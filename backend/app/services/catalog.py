@@ -41,22 +41,18 @@ Design decisions worth recording for later phases:
 
 import datetime
 import uuid
-from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from app.catalog_config import SourceRegistration
 from app.domain import fields as domain_fields
 from app.domain.approval import (
     ApprovalStateCode,
-    DecisionAction,
     DecisionEventView,
     Policy,
     PolicyStatus,
     evaluate,
 )
-from app.domain.frontmatter import JsonValue
-from app.domain.issues import Issue, IssueCode, Severity
+from app.domain.issues import Issue, Severity
 from app.domain.relationships import (
     DisplayStatus,
     InboundLink,
@@ -68,10 +64,20 @@ from app.domain.relationships import (
     ResolvedLink,
 )
 from app.domain.values import LinkType, RecordKind, TitleSource
+from app.services.approval_view import (
+    ApprovalSummary,
+    CompetingCandidate,
+    DecisionProvenance,
+    DecisionSummary,
+    DivergenceInfo,
+    PolicySummary,
+    build_approval,
+    is_approvable,
+)
+from app.services.decisions import Reviewer
+from app.services.sources_view import is_stale
 from app.storage.port import (
     CatalogStore,
-    DecisionEvent,
-    IntakeKind,
     JsonObject,
     PollStatus,
     RecordState,
@@ -83,13 +89,13 @@ from app.storage.port import (
 
 __all__ = [
     "ApprovalSummary",
-    "CatalogFacets",
     "CatalogSearchItem",
     "CatalogSearchPage",
+    "CompetingCandidate",
+    "DecisionProvenance",
     "DecisionSummary",
+    "DivergenceInfo",
     "ErratumInfo",
-    "FacetProject",
-    "FacetSource",
     "InboundLinkInfo",
     "IssueCounts",
     "OutboundLinkInfo",
@@ -99,11 +105,7 @@ __all__ = [
     "RecordMetadata",
     "RecordProvenance",
     "SiblingInfo",
-    "SourceSummary",
-    "get_facets",
     "get_record_detail",
-    "is_stale",
-    "list_sources",
     "search_records",
 ]
 
@@ -212,12 +214,10 @@ def search_records(
     page: int,
     page_size: int,
     policy: Policy | None,
+    needs_approval: bool = False,
 ) -> CatalogSearchPage:
     """
     Search the catalog with the Phase 1 filters.
-
-    The ``needs_approval`` filter and its query parameter are not
-    available yet; they arrive in phase 07.
 
     :param store: Store of the caller's unit of work.
     :param query: Free text, or ``None``/blank for all records.
@@ -227,10 +227,18 @@ def search_records(
     :param page: 1-based page number.
     :param page_size: Page size, 1 to :data:`~app.storage.port.MAX_PAGE_SIZE`.
     :param policy: The configured policy, or ``None``.
+    :param needs_approval: Only records whose current content does not
+        satisfy the policy (pending, rejected, changed since acceptance,
+        policy missing); evaluated in SQL by the store.
     :returns: The page.
     :raises ValueError: If *page* or *page_size* is out of bounds.
     """
-    filters = SearchFilters(source_id=source_id, project=project, kind=kind)
+    filters = SearchFilters(
+        source_id=source_id,
+        project=project,
+        kind=kind,
+        needs_approval=needs_approval,
+    )
     page_result = store.search(query, filters, page, page_size, policy=policy)
     return CatalogSearchPage(
         items=tuple(_search_item(item) for item in page_result.items),
@@ -254,6 +262,8 @@ class RecordMetadata:
     :param record_kind: Decision or erratum.
     :param title: Display title.
     :param title_source: Where the title came from.
+    :param digest: Canonical digest of the current content.
+    :param previous_digest: Digest before the latest content change.
     """
 
     id: uuid.UUID
@@ -264,6 +274,8 @@ class RecordMetadata:
     record_kind: RecordKind
     title: str
     title_source: TitleSource
+    digest: str
+    previous_digest: str | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -389,62 +401,6 @@ class SiblingInfo:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PolicySummary:
-    """
-    The applicable approval policy, or why there is none.
-
-    :param status: Configured, missing or invalid.
-    :param id: Policy id, when configured.
-    :param version: Policy version, when configured.
-    :param required: Whether approval is required, when configured.
-    """
-
-    status: PolicyStatus
-    id: str | None
-    version: int | None
-    required: bool | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DecisionSummary:
-    """
-    One historical decision event, read-only in phase 05.
-
-    :param id: Stable event id.
-    :param digest: Digest the decision applies to.
-    :param action: Accepted or rejected.
-    :param actor_display: Reviewer display name, if known.
-    :param comment: Optional reviewer comment.
-    :param created_at: Server timestamp of the decision.
-    """
-
-    id: uuid.UUID
-    digest: str
-    action: DecisionAction
-    actor_display: str | None
-    comment: str | None
-    created_at: datetime.datetime
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ApprovalSummary:
-    """
-    Approval state of a record's current content.
-
-    :param state: The state code.
-    :param needs_approval: Whether the record belongs in a future
-        "Needs approval" filter (phase 07).
-    :param policy: The applicable policy summary.
-    :param history: All decisions of this identity, oldest first.
-    """
-
-    state: ApprovalStateCode
-    needs_approval: bool
-    policy: PolicySummary
-    history: tuple[DecisionSummary, ...]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class RecordDetail:
     """
     Everything the record detail page shows.
@@ -556,6 +512,8 @@ def _metadata(record: StoredRecord) -> RecordMetadata:
         record_kind=record.record_kind,
         title=record.title,
         title_source=record.title_source,
+        digest=record.digest,
+        previous_digest=record.previous_digest,
     )
 
 
@@ -568,31 +526,6 @@ def _provenance(record: StoredRecord) -> RecordProvenance:
         ref=record.ref,
         source_url=record.source_url,
     )
-
-
-def is_stale(
-    registration: Registration | None,
-    now: datetime.datetime,
-    stale_after_minutes: int,
-) -> bool:
-    """
-    Tell whether a registration's indexed content may be out of date.
-
-    Stale when the registration never succeeded, its latest poll
-    failed or was partial, or its latest success is older than
-    *stale_after_minutes*.
-
-    :param registration: The registration, or ``None`` if unknown.
-    :param now: The current time (injected for testability).
-    :param stale_after_minutes: Configured staleness threshold.
-    :returns: Whether the registration is stale.
-    """
-    if registration is None or registration.last_success_at is None:
-        return True
-    if registration.last_status in (PollStatus.FAILED, PollStatus.PARTIAL):
-        return True
-    age = now - registration.last_success_at
-    return age > datetime.timedelta(minutes=stale_after_minutes)
 
 
 def _freshness(
@@ -655,21 +588,6 @@ def _errata(
     )
 
 
-def _approvable(record: StoredRecord) -> bool:
-    """
-    Tell whether a stored row's content may be decided at all.
-
-    Mirrors :attr:`app.domain.records.ParsedRecord.approvable` from the
-    stored row: no valid UUID, or a ``bad_encoding`` issue, blocks it.
-
-    :param record: The row.
-    :returns: Whether it is approvable.
-    """
-    if record.adr_uuid is None:
-        return False
-    return not any(i.code is IssueCode.BAD_ENCODING for i in record.issues)
-
-
 def _siblings(
     siblings: Iterable[StoredRecord],
     policy: Policy | None,
@@ -689,7 +607,7 @@ def _siblings(
             decision_date=sibling.decision_date,
             decision_date_inferred=sibling.decision_date_inferred,
             approval_state=evaluate(
-                policy, events, sibling.digest, _approvable(sibling)
+                policy, events, sibling.digest, is_approvable(sibling)
             ).state,
         )
         for sibling in siblings
@@ -716,57 +634,6 @@ def _legacy_signoff(metadata: JsonObject) -> tuple[str, ...]:
     return values
 
 
-def _policy_summary(
-    policy: Policy | None, status: PolicyStatus
-) -> PolicySummary:
-    """Build :class:`PolicySummary` from the configured policy."""
-    if policy is None:
-        return PolicySummary(
-            status=status, id=None, version=None, required=None
-        )
-    return PolicySummary(
-        status=status,
-        id=policy.id,
-        version=policy.version,
-        required=policy.required,
-    )
-
-
-def _decision_history(
-    events: Iterable[DecisionEvent],
-) -> tuple[DecisionSummary, ...]:
-    """Convert stored decision events to :class:`DecisionSummary`."""
-    return tuple(
-        DecisionSummary(
-            id=event.id,
-            digest=event.digest,
-            action=event.action,
-            actor_display=event.actor_display,
-            comment=event.comment,
-            created_at=event.created_at,
-        )
-        for event in events
-    )
-
-
-def _approval_summary(
-    *,
-    policy: Policy | None,
-    policy_status: PolicyStatus,
-    event_views: Sequence[DecisionEventView],
-    decision_events: Sequence[DecisionEvent],
-    record: StoredRecord,
-) -> ApprovalSummary:
-    """Build :class:`ApprovalSummary` for a record's current digest."""
-    state = evaluate(policy, event_views, record.digest, _approvable(record))
-    return ApprovalSummary(
-        state=state.state,
-        needs_approval=state.needs_approval,
-        policy=_policy_summary(policy, policy_status),
-        history=_decision_history(decision_events),
-    )
-
-
 def get_record_detail(
     store: CatalogStore,
     record_id: uuid.UUID,
@@ -775,6 +642,7 @@ def get_record_detail(
     policy_status: PolicyStatus,
     now: datetime.datetime,
     stale_after_minutes: int,
+    reviewer: Reviewer | None = None,
 ) -> RecordDetail | None:
     """
     Assemble everything the record detail page shows.
@@ -786,6 +654,8 @@ def get_record_detail(
     :param policy_status: Configuration status of the policy.
     :param now: The current time (injected for testability).
     :param stale_after_minutes: Configured staleness threshold.
+    :param reviewer: The caller, for ``approval.can_decide``; ``None``
+        means nobody can decide.
     :returns: The detail, or ``None`` if the record does not exist.
     """
     record = store.get_record(record_id)
@@ -812,156 +682,12 @@ def get_record_detail(
             (s for s in siblings if s.id != record.id), policy, event_views
         ),
         legacy_signoff_unverified=_legacy_signoff(record.metadata),
-        approval=_approval_summary(
+        approval=build_approval(
+            record=record,
+            siblings=siblings,
+            events=decision_events,
             policy=policy,
             policy_status=policy_status,
-            event_views=event_views,
-            decision_events=decision_events,
-            record=record,
+            reviewer=reviewer,
         ),
-    )
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourceSummary:
-    """
-    One source registration's configuration and freshness.
-
-    :param id: Registration id.
-    :param type: Source type.
-    :param enabled: Whether the registration may be polled / pushed to.
-    :param config_error: Why the registration is disabled, if invalid.
-    :param intake: Enabled intake mechanisms, from the current
-        configuration (empty for a registration removed from
-        ``catalog.yaml``).
-    :param published_ref: Configured published ref, from the current
-        configuration (blank if removed from ``catalog.yaml``).
-    :param last_attempt_at: Start of the latest poll attempt.
-    :param last_success_at: Start of the latest fully successful poll.
-    :param last_status: Outcome of the latest poll.
-    :param last_error: Secret-free error details of the latest poll.
-    :param stale: Whether the indexed content may be out of date.
-    """
-
-    id: str
-    type: str
-    enabled: bool
-    config_error: str | None
-    intake: tuple[IntakeKind, ...]
-    published_ref: str
-    last_attempt_at: datetime.datetime | None
-    last_success_at: datetime.datetime | None
-    last_status: PollStatus
-    last_error: JsonValue
-    stale: bool
-
-
-def list_sources(
-    store: CatalogStore,
-    config_sources: Sequence[SourceRegistration],
-    *,
-    now: datetime.datetime,
-    stale_after_minutes: int,
-) -> tuple[SourceSummary, ...]:
-    """
-    List every stored registration with its configuration and freshness.
-
-    Registrations removed from ``catalog.yaml`` are still listed (they
-    are disabled, never deleted, per ``sync_registrations``); their
-    ``intake``/``published_ref`` are empty/blank since the current
-    configuration no longer describes them.
-
-    :param store: Store of the caller's unit of work.
-    :param config_sources: The current configuration's registrations.
-    :param now: The current time (injected for testability).
-    :param stale_after_minutes: Configured staleness threshold.
-    :returns: One summary per stored registration, ordered by id.
-    """
-    config_by_id = {source.id: source for source in config_sources}
-    summaries = []
-    for registration in store.list_registrations():
-        config = config_by_id.get(registration.id)
-        summaries.append(
-            SourceSummary(
-                id=registration.id,
-                type=registration.type,
-                enabled=registration.enabled,
-                config_error=registration.config_error,
-                intake=(
-                    tuple(sorted(config.intake, key=lambda k: k.value))
-                    if config
-                    else ()
-                ),
-                published_ref=config.published_ref if config else "",
-                last_attempt_at=registration.last_attempt_at,
-                last_success_at=registration.last_success_at,
-                last_status=registration.last_status,
-                last_error=registration.last_error,
-                stale=is_stale(registration, now, stale_after_minutes),
-            )
-        )
-    return tuple(summaries)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FacetProject:
-    """
-    Record count of one project within a source.
-
-    :param project: Project path.
-    :param count: Number of rows (published and candidate) in it.
-    """
-
-    project: str
-    count: int
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FacetSource:
-    """
-    One source's projects, for the filter select.
-
-    :param source_id: Registration id.
-    :param count: Total rows across the source's projects.
-    :param projects: Projects of this source, with their counts.
-    """
-
-    source_id: str
-    count: int
-    projects: tuple[FacetProject, ...]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CatalogFacets:
-    """
-    Filter options for the search UI.
-
-    :param sources: Sources with their projects and counts.
-    """
-
-    sources: tuple[FacetSource, ...]
-
-
-def get_facets(store: CatalogStore) -> CatalogFacets:
-    """
-    Build the source/project filter options with record counts.
-
-    :param store: Store of the caller's unit of work.
-    :returns: The facets, sources ordered as
-        :meth:`~app.storage.port.CatalogStore.list_facets` returns them.
-    """
-    by_source: dict[str, list[FacetProject]] = defaultdict(list)
-    for entry in store.list_facets():
-        by_source[entry.source_id].append(
-            FacetProject(project=entry.project, count=entry.count)
-        )
-    return CatalogFacets(
-        sources=tuple(
-            FacetSource(
-                source_id=source_id,
-                count=sum(project.count for project in projects),
-                projects=tuple(projects),
-            )
-            for source_id, projects in by_source.items()
-        )
     )

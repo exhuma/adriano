@@ -9,7 +9,10 @@ to an explicit HTTP status code by a registered handler.
 
 Error bodies are ``{"detail": "<message>"}``; errors constructed with
 a machine-readable ``code`` add ``"code": "<code>"`` next to it (the
-authentication and authorization errors always do).
+authentication and authorization errors always do). An optional
+``hint`` (what the caller or an operator can do about it) adds
+``"hint": "<hint>"``, and ``extra`` adds further JSON members (for
+example the ``issues`` list of a refused candidate document).
 """
 
 from collections.abc import Awaitable, Callable, Mapping
@@ -17,24 +20,55 @@ from collections.abc import Awaitable, Callable, Mapping
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.domain.frontmatter import JsonValue
+
 
 class AdrianoError(Exception):
     """Base class for all domain exceptions raised by the services.
 
     :param message: Human-readable description of the error.
     :param code: Optional machine-readable error code.
+    :param hint: Optional recovery advice for the caller or operator.
+    :param extra: Optional further JSON members of the error body.
     """
 
-    def __init__(self, message: str, *, code: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        hint: str | None = None,
+        extra: Mapping[str, JsonValue] | None = None,
+    ) -> None:
         """
-        Store the message and code.
+        Store the message, code, hint and extra members.
 
         :param message: Human-readable description of the error.
         :param code: Optional machine-readable error code.
+        :param hint: Optional recovery advice.
+        :param extra: Optional further JSON members of the error body.
         """
         super().__init__(message)
         self.message = message
         self.code = code
+        self.hint = hint
+        self.extra: Mapping[str, JsonValue] = dict(extra or {})
+
+    def body(self) -> dict[str, JsonValue]:
+        """
+        Build the JSON error body.
+
+        :returns: ``detail`` plus ``code``/``hint`` when set, plus
+            :attr:`extra`.
+        """
+        content: dict[str, JsonValue] = {"detail": self.message}
+        if self.code is not None:
+            content["code"] = self.code
+        if self.hint is not None:
+            content["hint"] = self.hint
+        for key, value in self.extra.items():
+            content.setdefault(key, value)
+        return content
 
     @property
     def headers(self) -> Mapping[str, str]:
@@ -78,6 +112,10 @@ class ValidationFailedError(AdrianoError):
     """Raised when submitted content fails validation (HTTP 422)."""
 
 
+class PayloadTooLargeError(AdrianoError):
+    """Raised when a request body or document exceeds a limit (HTTP 413)."""
+
+
 class AuthenticationError(AdrianoError):
     """
     Raised when a request has no acceptable bearer token (HTTP 401).
@@ -91,7 +129,12 @@ class AuthenticationError(AdrianoError):
     """
 
     def __init__(
-        self, message: str, *, code: str, token_presented: bool = True
+        self,
+        message: str,
+        *,
+        code: str,
+        token_presented: bool = True,
+        hint: str | None = None,
     ) -> None:
         """
         Store the reason.
@@ -99,8 +142,9 @@ class AuthenticationError(AdrianoError):
         :param message: Human-readable reason.
         :param code: Machine-readable error code.
         :param token_presented: Whether the request carried a token.
+        :param hint: Optional recovery advice.
         """
-        super().__init__(message, code=code)
+        super().__init__(message, code=code, hint=hint)
         self.token_presented = token_presented
 
     @property
@@ -132,6 +176,7 @@ _STATUS_BY_ERROR: dict[type[AdrianoError], int] = {
     ConflictError: 409,
     ForbiddenError: 403,
     ValidationFailedError: 422,
+    PayloadTooLargeError: 413,
 }
 
 
@@ -165,12 +210,9 @@ def _make_handler(
             return JSONResponse(
                 status_code=status_code, content={"detail": str(exc)}
             )
-        content = {"detail": exc.message}
-        if exc.code is not None:
-            content["code"] = exc.code
         return JSONResponse(
             status_code=status_code,
-            content=content,
+            content=exc.body(),
             headers=dict(exc.headers),
         )
 

@@ -4,7 +4,7 @@ HTTP routes for source registration status and operator polls.
 ``GET /api/v1/sources`` (``read``) reports the configuration and
 freshness of every registration; the ``stale`` flag uses
 ``ADRIANO_STALE_AFTER_MINUTES`` (see
-:func:`app.services.catalog.is_stale`).
+:func:`app.services.sources_view.is_stale`).
 
 ``POST /api/v1/sources/poll`` and ``POST /api/v1/sources/{id}/poll``
 (``operate``) validate the request, then run the polling service in a
@@ -33,7 +33,7 @@ from app.domain.frontmatter import JsonValue
 from app.errors import ConfigurationError
 from app.schemas.auth import PollAcceptedOut
 from app.schemas.sources import SourceOut
-from app.services import catalog
+from app.services import sources_view
 from app.services.poll_trigger import run_polls, select_poll_targets
 from app.storage.port import CatalogStoreProvider
 
@@ -59,7 +59,7 @@ def list_sources(
     """
     config_sources = runtime.config.sources if runtime is not None else ()
     with provider.unit_of_work() as store:
-        summaries = catalog.list_sources(
+        summaries = sources_view.list_sources(
             store,
             config_sources,
             now=datetime.datetime.now(datetime.UTC),

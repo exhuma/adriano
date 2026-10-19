@@ -10,7 +10,9 @@ the configuration or the database: problems are logged and reported by
 ``/healthz``.
 
 Authentication: every ``/api/v1`` route requires a bearer token
-(:mod:`app.auth`); ``/healthz`` and the OpenAPI schema/docs
+(:mod:`app.auth`) -- an OIDC/dev JWT, except candidate intake
+(``/api/v1/candidates``), which accepts only per-registration CI push
+tokens (:mod:`app.auth.push`); ``/healthz`` and the OpenAPI schema/docs
 (``/openapi.json``, ``/api/docs``) are public -- they expose no record
 data or secrets. The dev-only ``/auth/dev`` router is imported and
 mounted only when ``ADRIANO_DEV_AUTH_ENABLED`` is true and
@@ -27,7 +29,15 @@ from app.auth.tokens import AuthStatus, auth_status
 from app.composition import start_catalog
 from app.config import Settings, get_settings
 from app.errors import register_handlers
-from app.routers import facets, health, me, records, sources
+from app.routers import (
+    candidates,
+    decisions,
+    facets,
+    health,
+    me,
+    records,
+    sources,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +121,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(records.router)
     app.include_router(sources.router)
     app.include_router(facets.router)
+    app.include_router(decisions.router)
+    app.include_router(candidates.router)
     _mount_dev_auth(app, settings)
     _log_auth_status(settings)
 

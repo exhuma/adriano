@@ -482,9 +482,14 @@ def test_every_api_route_requires_authentication(
     ]
     api = {p: ops for p, ops in paths.items() if p.startswith("/api/v1/")}
 
-    assert len(api) >= 6
+    # Candidate intake uses CI push tokens instead of OIDC, but it is
+    # covered by the same sweep: no token -> 401.
+    assert set(api["/api/v1/candidates"]) == {"put", "post"}
+    assert "/api/v1/records/{record_id}/decisions" in api
+    assert "/api/v1/records/{record_id}/diff" in api
     for template, operations in api.items():
         path = re.sub(r"\{[^}]+\}", ZERO_UUID, template)
         for method in operations:
             response = client.request(method.upper(), path)
             assert response.status_code == 401, (method, template)
+            assert response.json()["code"] == "not_authenticated"

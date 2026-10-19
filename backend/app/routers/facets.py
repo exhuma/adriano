@@ -11,7 +11,7 @@ from app.auth.deps import require_permission
 from app.auth.rbac import Permission
 from app.composition import get_store_provider
 from app.schemas.sources import FacetsOut
-from app.services import catalog
+from app.services import sources_view
 from app.storage.port import CatalogStoreProvider
 
 router = APIRouter(
@@ -32,5 +32,5 @@ def get_facets(
     :returns: The facets.
     """
     with provider.unit_of_work() as store:
-        facets = catalog.get_facets(store)
+        facets = sources_view.get_facets(store)
     return FacetsOut.model_validate(facets)

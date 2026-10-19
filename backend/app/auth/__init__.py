@@ -11,4 +11,6 @@ Authentication and authorization.
   eligibility.
 - :mod:`app.auth.deps` -- FastAPI dependencies (:class:`Principal`,
   ``get_principal``, ``require_permission``).
+- :mod:`app.auth.push` -- constant-time CI push-token checks for
+  candidate intake (a separate scheme, never OIDC).
 """

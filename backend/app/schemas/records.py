@@ -16,6 +16,7 @@ from app.domain.approval import ApprovalStateCode, DecisionAction, PolicyStatus
 from app.domain.issues import IssueCode, Severity
 from app.domain.relationships import DisplayStatus, InboundType, Resolution
 from app.domain.values import LinkType, RecordKind, TitleSource
+from app.services.approval_view import DivergenceKind
 from app.storage.port import PollStatus, RecordState
 
 
@@ -79,6 +80,8 @@ class MetadataOut(BaseModel):
     record_kind: RecordKind
     title: str
     title_source: TitleSource
+    digest: str
+    previous_digest: str | None
 
 
 class ProvenanceOut(BaseModel):
@@ -164,30 +167,84 @@ class PolicySummaryOut(BaseModel):
     id: str | None
     version: int | None
     required: bool | None
+    allow_self_approval: bool | None
+
+
+class DecisionProvenanceOut(BaseModel):
+    """The decided row as it was at decision time."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    record_id: str | None
+    kind: str | None
+    source_id: str | None
+    project: str | None
+    ref: str | None
+    path: str | None
+    source_url: str | None
 
 
 class DecisionSummaryOut(BaseModel):
-    """One historical decision event, read-only in phase 05."""
+    """One append-only decision event of the record's identity."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     digest: str
+    current_digest: bool
     action: DecisionAction
+    actor_issuer: str
+    actor_subject: str
     actor_display: str | None
     comment: str | None
+    policy_id: str
+    policy_version: int
+    provenance: DecisionProvenanceOut
     created_at: datetime.datetime
 
 
+class DivergenceOut(BaseModel):
+    """Content divergence within the record's identity."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    kind: DivergenceKind
+    other_digest: str
+    other_record_ids: list[uuid.UUID]
+    other_accepted: bool
+    message: str
+
+
+class CompetingCandidateOut(BaseModel):
+    """Another candidate of the identity with different content."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    ref: str
+    path: str
+    digest: str
+    approval_state: ApprovalStateCode
+
+
 class ApprovalOut(BaseModel):
-    """Approval state of a record's current content."""
+    """Approval state of a record's current content, for the caller."""
 
     model_config = ConfigDict(from_attributes=True)
 
     state: ApprovalStateCode
     needs_approval: bool
+    digest: str
     policy: PolicySummaryOut
     history: list[DecisionSummaryOut]
+    approvable: bool
+    approval_blocker: str | None
+    last_accepted_digest: str | None
+    can_decide: bool
+    decide_blocked_code: str | None
+    decide_blocked_reason: str | None
+    divergence: DivergenceOut | None
+    competing_candidates: list[CompetingCandidateOut]
 
 
 class RecordDetailOut(BaseModel):
@@ -207,3 +264,27 @@ class RecordDetailOut(BaseModel):
     siblings: list[SiblingOut]
     legacy_signoff_unverified: list[str]
     approval: ApprovalOut
+
+
+class DiffEndpointOut(BaseModel):
+    """One side of a diff."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    digest: str
+    label: str
+    decided_at: datetime.datetime | None
+
+
+class RecordDiffOut(BaseModel):
+    """A unified diff between two stored snapshots."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    base: DiffEndpointOut | None
+    target: DiffEndpointOut
+    reason: str | None
+    unified_diff: str
+    identical: bool
+    lines_added: int
+    lines_removed: int
