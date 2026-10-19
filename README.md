@@ -58,9 +58,39 @@ Copy `.env.example` to `.env` and adjust as needed; the defaults
 already point at the ephemeral dev database on port 55432. See
 `.env.example` for every supported `ADRIANO_`-prefixed setting.
 
-The catalog's sources and approval policy are configured in
-`catalog.yaml` (see the documented `catalog.example.yaml`). This file
-is not read until later phases wire up source polling.
+The catalog's sources, approval policy and role permissions (`rbac`)
+are configured in `catalog.yaml` (see the documented
+`catalog.example.yaml`); validate it with `task check-config`.
+
+### Authentication
+
+Every `/api/v1` route needs an `Authorization: Bearer` token; only
+`/healthz` and the API docs (`/api/docs`, `/openapi.json`, which
+contain no data) are public. In production the backend validates
+RS256 tokens from your OIDC provider (`ADRIANO_OIDC_AUTHORITY`,
+`ADRIANO_OIDC_ISSUER`, `ADRIANO_OIDC_AUDIENCE`,
+`ADRIANO_OIDC_ROLES_CLAIM`). Roles map to `read` / `operate` through
+the `rbac` section of `catalog.yaml`.
+
+To run locally without an identity provider, enable the dev-only
+HS256 path in your (gitignored) `.env`:
+
+```sh
+ADRIANO_DEV_AUTH_ENABLED=true
+ADRIANO_DEV_SHARED_SECRET=<output of `openssl rand -hex 32`>
+```
+
+Then mint a token for any identity and call the API:
+
+```sh
+TOKEN=$(task mint-dev-token -- --sub alice --name Alice --roles admin)
+curl -H "Authorization: Bearer $TOKEN" localhost:8100/api/v1/me
+```
+
+`ADRIANO_DEV_AUTH_ENABLED=true` also mounts `POST /auth/dev/token`
+(body `{"sub", "name", "email", "roles"}`) for the frontend dev login.
+Never set either variable in production; the backend logs a warning
+at startup whenever the dev path is active.
 
 ## Project layout
 

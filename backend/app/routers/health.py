@@ -5,8 +5,13 @@ database (``status`` / ``database``; HTTP 503 when unreachable) plus the
 configuration state loaded at startup: ``config`` (file ``ok``,
 ``missing`` or ``invalid``), ``policy`` (``configured``, ``missing`` or
 ``invalid``) and ``registrations`` (startup sync ``synced``, ``skipped``
-or ``failed``). Configuration problems never make the probe fail:
-restarting the container would not fix them.
+or ``failed``). ``auth`` reports the configured token validators
+(``oidc``, ``dev``, ``oidc+dev`` or ``unconfigured``; with
+``unconfigured`` every protected route answers 503) and ``rbac``
+whether any role grants a permission (``configured`` or ``empty``).
+Configuration problems never make the probe fail: restarting the
+container would not fix them. The route is public and reports no
+secrets and no record data.
 """
 
 from fastapi import APIRouter, Depends, Response
@@ -14,7 +19,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.auth.tokens import auth_status
 from app.composition import CatalogRuntime, get_catalog_runtime
+from app.config import Settings, get_settings
 from app.database import get_db
 
 router = APIRouter()
@@ -27,18 +34,21 @@ def _config_status(runtime: CatalogRuntime | None) -> dict[str, str]:
     Summarise the startup configuration state.
 
     :param runtime: Startup state, ``None`` if the lifespan did not run.
-    :returns: ``config``, ``policy`` and ``registrations`` keys.
+    :returns: ``config``, ``policy``, ``registrations`` and ``rbac``
+        keys.
     """
     if runtime is None:
         return {
             "config": _UNKNOWN,
             "policy": _UNKNOWN,
             "registrations": _UNKNOWN,
+            "rbac": _UNKNOWN,
         }
     return {
         "config": runtime.config.file_status.value,
         "policy": runtime.config.policy.status.value,
         "registrations": runtime.sync.value,
+        "rbac": "configured" if runtime.config.rbac.roles else "empty",
     }
 
 
@@ -47,6 +57,7 @@ def healthz(
     response: Response,
     db: Session = Depends(get_db),
     runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, str]:
     """Report application, database and configuration health.
 
@@ -58,10 +69,12 @@ def healthz(
     :param response: Outgoing response, used to set the status code.
     :param db: Request-scoped database session.
     :param runtime: Startup state of the catalog.
+    :param settings: Application settings (auth status).
     :returns: A mapping with ``status``, ``database``, ``config``,
-        ``policy`` and ``registrations`` keys.
+        ``policy``, ``registrations``, ``rbac`` and ``auth`` keys.
     """
     details = _config_status(runtime)
+    details["auth"] = auth_status(settings).value
     try:
         db.execute(text("SELECT 1"))
     except OperationalError:

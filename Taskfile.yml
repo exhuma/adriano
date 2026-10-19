@@ -112,6 +112,14 @@ tasks:
     cmds:
       - uv run --project backend adriano check-config
 
+  mint-dev-token:
+    desc: >-
+      Print a dev-only HS256 access token signed with
+      ADRIANO_DEV_SHARED_SECRET (from .env), e.g.
+      `task mint-dev-token -- --sub alice --roles admin`.
+    cmds:
+      - uv run --project backend adriano mint-dev-token {{.CLI_ARGS}}
+
   lint:
     desc: Lint and format-check the backend and the frontend.
     cmds:

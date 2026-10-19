@@ -7,6 +7,10 @@ app lifespan has synced two ``filesystem`` registrations
 generated ``catalog.yaml``. Tests seed records directly through the
 storage port (:func:`app.services.ingest.ingest_document`), exactly
 like the phase 04 ingest/polling tests, then exercise the HTTP routes.
+
+The ``client`` sends a dev token for an ``admin`` (read + operate) by
+default; tests replace or drop the ``Authorization`` header to check
+authentication and permissions.
 """
 
 import datetime
@@ -27,6 +31,7 @@ from app.services.ingest import (
 )
 from app.storage.port import CatalogStore, RecordState
 from app.storage.postgres.store import PostgresStoreProvider
+from tests.auth_helpers import bearer
 from tests.storage.conftest import TABLES, migrated_engine  # noqa: F401
 
 #: Two filesystem registrations and a configured, enforced policy with
@@ -50,6 +55,8 @@ approval_policy:
 rbac:
   roles:
     admin: [read, operate]
+    adr-reader: [read]
+    poller: [operate]
 """
 
 
@@ -80,24 +87,34 @@ def catalog_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def router_settings(test_settings: Settings, catalog_file: Path) -> Settings:
+    """
+    Build the settings of the router test client.
+
+    :param test_settings: Settings pointed at the test database.
+    :param catalog_file: The generated ``catalog.yaml``.
+    :returns: Settings reading that file.
+    """
+    return test_settings.model_copy(update={"config_file": str(catalog_file)})
+
+
+@pytest.fixture
 def client(
-    test_settings: Settings, catalog_file: Path, clean_engine: Engine
+    router_settings: Settings, clean_engine: Engine
 ) -> Iterator[TestClient]:
     """
     Build a test client whose lifespan synced the two registrations.
 
-    :param test_settings: Settings pointed at the test database.
-    :param catalog_file: The generated ``catalog.yaml``.
+    :param router_settings: Settings reading the generated
+        ``catalog.yaml``.
     :param clean_engine: Truncated, migrated engine (ensures the sync
         in this fixture's lifespan runs against empty tables).
-    :returns: The client.
+    :returns: The client, authenticated as an ``admin``.
     """
-    settings = test_settings.model_copy(
-        update={"config_file": str(catalog_file)}
-    )
-    app = create_app()
-    app.dependency_overrides[get_settings] = lambda: settings
+    app = create_app(router_settings)
+    app.dependency_overrides[get_settings] = lambda: router_settings
     with TestClient(app) as test_client:
+        test_client.headers.update(bearer(router_settings, roles=["admin"]))
         yield test_client
     app.dependency_overrides.clear()
 

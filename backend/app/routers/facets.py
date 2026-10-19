@@ -7,12 +7,18 @@ counts, for the search landing page's source/project selects.
 
 from fastapi import APIRouter, Depends
 
+from app.auth.deps import require_permission
+from app.auth.rbac import Permission
 from app.composition import get_store_provider
 from app.schemas.sources import FacetsOut
 from app.services import catalog
 from app.storage.port import CatalogStoreProvider
 
-router = APIRouter(prefix="/api/v1", tags=["facets"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["facets"],
+    dependencies=[Depends(require_permission(Permission.READ))],
+)
 
 
 @router.get("/facets", response_model=FacetsOut)

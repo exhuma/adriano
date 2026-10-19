@@ -86,8 +86,17 @@ approval_policy:
     roles: [adr-reviewer]
   allow_self_approval: false
 
-# Maps each IdP role (as it appears in the configured roles claim)
-# to the permissions it grants.
+# Maps each IdP role (as it appears in the roles claim selected by
+# ADRIANO_OIDC_ROLES_CLAIM, default `roles`) to the permissions it
+# grants:
+#   read     browse and search the catalog (every GET /api/v1 route)
+#   operate  trigger polls (POST /api/v1/sources/poll and
+#            POST /api/v1/sources/{id}/poll)
+# Permissions do not imply each other: give operators both. Reviewing
+# is NOT a permission; it comes from approval_policy.reviewers only.
+# Deny by default: a role not listed here, or a missing/invalid rbac
+# section, grants nothing (reported by check-config and as
+# `rbac: empty` in /healthz). GET /api/v1/me needs no permission.
 rbac:
   roles:
     admin: [read, operate]

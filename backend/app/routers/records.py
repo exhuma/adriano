@@ -15,6 +15,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query
 
+from app.auth.deps import require_permission
+from app.auth.rbac import Permission
 from app.composition import (
     CatalogRuntime,
     get_catalog_runtime,
@@ -27,7 +29,11 @@ from app.schemas.records import RecordDetailOut, SearchPageOut
 from app.services import catalog
 from app.storage.port import MAX_PAGE_SIZE, CatalogStoreProvider, RecordState
 
-router = APIRouter(prefix="/api/v1", tags=["records"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["records"],
+    dependencies=[Depends(require_permission(Permission.READ))],
+)
 
 _DEFAULT_PAGE_SIZE = 20
 
