@@ -50,6 +50,16 @@ services:
   backend:
     <<: *backend-image
     restart: unless-stopped
+    # Catalog-referenced secrets (the env var NAMES catalog.yaml points
+    # at: ADRIANO_GITLAB_TOKEN_*, ADRIANO_PUSH_TOKEN_*, ...) come from
+    # this optional file, so a new registration needs no edit here.
+    # Default: ./.env (the operator's file, see docs/operator.md);
+    # `task demo` points it at the generated .env.demo. Precedence:
+    # the `environment:` entries below override the same names from
+    # this file.
+    env_file:
+      - path: ${ADRIANO_BACKEND_ENV_FILE:-.env}
+        required: false
     environment:
       ADRIANO_DATABASE_URL: postgresql://${ADRIANO_DB_USER:-adriano}:${ADRIANO_DB_PASSWORD:-adriano}@db:5432/${ADRIANO_DB_NAME:-adriano}
       ADRIANO_CONFIG_FILE: /app/catalog.yaml
@@ -65,14 +75,15 @@ services:
       ADRIANO_DEV_AUTH_ENABLED: ${ADRIANO_DEV_AUTH_ENABLED:-false}
       ADRIANO_DEV_SHARED_SECRET: ${ADRIANO_DEV_SHARED_SECRET:-}
       ADRIANO_STALE_AFTER_MINUTES: ${ADRIANO_STALE_AFTER_MINUTES:-120}
-      # Catalog-referenced secrets (env var NAMES, never values, are
-      # what catalog.yaml/catalog.demo.yaml point at).
-      ADRIANO_PUSH_TOKEN_CENTRAL: ${ADRIANO_PUSH_TOKEN_CENTRAL:-}
     volumes:
       # Read-only: the filesystem source and the demo catalog config.
       # Point ADRIANO_CATALOG_FILE_HOST at your own catalog.yaml for a
       # non-demo deployment (see docs/operator.md "Configuration").
       - ${ADRIANO_CATALOG_FILE_HOST:-./catalog.demo.yaml}:/app/catalog.yaml:ro
+      # Only catalog.demo.yaml reads this (its filesystem source root
+      # is samples/adr-root). A real deployment mounts its own
+      # filesystem source trees instead, e.g. in a
+      # docker-compose.override.yml (see docs/operator.md).
       - ./samples:/app/samples:ro
     depends_on:
       migrate:

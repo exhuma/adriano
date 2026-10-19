@@ -94,12 +94,14 @@ def test_second_decision_for_digest_is_refused(
         "UPDATE decision_event SET comment = 'tampered'",
         "DELETE FROM decision_event",
         "UPDATE decision_event SET comment = 'x' WHERE false",
+        "TRUNCATE decision_event",
+        "TRUNCATE revision CASCADE",
     ],
 )
 def test_decision_events_are_append_only(
     provider: PostgresStoreProvider, engine: Engine, statement: str
 ) -> None:
-    """Ensure UPDATE and DELETE on decision_event are rejected."""
+    """Ensure UPDATE, DELETE and TRUNCATE on decision_event fail."""
     with provider.unit_of_work() as store:
         decide(store, put_record(store, adr_uuid=U1).digest)
     with pytest.raises(DBAPIError, match="append-only"):

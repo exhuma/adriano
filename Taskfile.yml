@@ -2,7 +2,36 @@ version: "3"
 
 dotenv: [".env"]
 
+vars:
+  # Shell fragment: make a relative ADRIANO_CONFIG_FILE (from .env or
+  # the caller's environment; default catalog.yaml) absolute against
+  # the repository root, so every task resolves the same file no
+  # matter which `dir:` it runs in (dev:backend runs in backend/).
+  # Task's `sh:` vars cannot see dotenv values, so this is spliced
+  # into each command instead.
+  RESOLVE_CONFIG: >-
+    adriano_cfg="${ADRIANO_CONFIG_FILE:-catalog.yaml}";
+    case "$adriano_cfg" in
+    /*) ;;
+    *) adriano_cfg="{{.ROOT_DIR}}/$adriano_cfg" ;;
+    esac;
+    export ADRIANO_CONFIG_FILE="$adriano_cfg"
+
 tasks:
+  frontend:install:
+    desc: >-
+      Install the frontend dependencies with `npm ci` (skipped while
+      node_modules matches package.json / package-lock.json).
+    run: once
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+    cmds:
+      - npm ci
+
   db:up:
     desc: >-
       Start the ephemeral dev/test Postgres container (no-op if
@@ -82,12 +111,15 @@ tasks:
     desc: Run the FastAPI dev server with reload on port 8100.
     dir: backend
     cmds:
-      - uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
+      - |
+        {{.RESOLVE_CONFIG}}
+        uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
 
   dev:frontend:
     desc: >-
       Run the Vite dev server on port 5173 (skips gracefully until
       the frontend is scaffolded).
+    deps: [frontend:install]
     cmds:
       - |
         if [ ! -f frontend/package.json ]; then
@@ -103,14 +135,18 @@ tasks:
       `-- --source ID` for one). Reads ADRIANO_CONFIG_FILE (default
       ./catalog.yaml in the repository root).
     cmds:
-      - uv run --project backend adriano poll {{.CLI_ARGS}}
+      - |
+        {{.RESOLVE_CONFIG}}
+        uv run --project backend adriano poll {{.CLI_ARGS}}
 
   check-config:
     desc: >-
       Validate the catalog configuration (ADRIANO_CONFIG_FILE, default
       ./catalog.yaml) and print registrations, policy and problems.
     cmds:
-      - uv run --project backend adriano check-config
+      - |
+        {{.RESOLVE_CONFIG}}
+        uv run --project backend adriano check-config
 
   mint-dev-token:
     desc: >-
@@ -195,6 +231,7 @@ tasks:
 
   lint:frontend:
     internal: true
+    deps: [frontend:install]
     cmds:
       - |
         if [ ! -f frontend/package.json ]; then
@@ -212,6 +249,7 @@ tasks:
 
   test:frontend:
     internal: true
+    deps: [frontend:install]
     cmds:
       - |
         if [ ! -f frontend/package.json ]; then
@@ -223,6 +261,7 @@ tasks:
 
   build:
     desc: Build the production frontend bundle.
+    deps: [frontend:install]
     cmds:
       - |
         if [ ! -f frontend/package.json ]; then
@@ -270,6 +309,10 @@ tasks:
   demo:up:
     internal: true
     dotenv: [".env.demo"]
+    env:
+      # The backend's env_file (catalog-referenced secrets such as
+      # ADRIANO_PUSH_TOKEN_CENTRAL); see docker-compose.yml.
+      ADRIANO_BACKEND_ENV_FILE: .env.demo
     cmds:
       - docker compose up -d
       - task: demo:wait-health
@@ -357,6 +400,7 @@ tasks:
       interactive sign-in against the same demo data).
     dotenv: [".env.demo"]
     dir: frontend
+    deps: [frontend:install]
     cmds:
       - |
         if [ ! -f package.json ]; then

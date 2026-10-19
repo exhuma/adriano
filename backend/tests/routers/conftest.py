@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine
 
 from app.config import Settings, get_settings
 from app.main import create_app
@@ -32,7 +32,10 @@ from app.services.ingest import (
 from app.storage.port import CatalogStore, RecordState
 from app.storage.postgres.store import PostgresStoreProvider
 from tests.auth_helpers import bearer
-from tests.storage.conftest import TABLES, migrated_engine  # noqa: F401
+from tests.storage.conftest import (  # noqa: F401
+    migrated_engine,
+    truncate_all,
+)
 
 #: Two filesystem registrations and a configured, enforced policy with
 #: no eligible reviewers (decisions are out of scope for phase 05).
@@ -69,7 +72,7 @@ def clean_engine(migrated_engine: Engine) -> Engine:  # noqa: F811
     :returns: The same engine, with empty tables.
     """
     with migrated_engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE {TABLES}"))
+        truncate_all(connection)
     return migrated_engine
 
 

@@ -63,10 +63,29 @@ decisions everywhere until fixed (see `docs/approval.md`).
   variable **name**, resolved once at startup and never logged.
 - Never commit `.env` or `.env.demo` (both are gitignored).
 - In `docker-compose.yml`, secrets are passed as plain environment
-  variables (from `.env` or the shell); there is no secrets-manager
-  integration in Phase 1 -- if your platform has one, inject it as
-  environment variables at the container level, which `backend`
-  already reads.
+  variables; there is no secrets-manager integration in Phase 1 -- if
+  your platform has one, inject it as environment variables at the
+  container level, which `backend` already reads.
+- The `backend` service loads an optional env file (`env_file`,
+  needs Docker Compose v2.24 or newer): `./.env` by default, or the
+  file named by `ADRIANO_BACKEND_ENV_FILE`. Put every secret that
+  `catalog.yaml` names there (`ADRIANO_GITLAB_TOKEN_*`,
+  `ADRIANO_PUSH_TOKEN_*`, ...); a new registration needs no edit to
+  `docker-compose.yml`. Precedence inside the container: the
+  variables listed under the backend's `environment:` in
+  `docker-compose.yml` (database URL, config path, OIDC, dev auth,
+  stale threshold, workers) win over the env file; their values are
+  interpolated from the shell, then `./.env`. Everything else comes
+  from the env file. `task demo` sets
+  `ADRIANO_BACKEND_ENV_FILE=.env.demo`, so the demo never reads your
+  `./.env` secrets into the demo container (and vice versa). If you
+  restart the demo stack by hand, pass the same variable, e.g.
+  `ADRIANO_BACKEND_ENV_FILE=.env.demo docker compose up -d`, or the
+  backend is recreated without the demo push token.
+- The `./samples` mount on `backend` exists only for
+  `catalog.demo.yaml`. For a real `filesystem` source, mount your own
+  tree read-only (for example in a `docker-compose.override.yml`) and
+  point its `root` at the mount.
 - The compose `db` service falls back to the password `adriano` when
   `ADRIANO_DB_PASSWORD` is unset. That default is for the local demo
   only (the database port is not published). Set a strong
@@ -280,6 +299,37 @@ their configured env var *names* appear in diagnostics.
   Adjust the interval to your own retention policy. Never delete rows
   with `finished_at IS NULL` (a run still in progress).
 
+### Database role and tamper resistance
+
+`decision_event` has statement triggers that refuse `UPDATE`,
+`DELETE` and `TRUNCATE` (also a `TRUNCATE ... CASCADE` reaching it).
+They stop application bugs and casual mistakes, not a privileged
+attacker: the table **owner** (and any superuser) can disable or drop
+the triggers. The compose stack runs migrations and the app as the
+same owning role, which is fine for a demo but not tamper resistant.
+
+For production, let `migrate` run as the owning role and run
+`backend` as a separate, non-owner role with only the privileges it
+needs (append-only on `decision_event`):
+
+```sql
+CREATE ROLE adriano_app LOGIN PASSWORD '<strong password>';
+GRANT CONNECT ON DATABASE adriano TO adriano_app;
+GRANT USAGE ON SCHEMA public TO adriano_app;
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON source_registration, record, intake_run TO adriano_app;
+GRANT SELECT, INSERT ON revision, decision_event TO adriano_app;
+-- No TRUNCATE, no ownership, no ALTER: the role cannot disable the
+-- append-only triggers.
+```
+
+Then point the backend's `ADRIANO_DATABASE_URL` at `adriano_app`
+(and keep the owner credentials for `migrate` only). Re-check the
+grants after a migration that adds tables. Even then, ordinary rows
+are not cryptographic evidence: a database administrator can still
+rewrite history, and content digests prove only which content a
+decision refers to (see `docs/hashing.md`).
+
 ## Migrations
 
 Deploy order is always **migrations, then application**
@@ -295,7 +345,10 @@ docker compose run --rm migrate
 docker compose run --rm backend alembic upgrade head
 ```
 
-The schema is still the single migration `0001_initial`; the faster
+Migrations: `0001_initial` (schema) and
+`0002_no_truncate_decisions` (refuses `TRUNCATE` on
+`decision_event`, see "Database role and tamper resistance"). The
+faster
 "Needs approval" filter (see `docs/benchmark.md`) is a query change
 only and adds no migration. It relies on the existing unique
 constraint/index `uq_decision_event_identity_digest` (one decision per
@@ -328,7 +381,20 @@ drop or replace it manually.
   JWKS lazily on first use (an unreachable IdP answers `503`, never a
   crash).
 - `ADRIANO_OIDC_ISSUER`: expected `iss` claim (defaults to the
-  discovery document's own `issuer` when unset).
+  discovery document's own `issuer` when unset; an empty or
+  blank value counts as unset, as do empty `ADRIANO_OIDC_AUTHORITY`
+  and `ADRIANO_DEV_SHARED_SECRET`).
+- Frontend CSP: the `frontend` container receives the same authority
+  as `OIDC_AUTHORITY` and adds its origin (`scheme://host[:port]`) to
+  the `Content-Security-Policy` `connect-src` (discovery, token and
+  userinfo requests) and `frame-src` (silent renew iframe). With no
+  authority both stay `'self'`. The value must be a plain
+  `http(s)://host[:port][/path]` URL (no query, fragment,
+  credentials, quotes or spaces); anything else stops the container
+  with an `ERROR: OIDC_AUTHORITY is not a valid URL` log line. If your
+  IdP's discovery document points the token or JWKS endpoints at a
+  different origin than the authority, the browser will block them;
+  serve them from the authority's origin.
 - `ADRIANO_OIDC_AUDIENCE` (default `adr_viewer`): expected `aud`
   claim.
 - `ADRIANO_OIDC_ROLES_CLAIM` (default `roles`): dotted path to the

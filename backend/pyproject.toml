@@ -38,6 +38,13 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# fastapi.testclient re-exports starlette.testclient, which warns that
+# its httpx backend is deprecated in favour of httpx2. Nothing to act
+# on until FastAPI's TestClient moves; keep the test output readable.
+filterwarnings = [
+    # StarletteDeprecationWarning subclasses UserWarning.
+    "ignore:Using `httpx` with `starlette.testclient`:UserWarning",
+]
 
 [tool.ruff]
 line-length = 80

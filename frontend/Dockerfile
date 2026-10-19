@@ -26,6 +26,14 @@ COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
 COPY --chown=nginx:nginx config.template.js \
     /usr/share/nginx/html/config.template.js
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Security-headers snippet: the entrypoint re-renders it with the OIDC
+# provider's origin at container start; pre-render the no-IdP variant
+# so the image is valid on its own (`nginx -t`).
+COPY --chown=nginx:nginx security-headers.conf.template \
+    /etc/nginx/adriano-security-headers.conf.template
+RUN CSP_IDP_SOURCES="" envsubst '${CSP_IDP_SOURCES}' \
+    < /etc/nginx/adriano-security-headers.conf.template \
+    > /etc/nginx/adriano-security-headers.conf
 COPY --chmod=755 docker-entrypoint.d/40-render-app-config.sh \
     /docker-entrypoint.d/40-render-app-config.sh
 

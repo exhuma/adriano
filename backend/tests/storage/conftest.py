@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, text
 
 from alembic import command
 from app.config import Settings
@@ -32,6 +32,26 @@ from app.storage.postgres.store import PostgresStoreProvider
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 TABLES = "intake_run, decision_event, record, revision, source_registration"
 SOURCES = ("central", "other")
+
+#: Migration 0002's TRUNCATE guard on ``decision_event``.
+_TRUNCATE_GUARD = "decision_event_no_truncate"
+
+
+def truncate_all(connection: Connection) -> None:
+    """
+    Empty every table, bypassing the decision_event TRUNCATE guard.
+
+    Test-only. The guard is disabled and re-enabled inside the
+    caller's transaction: ``ALTER TABLE`` takes an exclusive lock and is
+    transactional, so no other session ever sees it disabled. The test
+    role owns the tables, which is all ``DISABLE TRIGGER`` needs.
+
+    :param connection: A connection inside an open transaction.
+    """
+    guard = f"ALTER TABLE decision_event {{}} TRIGGER {_TRUNCATE_GUARD}"
+    connection.execute(text(guard.format("DISABLE")))
+    connection.execute(text(f"TRUNCATE {TABLES}"))
+    connection.execute(text(guard.format("ENABLE")))
 
 
 def database_url_for_tests() -> str:
@@ -78,7 +98,7 @@ def engine(migrated_engine: Engine) -> Engine:
     :returns: The same engine.
     """
     with migrated_engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE {TABLES}"))
+        truncate_all(connection)
     provider = PostgresStoreProvider(migrated_engine)
     with provider.unit_of_work() as store:
         store.sync_registrations(

@@ -9,7 +9,7 @@ through :func:`get_settings`.
 
 from functools import lru_cache
 
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,6 +62,26 @@ class Settings(BaseSettings):
     dev_shared_secret: str | None = None
 
     stale_after_minutes: int = 120
+
+    @field_validator(
+        "oidc_authority", "oidc_issuer", "dev_shared_secret", mode="before"
+    )
+    @classmethod
+    def _blank_to_none(cls, value: object) -> object:
+        """
+        Treat an empty or whitespace-only optional string as unset.
+
+        ``docker compose`` passes ``${NAME:-}`` as an empty string, not
+        as an absent variable. Without this, ``ADRIANO_OIDC_ISSUER=""``
+        would be compared literally against the token's ``iss`` instead
+        of falling back to the discovery document's issuer.
+
+        :param value: The raw input value.
+        :returns: ``None`` for a blank string, else *value* unchanged.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 @lru_cache
