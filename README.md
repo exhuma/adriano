@@ -65,8 +65,7 @@ is not read until later phases wire up source polling.
 ## Project layout
 
 - `backend/` — FastAPI application (`uv` project).
-- `frontend/` — Vue 3 / Vuetify 4 / TypeScript application (added in
-  a later phase).
+- `frontend/` — Vue 3 / Vuetify 4 / TypeScript application (Vite).
 - `phases/` — the implementation plan, decisions, and status for
   this build.
 - `Taskfile.yml` — all developer commands (`task --list-all`).
