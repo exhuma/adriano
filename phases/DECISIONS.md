@@ -239,8 +239,8 @@ Alembic migration 0001 creates:
   `comment`, `policy_id`, `policy_version`, `provenance` JSONB (record
   id, kind, ref, path, source_url at decision time), `created_at`
   (server `now()`). **UNIQUE (source_id, project, record_key, digest)**:
-  one formal decision per content hash. A trigger raises on UPDATE and
-  DELETE (append-only).
+  one formal decision per content hash. Triggers raise on UPDATE,
+  DELETE, and TRUNCATE (append-only; migrations 0001 + 0002).
 - `intake_run` — `id`, `source_id`, `kind` (`poll|push`),
   `identity` JSONB, `delivery_id` (unique with source_id when set),
   `started_at`, `finished_at`, `status`, `counts` JSONB, `errors` JSONB.
@@ -336,7 +336,8 @@ Common registration fields: `id`, `type`, `scope`, `path`,
   reviewers only; 403 with reason; 409 if (identity, digest) decided.
 - `PUT /api/v1/candidates` (idempotent create/replace) and
   `POST /api/v1/candidates` (409 if the candidate identity exists). Body:
-  `{source_id, project, adr_uuid, ref, content, delivery_id?, author?}`.
+  `{source_id, project, adr_uuid, ref, content, path?, delivery_id?,
+  author?}` (`path` defaults to `<registration path>/<adr_uuid>.md`).
   Auth: bearer push token of that registration (constant-time compare).
   Checks: registration has `push` intake, project within scope, ref is
   not the published ref, document UUID equals `adr_uuid`. 422 with the

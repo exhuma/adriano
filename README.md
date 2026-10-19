@@ -155,6 +155,9 @@ at startup whenever the dev path is active.
   the Phase 1 P95 target, dataset, environment, and results.
 - `docs/examples/README.md` -- pointers into `samples/adr-root/` for
   every schema/validation example.
+- `docs/phase1-report.md` -- the Phase 1 acceptance report: criteria
+  status, measured latency, deviations, known limitations, and the
+  deferred backlog.
 
 ## Project layout
 

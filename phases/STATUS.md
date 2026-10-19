@@ -5,7 +5,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | # | Phase | Status | Commit | Notes |
 |---|---|---|---|---|
 | 00 | Planning + phases folder | done | | spec copied, decisions recorded |
-| 01 | Scaffold + skeleton UI | done | fcef2ad + next | see notes |
+| 01 | Scaffold + skeleton UI | done | fcef2ad d0d41dc | see notes |
 | 02 | Domain core | done | see git log | see notes |
 | 03 | Persistence | done | see git log | see notes |
 | 04 | Sources & ingest | done | see git log | see notes |
@@ -13,7 +13,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 06 | Auth & RBAC slice | done | see git log | see notes |
 | 07 | Approval slice | done | see git log | see notes |
 | 08 | Samples, deploy, demo | done | see git log | see notes |
-| 09 | Benchmark & report | todo | | |
+| 09 | Benchmark & report | done | 3db7e88 d0ee735 c0e831c 22386ae f154ddf | see notes |
 
 ## Handoff notes
 
@@ -288,3 +288,66 @@ open issues, anything the next phase must know.
   samples/adr-root samples/adr-root.bak`, poll, restore.
 - Fix: responsive app bar (`AppBarMenu.vue` below md; DEV chip stays
   visible). Tests: 389 backend, 113 frontend.
+
+### Phase 09
+
+- Benchmark tooling: `adriano seed-synthetic` (`app/services/
+  seed_synthetic*.py`) ingests a deterministic synthetic corpus
+  through `prepare_document`/`ingest_document` (never raw SQL), seed
+  42; `backend/bench/bench.py` (httpx, dev token, warm-up, p50/p95/p99/
+  max) drives `task bench`/`task bench:seed`. Results, environment,
+  and method recorded in `docs/benchmark.md`
+  (`docs/bench-2000.json`/`docs/bench-20000.json`). Worst observed
+  p95: 269.7 ms (`needs_approval`, 20,000 records, concurrency 8),
+  comfortably under the 1 s target.
+- Two optimisations found by benchmarking, both behaviour-preserving
+  (proven by dedicated tests): the record detail endpoint's
+  relationship index now fetches only candidate rows instead of every
+  published row (`list_relationship_candidates`, ~40x faster); the
+  `needs_approval` filter now uses set-based joins instead of
+  per-row correlated subqueries (`approval_join`, ~16x faster, no
+  JIT, no migration).
+- Independent read-only audit of all 27 criteria (opus, commits
+  `3db7e88`/`d0ee735` precede it): 23 pass, 3 partial (criterion 1
+  clean-checkout quickstart; criterion 3 raw-JSON source errors;
+  criterion 26 OIDC deployment blockers -- CSP missing the IdP origin
+  in `connect-src`/`frame-src`, empty `ADRIANO_OIDC_ISSUER` compared
+  literally instead of falling back), 1 not measured (criterion 25,
+  auditor not allowed to run the benchmark).
+- Fixes for every partial finding, in `c0e831c`/`22386ae`/`f154ddf`:
+  `Taskfile.yml` auto-installs frontend deps and resolves
+  `ADRIANO_CONFIG_FILE` to an absolute path from the repo root;
+  `frontend/src/utils/sourceErrors.ts` renders readable source errors
+  (never raw JSON) in a responsive `SourcesView` table;
+  `frontend/security-headers.conf.template` +
+  `docker-entrypoint.d/40-render-app-config.sh` render the validated
+  IdP origin into `connect-src`/`frame-src` and are `include`d in
+  every nginx `location` (previously missing on HTML responses);
+  `app/config.py` `_blank_to_none` treats an empty optional OIDC/dev
+  setting as unset; `docker-compose.yml` backend `env_file` passes
+  catalog secrets without touching `docker-compose.yml` per
+  registration; migration `0002_no_truncate_decisions` blocks
+  `TRUNCATE` on `decision_event` (UPDATE/DELETE were already blocked
+  by `0001`), plus non-owner DB role guidance in `docs/operator.md`;
+  `test_no_adapter_calls.py` strengthened to patch every adapter
+  constructor (proven to catch a real read-path regression, not just
+  the registry factory); freshness banner wording now varies by
+  record kind and intake mode (`utils/freshness.ts`); the full digest
+  is shown in `DecisionDialog`; `DiffPanel` header shows source/
+  project/ref and last-indexed time; more frontend tests; several
+  stale doc claims corrected; `RecordView.vue` split into 7
+  sub-components under `components/record/`.
+- Report: `docs/phase1-report.md` (criteria table, measured latency,
+  demo summary, deviations, known limitations, deferred backlog). All
+  27 criteria pass; the audit's three partial findings (1, 3, 26) and
+  its not-measured finding (25) are confirmed fixed/passing against
+  the current code and a fresh `task lint && task test && task build
+  && uvx pyright` run (426 backend tests, 151 frontend tests, 0
+  pyright errors).
+- Commits: `3db7e88` (seeding/benchmark/detail optimisation),
+  `d0ee735` (needs_approval join), `c0e831c` (audit fixes: CSP, empty
+  settings, compose env), `22386ae` (readable source errors,
+  freshness wording), `f154ddf` (RecordView split).
+- Open issues: none blocking. See `docs/phase1-report.md` "Known
+  limitations" and "Deferred backlog" for everything deliberately not
+  done. **Stop for product-owner review; no Phase 2 work started.**
