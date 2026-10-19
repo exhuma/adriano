@@ -110,7 +110,7 @@ raw SQL.
    record ids from `GET /api/v1/records` before timing starts.
 4. For each scenario, 50 warm-up requests are discarded, then 400
    requests are timed sequentially-issued-but-concurrently-executed
-   (`concurrency.ThreadPoolExecutor`) at each of concurrency 1 and 8 --
+   (`concurrent.futures.ThreadPoolExecutor`) at each of concurrency 1 and 8 --
    at least 300 requests measured per scenario per concurrency, per
    the Phase 1 acceptance benchmark requirement.
 5. Scenarios: `free_text` (`q=<random vocabulary term>`), `filtered`

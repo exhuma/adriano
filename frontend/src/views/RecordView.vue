@@ -20,6 +20,7 @@ import { withLoading } from "@/composables/useLoading";
 import type { DecisionSummaryOut } from "@/types/approval";
 import type { RecordDetail } from "@/types/records";
 import { formatDate, formatDateTime, formatRelativeTime } from "@/utils/dates";
+import { freshnessBannerText, provenanceText } from "@/utils/freshness";
 import {
   approvalStateLabel,
   displayStatusLabel,
@@ -115,16 +116,24 @@ const recordKindLabel = computed(() =>
 /** A clear sentence distinguishing a candidate (and its branch) from
  *  a published record (SPEC.md "UI requirements": distinguish
  *  candidate from published everywhere). */
-const provenanceText = computed(() => {
-  if (!detail.value) {
-    return "";
-  }
-  const { metadata, provenance } = detail.value;
-  if (metadata.kind === "candidate") {
-    return `Candidate from branch ${provenance.ref} (${provenance.source_id} / ${provenance.project}).`;
-  }
-  return `Published from ${provenance.source_id} / ${provenance.project}.`;
-});
+const provenanceSentence = computed(() =>
+  detail.value
+    ? provenanceText(detail.value.metadata.kind, detail.value.provenance)
+    : "",
+);
+
+/** The stale/failed freshness banner's text, or `null` when no
+ *  banner should show (candidate, push-only registration, or fresh
+ *  content -- see `utils/freshness.ts`). */
+const freshnessBanner = computed(() =>
+  detail.value
+    ? freshnessBannerText(
+        detail.value.metadata.kind,
+        detail.value.provenance,
+        detail.value.freshness,
+      )
+    : null,
+);
 
 /** Shown only for an accepted candidate: acceptance already guides
  *  implementation before publication (SPEC.md "Independent approval
@@ -230,7 +239,7 @@ function linkTypeLabel(type: string): string {
         </div>
       </header>
 
-      <p class="text-body-2 text-medium-emphasis mb-2">{{ provenanceText }}</p>
+      <p class="text-body-2 text-medium-emphasis mb-2">{{ provenanceSentence }}</p>
 
       <p v-if="showAcceptedCandidateNote" class="text-body-2 mb-4">
         <v-icon icon="mdi-check-decagram" color="success" size="small" aria-hidden="true" />
@@ -267,16 +276,13 @@ function linkTypeLabel(type: string): string {
       </p>
 
       <v-alert
-        v-if="detail.freshness.stale"
+        v-if="freshnessBanner"
         type="warning"
         variant="tonal"
         icon="mdi-clock-alert-outline"
         class="mb-4"
       >
-        Last indexed
-        {{ formatRelativeTime(detail.freshness.last_success_at) ?? "never" }} —
-        the source could not be refreshed, so this may not be the current
-        published revision.
+        {{ freshnessBanner }}
       </v-alert>
 
       <v-card v-if="detail.issues.length > 0" class="mb-4" variant="outlined">
@@ -416,6 +422,10 @@ function linkTypeLabel(type: string): string {
         :record-id="props.id"
         :current-digest="detail.metadata.digest"
         :previous-digest="detail.metadata.previous_digest"
+        :source-id="detail.provenance.source_id"
+        :project="detail.provenance.project"
+        :ref-name="detail.provenance.ref"
+        :last-indexed-at="detail.freshness.last_success_at"
         :history="detail.approval.history"
         :siblings="detail.siblings"
         :competing-candidates="detail.approval.competing_candidates"

@@ -14,7 +14,6 @@ import { computed, ref, watch } from "vue";
 
 import { useDecision } from "@/composables/useDecision";
 import type { DecisionAction, DecisionSummaryOut } from "@/types/approval";
-import { shortDigest } from "@/utils/digest";
 
 const MAX_COMMENT_LENGTH = 2000;
 
@@ -110,7 +109,7 @@ async function submit(): Promise<void> {
           the exact content at digest:
         </p>
         <p class="mb-4">
-          <code :title="digest">{{ shortDigest(digest) }}</code>
+          <code class="digest-full">{{ digest }}</code>
         </p>
 
         <v-alert
@@ -173,3 +172,10 @@ async function submit(): Promise<void> {
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+.digest-full {
+  overflow-wrap: break-word;
+  word-break: break-all;
+}
+</style>

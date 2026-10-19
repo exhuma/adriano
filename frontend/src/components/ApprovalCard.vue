@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Approval card on the record detail page: state + explanation,
- * policy summary, current digest (short, with copy), decide
+ * policy summary, indexed digest (short, with copy), decide
  * controls (or the visible reason decisions are blocked), and the
  * decision history. `DecisionDialog.vue` is the adapter that turns
  * an Accept/Reject click into a submitted decision.
@@ -96,7 +96,7 @@ function policySummaryText(approval: ApprovalOut): string {
       <p class="text-body-2">{{ policySummaryText(approval) }}</p>
 
       <p class="text-body-2 mt-2">
-        Current content digest:
+        Indexed content digest:
         <code :title="approval.digest">{{ shortDigest(approval.digest) }}</code>
         <v-btn
           icon="mdi-content-copy"

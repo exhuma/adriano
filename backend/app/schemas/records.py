@@ -19,7 +19,7 @@ from app.domain.issues import IssueCode, Severity
 from app.domain.relationships import DisplayStatus, InboundType, Resolution
 from app.domain.values import LinkType, RecordKind, TitleSource
 from app.services.approval_view import DivergenceKind
-from app.storage.port import PollStatus, RecordState
+from app.storage.port import IntakeKind, PollStatus, RecordState
 
 
 class IssueOut(BaseModel):
@@ -96,6 +96,7 @@ class ProvenanceOut(BaseModel):
     path: str
     ref: str
     source_url: str | None
+    updated_at: datetime.datetime
 
 
 class FreshnessOut(BaseModel):
@@ -107,6 +108,7 @@ class FreshnessOut(BaseModel):
     last_success_at: datetime.datetime | None
     last_status: PollStatus
     stale: bool
+    intake: list[IntakeKind]
 
 
 class OutboundLinkOut(BaseModel):

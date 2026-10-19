@@ -53,12 +53,14 @@ function baseDetail(): RecordDetail {
       path: "doc/decisions/2024-12-24-use-postgres.md",
       ref: "feature/x",
       source_url: null,
+      updated_at: "2026-02-03T10:00:00Z",
     },
     freshness: {
       last_attempt_at: null,
       last_success_at: "2026-01-01T00:00:00Z",
       last_status: "ok",
       stale: false,
+      intake: ["poll"],
     },
     outbound_links: [],
     inbound_links: [],
@@ -177,10 +179,114 @@ describe("RecordView approval controls", () => {
 
     const wrapper = await mountRecordView();
 
-    expect(wrapper.text()).toContain("Candidate from branch feature/x");
+    expect(wrapper.text()).toContain("Submitted from branch feature/x");
     expect(wrapper.text()).toContain(
       "Accepted — this candidate is authoritative for implementation " +
         "before publication.",
     );
+  });
+});
+
+describe("RecordView freshness banner", () => {
+  beforeEach(() => {
+    getRecordDiff.mockResolvedValue(noPriorDiff);
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("never shows a polling-freshness banner for a candidate", async () => {
+    const detail = baseDetail();
+    detail.freshness.stale = true;
+    detail.freshness.last_status = "failed";
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).not.toContain("may not be the current published");
+    expect(wrapper.text()).not.toContain("older than the freshness threshold");
+  });
+
+  it("describes a failed poll distinctly from merely old content for a published record", async () => {
+    const detail = baseDetail();
+    detail.metadata.kind = "published";
+    detail.freshness.stale = true;
+    detail.freshness.last_status = "failed";
+    detail.freshness.last_attempt_at = "2026-03-01T12:00:00Z";
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("The last poll of central failed");
+    expect(wrapper.text()).toContain(
+      "this is the last successfully indexed revision and may not be " +
+        "the current published revision.",
+    );
+    expect(wrapper.text()).not.toContain("could not be refreshed");
+  });
+
+  it("describes stale-by-age content without claiming the poll failed", async () => {
+    const detail = baseDetail();
+    detail.metadata.kind = "published";
+    detail.freshness.stale = true;
+    detail.freshness.last_status = "ok";
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("older than the freshness threshold");
+    expect(wrapper.text()).toContain("the source may have changed since");
+    expect(wrapper.text()).not.toContain("the last poll of");
+  });
+
+  it("shows no polling-freshness banner for a push-only registration", async () => {
+    const detail = baseDetail();
+    detail.metadata.kind = "published";
+    detail.freshness.stale = true;
+    detail.freshness.last_status = "ok";
+    detail.freshness.intake = ["push"];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).not.toContain("older than the freshness threshold");
+    expect(wrapper.text()).not.toContain("the last poll of");
+  });
+});
+
+describe("RecordView legacy sign-off card", () => {
+  beforeEach(() => {
+    getRecordDiff.mockResolvedValue(noPriorDiff);
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("shows the legacy sign-off card, separate from the approval card, with its explanation", async () => {
+    const detail = baseDetail();
+    detail.legacy_signoff_unverified = ["Jane Doe <jane@example.com>"];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("Legacy sign-off (unverified)");
+    expect(wrapper.text()).toContain("signed-off-by");
+    expect(wrapper.text()).toContain("not a verified approval");
+    expect(wrapper.text()).toContain("Jane Doe <jane@example.com>");
+    // Separate from the approval card: the approval card's own
+    // heading is still present and distinct from this one.
+    expect(wrapper.text()).toContain("Approval");
+  });
+
+  it("does not render the legacy sign-off card when there is nothing legacy", async () => {
+    const detail = baseDetail();
+    detail.legacy_signoff_unverified = [];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).not.toContain("Legacy sign-off (unverified)");
   });
 });

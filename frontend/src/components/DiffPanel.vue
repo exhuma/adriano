@@ -31,6 +31,15 @@ const props = defineProps<{
   currentDigest: string;
   /** The record's previous stored digest, if any. */
   previousDigest: string | null;
+  /** Owning source/registration id, for the header. */
+  sourceId: string;
+  /** Project path within the source, for the header. */
+  project: string;
+  /** Branch/ref the content came from, for the header. */
+  refName: string;
+  /** When the owning registration last indexed successfully, for the
+   *  header (`null` if it never has). */
+  lastIndexedAt: string | null;
   /** Decision history of the identity, for the digest selector. */
   history: DecisionSummaryOut[];
   /** Identity siblings (published/candidates), for the selector. */
@@ -115,6 +124,10 @@ watch([fromDigest, toDigest], load);
 <template>
   <v-card variant="outlined" class="mb-4">
     <v-card-title class="text-subtitle-1">Diff</v-card-title>
+    <v-card-subtitle class="diff-source">
+      {{ sourceId }} / {{ project }} @ {{ refName }} — last indexed
+      {{ lastIndexedAt ? formatDateTime(lastIndexedAt) : "never" }}
+    </v-card-subtitle>
 
     <v-card-text v-if="digestOptions.length > 2" class="diff-selectors">
       <v-select
@@ -188,6 +201,11 @@ watch([fromDigest, toDigest], load);
 </template>
 
 <style scoped>
+.diff-source {
+  white-space: normal;
+  opacity: var(--v-medium-emphasis-opacity);
+}
+
 .diff-selectors {
   display: flex;
   flex-wrap: wrap;

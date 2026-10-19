@@ -268,7 +268,13 @@ their configured env var *names* appear in diagnostics.
 
 - **Restore:**
 
+  Stop the backend (and any external poll job -- the `adriano poll`
+  CLI run from cron/k8s, see "Polling schedule") before restoring: a running
+  backend or a poll in progress can write to the database mid-restore
+  and corrupt it, or simply get overwritten and lose that write.
+
   ```sh
+  docker compose stop backend
   docker compose cp ./adriano-2026-10-19.dump db:/tmp/adriano.dump
   docker compose exec db pg_restore -U adriano -d adriano \
     --clean --if-exists /tmp/adriano.dump
@@ -278,7 +284,13 @@ their configured env var *names* appear in diagnostics.
 
   If `alembic current` does not report the latest head, run
   `docker compose run --rm migrate` (or `... run --rm backend alembic
-  upgrade head`) before starting `backend` against the restored data.
+  upgrade head`) and re-run `alembic current` to confirm it now does.
+  Only once it reports head, start the backend (and any poll jobs)
+  again against the restored data:
+
+  ```sh
+  docker compose start backend
+  ```
 
 ## Retention
 

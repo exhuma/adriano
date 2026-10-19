@@ -9,7 +9,7 @@ description of the old behaviour this is migrated from.
 
 | Legacy route | Legacy behaviour | Replacement |
 |---|---|---|
-| `GET /` | Redirected to `/docs`. | Redirects to the SPA's search landing page (`/`, served by the frontend). API documentation moved to `/api/docs` (see below). |
+| `GET /` | Redirected to `/docs`. | No redirect: the frontend's nginx serves the SPA's `index.html` directly at `/` (`try_files ... /index.html`), which then renders the search landing page client-side. The backend has no `/` route at all. API documentation moved to `/api/docs` (see below). |
 | `GET /adr/` | Returned HTML by default; JSON when `Accept: application/json` or `?json=true` was given; **scraped its configured source on every request**. | Replaced entirely by `GET /api/v1/records` (search/list) and `GET /api/v1/records/{id}` (detail), both JSON-only, both served from the local index -- **no source call happens on a normal read** (acceptance criterion 5). There is no HTML-vs-JSON content negotiation: the SPA renders the HTML view client-side from the JSON API. |
 | `GET /healthz` | DB-independent liveness check. | **Preserved at the same path**, now reporting `{status, database, config, policy, registrations, auth, rbac}` -- still public, still no record data or secrets. |
 | `GET /docs` | FastAPI's interactive API docs. | Moved to `GET /api/docs` (OpenAPI schema at `GET /openapi.json`); both public, both contain no record data. |

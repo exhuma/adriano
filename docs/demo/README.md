@@ -48,7 +48,7 @@ poll or push already indexed.
 ## 2. Filter by project and state (AC 2, 4)
 
 Selecting `central` / `platform` and the "Published" toggle narrows
-the same 18-record catalog to 9 platform records; the result count
+the same 15-record catalog to 9 platform records; the result count
 and chips ("Published", "Pending approval", issue indicators) update
 without a page reload.
 
@@ -74,7 +74,8 @@ to "Use Stripe for card payment processing".
 location (no UUID can be read), and reports one `bad_yaml` error with
 the exact parser message and line number. Every other record stayed
 fully browsable the whole time — step 1's search results list is the
-same 18 records, with only this one flagged.
+same 15 records (candidates arrive later, in step 5), with only this
+one flagged.
 
 ![Invalid record isolated, with its bad_yaml issue](04-invalid-record-bad-yaml.png)
 
@@ -221,9 +222,12 @@ then polled:
 $ mv samples/adr-root samples/adr-root.bak
 ```
 
-Polling now fails cleanly: the registration is marked `Failed` with
-the exact problem and a recovery hint, while every previously indexed
-record stays fully browsable (nothing is deleted on a failed poll):
+Polling now fails cleanly: the registration is marked `Failed`, and
+the "Problem & recovery" column renders the error as a readable
+message (with its stable code as secondary text) plus a recovery
+hint -- never the raw JSON the server stores internally -- while
+every previously indexed record stays fully browsable (nothing is
+deleted on a failed poll):
 
 ![Sources page: poll failed, with the error and a recovery hint](12b-sources-failed.png)
 
@@ -278,5 +282,18 @@ task demo:down   # docker compose down -v: stops and discards the stack
 `task demo:down` removes the containers and the stack's database
 volume; it never touches the separate ephemeral dev/test database
 (`adriano-db`, `task db:up`/`task db:down`). `.env.demo` and the push
-token it contains are gitignored and regenerated fresh on every
-`task demo`; no token or secret value appears anywhere in this page.
+token it contains are gitignored and generated once, the first time
+`task demo` runs (its `demo:env` step is a no-op if the file already
+exists, so the secret and push token stay stable across repeated
+`task demo`/`task demo:down` cycles); delete `.env.demo` yourself to
+force a fresh secret on the next run. No token or secret value
+appears anywhere in this page.
+
+Steps 7, 8 and 12 add, edit, and temporarily rename files under the
+tracked `samples/adr-root/` tree (step 12 renames it back itself;
+steps 7-8 leave a new/modified file behind). Discard those local
+changes when you are done:
+
+```sh
+git checkout -- samples/ && git clean -fd samples/
+```

@@ -15,6 +15,7 @@ import { ApiError } from "@/api";
 import { listSources, pollAllSources, pollSource } from "@/api/sources";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
+import SourceProblemCell from "@/components/SourceProblemCell.vue";
 import StatusChip from "@/components/StatusChip.vue";
 import { useAuth } from "@/composables/useAuth";
 import { withLoading } from "@/composables/useLoading";
@@ -22,6 +23,7 @@ import type { SourceOut } from "@/types/sources";
 import { formatDateTime, formatRelativeTime } from "@/utils/dates";
 import { errorDetail, forbiddenText, isForbidden } from "@/utils/apiErrors";
 import { pollStatusLabel, type StatusLabel } from "@/utils/labels";
+import { describeLastError, type SourceProblemDisplay } from "@/utils/sourceErrors";
 
 type LoadState = "loading" | "loaded" | "error";
 
@@ -63,7 +65,7 @@ interface SourceRow {
   statusLabel: StatusLabel;
   lastAttempt: { relative: string; absolute: string } | null;
   lastSuccess: { relative: string; absolute: string } | null;
-  problem: string | null;
+  problem: SourceProblemDisplay;
   hint: string | null;
 }
 
@@ -157,24 +159,19 @@ async function pollOne(id: string): Promise<void> {
   }
 }
 
-/** A human-readable problem summary, or `null` when there is none. */
-function problemSummary(source: SourceOut): string | null {
+/** How to display a registration's problem, readably -- never the
+ *  raw `last_error` JSON (audit finding S3). */
+function problemDisplay(source: SourceOut): SourceProblemDisplay {
   if (source.config_error) {
-    return source.config_error;
+    return { kind: "text", text: source.config_error };
   }
-  const lastError: unknown = source.last_error;
-  if (typeof lastError === "string") {
-    return lastError;
-  }
-  if (lastError !== null && lastError !== undefined) {
-    return JSON.stringify(lastError);
-  }
-  return null;
+  return describeLastError(source.last_error);
 }
 
 /** A concrete next step for the operator, or `null` when healthy. */
-function recoveryHint(source: SourceOut, problem: string | null): string | null {
-  if (!problem && source.last_status !== "failed" && source.last_status !== "partial") {
+function recoveryHint(source: SourceOut, problem: SourceProblemDisplay): string | null {
+  const hasProblem = problem.kind !== "none";
+  if (!hasProblem && source.last_status !== "failed" && source.last_status !== "partial") {
     return null;
   }
   return source.type === "gitlab"
@@ -186,7 +183,7 @@ function recoveryHint(source: SourceOut, problem: string | null): string | null 
  *  so the template never re-derives them (and never has to narrow
  *  the recursive `JsonValue` type of `last_error` itself). */
 function toRow(source: SourceOut): SourceRow {
-  const problem = problemSummary(source);
+  const problem = problemDisplay(source);
   return {
     id: source.id,
     type: source.type,
@@ -247,80 +244,76 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
     />
 
     <template v-else>
-      <v-table v-if="rows.length > 0">
-        <thead>
-          <tr>
-            <th scope="col">Registration</th>
-            <th scope="col">Type</th>
-            <th scope="col">Intake</th>
-            <th scope="col">Published ref</th>
-            <th scope="col">Status</th>
-            <th scope="col">Last attempt</th>
-            <th scope="col">Last success</th>
-            <th scope="col">Problem &amp; recovery</th>
-            <th v-if="canOperate" scope="col">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <th scope="row">{{ row.id }}</th>
-            <td>{{ row.type }}</td>
-            <td>{{ row.intake }}</td>
-            <td>{{ row.publishedRef }}</td>
-            <td>
-              <StatusChip v-bind="row.statusLabel" />
-              <span v-if="!row.enabled" class="ml-2">
-                <StatusChip icon="mdi-pause-circle-outline" text="Disabled" />
-              </span>
-            </td>
-            <td>
-              <span v-if="row.lastAttempt">
-                {{ row.lastAttempt.relative }}
-                <br>
-                <span class="text-caption text-medium-emphasis">
-                  {{ row.lastAttempt.absolute }}
+      <div v-if="rows.length > 0" class="sources-table-scroll">
+        <v-table>
+          <thead>
+            <tr>
+              <th scope="col">Registration</th>
+              <th scope="col">Type</th>
+              <th scope="col">Intake</th>
+              <th scope="col">Published ref</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last attempt</th>
+              <th scope="col">Last success</th>
+              <th scope="col" class="problem-column">Problem &amp; recovery</th>
+              <th v-if="canOperate" scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in rows" :key="row.id">
+              <th scope="row">{{ row.id }}</th>
+              <td>{{ row.type }}</td>
+              <td>{{ row.intake }}</td>
+              <td>{{ row.publishedRef }}</td>
+              <td>
+                <StatusChip v-bind="row.statusLabel" />
+                <span v-if="!row.enabled" class="ml-2">
+                  <StatusChip icon="mdi-pause-circle-outline" text="Disabled" />
                 </span>
-              </span>
-              <span v-else>Never</span>
-            </td>
-            <td>
-              <span v-if="row.lastSuccess">
-                {{ row.lastSuccess.relative }}
-                <br>
-                <span class="text-caption text-medium-emphasis">
-                  {{ row.lastSuccess.absolute }}
+              </td>
+              <td>
+                <span v-if="row.lastAttempt">
+                  {{ row.lastAttempt.relative }}
+                  <br>
+                  <span class="text-caption text-medium-emphasis">
+                    {{ row.lastAttempt.absolute }}
+                  </span>
                 </span>
-              </span>
-              <span v-else>Never</span>
-            </td>
-            <td>
-              <template v-if="row.problem || row.hint">
-                <p v-if="row.problem" class="text-body-2">{{ row.problem }}</p>
-                <p v-if="row.hint" class="text-body-2 text-medium-emphasis">
-                  {{ row.hint }}
-                </p>
-              </template>
-              <span v-else class="text-medium-emphasis">—</span>
-            </td>
-            <td v-if="canOperate">
-              <v-btn
-                v-if="row.pollable"
-                size="small"
-                variant="tonal"
-                prepend-icon="mdi-cloud-sync-outline"
-                :loading="pollingIds.includes(row.id)"
-                :disabled="pollingIds.includes(row.id)"
-                @click="pollOne(row.id)"
-              >
-                Poll now
-              </v-btn>
-              <span v-else class="text-caption text-medium-emphasis">
-                Not pollable
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </v-table>
+                <span v-else>Never</span>
+              </td>
+              <td>
+                <span v-if="row.lastSuccess">
+                  {{ row.lastSuccess.relative }}
+                  <br>
+                  <span class="text-caption text-medium-emphasis">
+                    {{ row.lastSuccess.absolute }}
+                  </span>
+                </span>
+                <span v-else>Never</span>
+              </td>
+              <td class="problem-column">
+                <SourceProblemCell :problem="row.problem" :hint="row.hint" />
+              </td>
+              <td v-if="canOperate">
+                <v-btn
+                  v-if="row.pollable"
+                  size="small"
+                  variant="tonal"
+                  prepend-icon="mdi-cloud-sync-outline"
+                  :loading="pollingIds.includes(row.id)"
+                  :disabled="pollingIds.includes(row.id)"
+                  @click="pollOne(row.id)"
+                >
+                  Poll now
+                </v-btn>
+                <span v-else class="text-caption text-medium-emphasis">
+                  Not pollable
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </div>
 
       <p v-else class="text-body-2 text-medium-emphasis">
         No source registrations are configured yet.
@@ -348,5 +341,21 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+/* Scroll horizontally inside the table's own container, never the
+ * page, so a wide table (long registration ids, many columns) never
+ * causes page-level horizontal scroll and never clips the trailing
+ * Action column (module-ux-principles accessibility; audit S3). */
+.sources-table-scroll {
+  overflow-x: auto;
+}
+
+/* Bound the problem/recovery column and let its text wrap instead of
+ * growing the column (and the table) without limit. */
+.problem-column {
+  max-width: 22rem;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 </style>

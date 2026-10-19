@@ -14,7 +14,7 @@ contract. This repository is being built phase by phase; see
 
 - [`uv`](https://docs.astral.sh/uv/) (Python package/dependency
   manager; it installs the required Python version itself).
-- [Node.js](https://nodejs.org/) (for the frontend, once scaffolded).
+- [Node.js](https://nodejs.org/) (for the frontend).
 - [Docker](https://www.docker.com/) (for the ephemeral dev/test
   database).
 - [`go-task`](https://taskfile.dev/) v3 (the `task` CLI).
@@ -22,35 +22,53 @@ contract. This repository is being built phase by phase; see
 ## Quickstart
 
 ```sh
-# Start the ephemeral dev/test Postgres container (host port 55432;
-# no-op if it's already running). Leave it running across sessions;
-# `task db:down` discards it.
-task db:up
+# Copy the documented env file and fill in the dev-only settings
+# (see "Authentication" below; both must stay unset in production).
+cp .env.example .env
+# Edit .env and set:
+#   ADRIANO_DEV_AUTH_ENABLED=true
+#   ADRIANO_DEV_SHARED_SECRET=<paste the output below>
+#   VITE_DEV_AUTH=true
+openssl rand -hex 32
+
+# Copy the bundled demo catalog so there is a configured `catalog.yaml`
+# to poll. Its `root: ./samples/adr-root` is resolved relative to the
+# config file's own directory, so it still resolves once copied here
+# (both land at the repository root).
+cp catalog.demo.yaml catalog.yaml
 
 # Install backend dependencies.
 cd backend && uv sync && cd ..
 
-# Apply database migrations (no-op until phase 03 adds the first
-# revision).
-task migrate
-
-# One-command alternative: starts the DB, applies migrations, then
-# runs the backend (8100) and frontend (5173) dev servers together.
-# Ctrl-C stops both servers; the DB keeps running until `task db:down`.
+# Start the ephemeral dev/test Postgres container (host port 55432;
+# no-op if it's already running), apply migrations, then run the
+# backend (8100) and frontend (5173) dev servers together. Ctrl-C
+# stops both servers; the DB keeps running until `task db:down`.
 task dev
 
-# Or run each dev server by hand, in separate terminals:
+# Or run each step by hand, in separate terminals:
+task db:up         # start the ephemeral DB (no-op if already running)
+task migrate       # apply Alembic migrations
 task dev:backend   # backend, reload, port 8100
-task dev:frontend  # frontend, port 5173 (skips gracefully with a
-                   # clear message until the frontend exists)
+task dev:frontend  # frontend, port 5173
+
+# In another terminal: index the sample ADRs in samples/adr-root.
+task poll
 
 # Lint and test everything.
 task lint
 task test
 ```
 
-Once the backend is running, `curl -fsS localhost:8100/healthz`
-should return `{"status": "ok", "database": "ok"}`.
+Open <http://localhost:5173> and use the "Dev sign-in" chip to sign in
+as one of the preset identities (Reader, Operator/Admin, or Reviewer
+-- roles `reader`, `admin`, `adr-reviewer`) -- no external identity
+provider needed. Once the backend is running,
+`curl -fsS localhost:8100/healthz` should return
+`{"status": "ok", "database": "ok", "config": "ok", "policy": "configured", "registrations": "synced", "rbac": "configured", "auth": "dev"}`.
+
+For the fully containerised stack instead (no dev servers, built
+images, `task poll` run for you), see "Running in containers" below.
 
 ## Running in containers (Docker Compose)
 

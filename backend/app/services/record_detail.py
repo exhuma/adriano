@@ -22,6 +22,7 @@ import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from app.catalog_config import SourceRegistration
 from app.domain import fields as domain_fields
 from app.domain.approval import (
     ApprovalStateCode,
@@ -48,6 +49,7 @@ from app.services.record_relationships import (
 from app.services.sources_view import is_stale
 from app.storage.port import (
     CatalogStore,
+    IntakeKind,
     JsonObject,
     PollStatus,
     RecordState,
@@ -105,6 +107,8 @@ class RecordProvenance:
     :param path: File path inside the project.
     :param ref: Branch/ref the content came from.
     :param source_url: Link to the content at the source, if any.
+    :param updated_at: When this row's content digest last changed
+        (for a candidate, effectively when it was last submitted).
     """
 
     source_id: str
@@ -112,6 +116,7 @@ class RecordProvenance:
     path: str
     ref: str
     source_url: str | None
+    updated_at: datetime.datetime
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -125,12 +130,18 @@ class RecordFreshness:
     :param last_status: Outcome of its latest poll.
     :param stale: Whether the indexed content may not reflect the
         current published source (see :func:`is_stale`).
+    :param intake: The owning registration's configured intake
+        mechanisms (``poll``, ``push``, or both); empty when the
+        registration is unknown. A registration without ``poll``
+        intake is never polled, so staleness-by-polling does not
+        apply to it.
     """
 
     last_attempt_at: datetime.datetime | None
     last_success_at: datetime.datetime | None
     last_status: PollStatus
     stale: bool
+    intake: tuple[IntakeKind, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -225,11 +236,13 @@ def _provenance(record: StoredRecord) -> RecordProvenance:
         path=record.path,
         ref=record.ref,
         source_url=record.source_url,
+        updated_at=record.updated_at,
     )
 
 
 def _freshness(
     registration: Registration | None,
+    config_source: SourceRegistration | None,
     now: datetime.datetime,
     stale_after_minutes: int,
 ) -> RecordFreshness:
@@ -241,6 +254,11 @@ def _freshness(
             registration.last_status if registration else PollStatus.NEVER
         ),
         stale=is_stale(registration, now, stale_after_minutes),
+        intake=(
+            tuple(sorted(config_source.intake, key=lambda k: k.value))
+            if config_source
+            else ()
+        ),
     )
 
 
@@ -299,6 +317,7 @@ def get_record_detail(
     now: datetime.datetime,
     stale_after_minutes: int,
     reviewer: Reviewer | None = None,
+    config_sources: Sequence[SourceRegistration] = (),
 ) -> RecordDetail | None:
     """
     Assemble everything the record detail page shows.
@@ -312,6 +331,9 @@ def get_record_detail(
     :param stale_after_minutes: Configured staleness threshold.
     :param reviewer: The caller, for ``approval.can_decide``; ``None``
         means nobody can decide.
+    :param config_sources: The current configuration's registrations,
+        for ``freshness.intake`` (empty for a registration removed
+        from ``catalog.yaml``).
     :returns: The detail, or ``None`` if the record does not exist.
     """
     record = store.get_record(record_id)
@@ -322,12 +344,17 @@ def get_record_detail(
     event_views = [event.as_view() for event in decision_events]
     relationships = build_relationships(store, record, siblings)
     registration = store.get_registration(record.source_id)
+    config_source = next(
+        (s for s in config_sources if s.id == record.source_id), None
+    )
     return RecordDetail(
         metadata=_metadata(record),
         issues=tuple(record.issues) + relationships.issues,
         rendered_html=record.rendered_html,
         provenance=_provenance(record),
-        freshness=_freshness(registration, now, stale_after_minutes),
+        freshness=_freshness(
+            registration, config_source, now, stale_after_minutes
+        ),
         outbound_links=relationships.outbound_links,
         inbound_links=relationships.inbound_links,
         errata=relationships.errata,

@@ -139,6 +139,58 @@ describe("SourcesView", () => {
     expect(wrapper.text()).toContain("ask an administrator");
   });
 
+  it("renders a problems[] last_error as a list with code as secondary text", async () => {
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        last_status: "failed",
+        last_error: {
+          problems: [
+            { code: "source_error", message: "fake source is down" },
+            { code: "fetch_failed", message: "could not fetch a.md" },
+          ],
+        },
+      },
+    ]);
+    const wrapper = await mountView();
+
+    const items = wrapper.findAll("li");
+    expect(items).toHaveLength(2);
+    expect(items[0].text()).toContain("fake source is down");
+    expect(items[0].text()).toContain("source_error");
+    expect(items[1].text()).toContain("could not fetch a.md");
+    expect(wrapper.text()).not.toContain("{");
+  });
+
+  it("renders a source_error last_error shape as plain text", async () => {
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        last_status: "failed",
+        last_error: { source_error: "connection refused" },
+      },
+    ]);
+    const wrapper = await mountView();
+
+    expect(wrapper.text()).toContain("connection refused");
+    expect(wrapper.text()).not.toContain("{");
+  });
+
+  it("never renders raw JSON for an unrecognised last_error shape", async () => {
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        last_status: "failed",
+        last_error: { weird: { nested: true } },
+      },
+    ]);
+    const wrapper = await mountView();
+
+    expect(wrapper.text()).toContain("See server logs (details unavailable).");
+    expect(wrapper.text()).not.toContain("{");
+    expect(wrapper.text()).not.toContain("weird");
+  });
+
   it("disables Poll now on a specific row while its poll is pending", async () => {
     listSources.mockResolvedValue([baseSource]);
     let resolvePoll: (value: { accepted: string[]; message: string }) => void = () => {};

@@ -629,6 +629,8 @@ export interface components {
             last_status: components["schemas"]["PollStatus"];
             /** Stale */
             stale: boolean;
+            /** Intake */
+            intake: components["schemas"]["IntakeKind"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -818,6 +820,11 @@ export interface components {
             ref: string;
             /** Source Url */
             source_url: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * RecordDetailOut

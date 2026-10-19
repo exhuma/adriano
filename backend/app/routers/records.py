@@ -140,6 +140,7 @@ def get_record(
             now=datetime.datetime.now(datetime.UTC),
             stale_after_minutes=settings.stale_after_minutes,
             reviewer=reviewer_from(principal),
+            config_sources=runtime.config.sources if runtime else (),
         )
     if detail is None:
         raise NotFoundError(
