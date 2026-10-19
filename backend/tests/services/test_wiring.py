@@ -51,7 +51,9 @@ def test_startup_syncs_registrations_and_reports_health(
     assert rows["central"].config_error is None
     assert rows["central"].last_status is PollStatus.NEVER
     assert rows["gitlab-platform"].enabled is False
-    assert "not available yet" in (rows["gitlab-platform"].config_error or "")
+    assert "ADRIANO_GITLAB_TOKEN_PLATFORM is not set" in (
+        rows["gitlab-platform"].config_error or ""
+    )
     assert rows["other"].enabled is False  # seeded, not in the file
 
 
@@ -111,8 +113,8 @@ def test_poll_command_handles_nothing_to_poll_and_unknown_ids(
     )
     unknown = main(["poll", "--source", "nope"], settings=settings)
     # central ([filesystem]) is now a valid, enabled registration (the
-    # sample ADR tree arrives in phase 08); gitlab-platform is still a
-    # pending, disabled type, so it is the one that stays "not pollable".
+    # sample ADR tree arrives in phase 08); gitlab-platform is disabled
+    # because its token env var is unset, so it stays "not pollable".
     disabled = main(
         ["poll", "--source", "gitlab-platform"],
         settings=settings,

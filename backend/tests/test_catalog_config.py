@@ -124,7 +124,7 @@ sources:
 def test_type_specific_settings_are_validated_by_the_registry(
     tmp_path: Path,
 ) -> None:
-    """Ensure unknown, pending and invalid typed settings disable."""
+    """Ensure unknown and invalid typed settings disable."""
     config = load(
         tmp_path,
         """
@@ -139,10 +139,27 @@ sources:
 
     errors = {s.id: s.config_error or "" for s in config.sources}
     assert "unknown source type 'svn'" in errors["a"]
-    assert "not available yet" in errors["b"]
+    assert "base_url" in errors["b"]
     assert "unknown world" in errors["c"]
     assert "extra" in errors["d"]
     assert not any(s.enabled for s in config.sources)
+
+
+def test_pending_source_type_is_reported_as_not_available(
+    tmp_path: Path,
+) -> None:
+    """Ensure a known type without an adapter disables readably."""
+    path = tmp_path / "catalog.yaml"
+    path.write_text(
+        "sources:\n  - {id: a, type: gitlab, published_ref: main}\n" + POLICY,
+        encoding="utf-8",
+    )
+
+    config = load_catalog_config(
+        path, env={}, registry=SourceTypeRegistry(pending=["gitlab"])
+    )
+
+    assert "not available yet" in (config.sources[0].config_error or "")
 
 
 def test_entries_without_usable_id_are_reported_not_stored(
@@ -268,8 +285,8 @@ sources:
     assert any("PUSH_UNSET is not set" in p.message for p in warnings)
 
 
-def test_example_configuration_is_valid_apart_from_pending_types() -> None:
-    """Ensure catalog.example.yaml only fails on unavailable adapters."""
+def test_example_configuration_is_valid_apart_from_unset_secrets() -> None:
+    """Ensure catalog.example.yaml only fails on the unset GitLab token."""
     example = Path(__file__).resolve().parents[2] / "catalog.example.yaml"
 
     config = load_catalog_config(example, env={}, registry=default_registry())
@@ -280,4 +297,18 @@ def test_example_configuration_is_valid_apart_from_pending_types() -> None:
     central, gitlab = config.sources
     assert central.enabled and central.config_error is None
     assert gitlab.config_error is not None
-    assert "not available yet" in gitlab.config_error
+    assert "ADRIANO_GITLAB_TOKEN_PLATFORM is not set" in gitlab.config_error
+
+
+def test_example_configuration_gitlab_entry_is_valid_with_a_token() -> None:
+    """Ensure the example gitlab entry validates once its token is set."""
+    example = Path(__file__).resolve().parents[2] / "catalog.example.yaml"
+    env = {"ADRIANO_GITLAB_TOKEN_PLATFORM": SECRET}
+
+    config = load_catalog_config(example, env=env, registry=default_registry())
+
+    gitlab = config.sources[1]
+    assert gitlab.enabled and gitlab.config_error is None
+    assert gitlab.binding is not None
+    assert gitlab.binding.in_scope("platform/sub/api")
+    assert SECRET not in repr(config.registration_configs())

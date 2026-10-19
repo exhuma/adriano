@@ -7,9 +7,10 @@ Public API: :class:`RecordKind`, :class:`TitleSource`, :class:`LinkType`,
 """
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import cast
 
 
 class RecordKind(StrEnum):
@@ -84,8 +85,8 @@ class Links:
         :returns: The links.
         :raises ValueError: If a stored UUID is malformed.
         """
-        updates = data.get("updates") or []
-        obsoletes = data.get("obsoletes") or []
+        updates = cast(Iterable[object], data.get("updates") or [])
+        obsoletes = cast(Iterable[object], data.get("obsoletes") or [])
         corrects = data.get("corrects")
         return cls(
             updates=tuple(uuid.UUID(str(item)) for item in updates),

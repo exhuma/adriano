@@ -97,8 +97,9 @@ def parse_uuid_list(
     issues: list[Issue] = []
     for item in value:
         parsed, issue = parse_uuid(item, field)
-        if issue is not None:
-            issues.append(issue)
+        if parsed is None:
+            if issue is not None:
+                issues.append(issue)
         elif parsed not in found:
             found.append(parsed)
     return tuple(found), issues

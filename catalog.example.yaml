@@ -49,12 +49,18 @@ sources:
     push_tokens_env: [ADRIANO_PUSH_TOKEN_CENTRAL]
 
   # A gitlab source reads ADR files from one or more GitLab groups
-  # or projects over the GitLab REST API.
+  # or projects over the GitLab REST API. The registration stays
+  # disabled until the token env var below is set.
   - id: gitlab-platform
     type: gitlab
+    # Instance URL; https:// only (TLS is always verified).
     base_url: https://gitlab.example.com
-    # Env var NAME holding the GitLab personal/project access token.
+    # Env var NAME holding the GitLab personal/project access token
+    # (read_api scope suffices).
     token_env: ADRIANO_GITLAB_TOKEN_PLATFORM
+    # Group paths (all their non-archived projects; descendants too
+    # with include_subgroups, default false) and/or full project
+    # paths. At least one group or project is required.
     scope:
       groups: [platform]
       include_subgroups: true

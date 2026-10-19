@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.domain.frontmatter import JsonValue
 from app.sources.filesystem import FilesystemAdapter, validate_settings
 from app.sources.port import (
     SourceAccessError,
@@ -21,9 +22,9 @@ def settings(
     tmp_path: Path,
     *,
     root: str = "root",
-    scope: dict[str, object] | None = None,
+    scope: dict[str, JsonValue] | None = None,
     path: str = "doc/decisions",
-    options_extra: dict[str, object] | None = None,
+    options_extra: dict[str, JsonValue] | None = None,
 ) -> SourceSettings:
     """
     Build minimal common settings for :func:`validate_settings`.
@@ -35,7 +36,7 @@ def settings(
     :param options_extra: Extra keys merged into ``options``.
     :returns: The settings.
     """
-    options: dict[str, object] = {"root": root}
+    options: dict[str, JsonValue] = {"root": root}
     options.update(options_extra or {})
     return SourceSettings(
         id="fs",
@@ -108,6 +109,7 @@ async def test_validate_settings_resolves_relative_root(
     binding = validate_settings(settings(tmp_path, root="sub/root"), {})
 
     async with binding.open_adapter() as adapter:
+        assert isinstance(adapter, FilesystemAdapter)
         assert adapter.root == tmp_path / "sub/root"
 
 
@@ -117,6 +119,7 @@ async def test_validate_settings_keeps_absolute_root(tmp_path: Path) -> None:
     binding = validate_settings(settings(tmp_path, root=str(absolute)), {})
 
     async with binding.open_adapter() as adapter:
+        assert isinstance(adapter, FilesystemAdapter)
         assert adapter.root == absolute
 
 

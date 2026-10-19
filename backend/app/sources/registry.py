@@ -217,16 +217,16 @@ def default_registry() -> SourceTypeRegistry:
     Build the registry of the Phase 1 source types.
 
     Adapter hook: each adapter module registers its validator here.
-    ``gitlab`` is still pending (not implemented yet) and is reported as
-    "not available". The import of ``app.sources.filesystem`` is local
-    to this function because that module imports back from this one
-    (``SourceBinding``, ``SourceSettings``, ``parse_options``); importing
-    it at module level would be a circular import.
+    The adapter imports are local to this function because those
+    modules import back from this one (``SourceBinding``,
+    ``SourceSettings``, ``parse_options``); importing them at module
+    level would be a circular import.
 
     :returns: The registry.
     """
-    from app.sources import filesystem
+    from app.sources import filesystem, gitlab
 
     registry = SourceTypeRegistry(pending=SUPPORTED_TYPES)
     registry.register("filesystem", filesystem.validate_settings)
+    registry.register("gitlab", gitlab.validate_settings)
     return registry

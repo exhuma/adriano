@@ -8,7 +8,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 01 | Scaffold + skeleton UI | done | fcef2ad + next | see notes |
 | 02 | Domain core | done | see git log | see notes |
 | 03 | Persistence | done | see git log | see notes |
-| 04 | Sources & ingest | todo | | |
+| 04 | Sources & ingest | done | see git log | see notes |
 | 05 | Browse slice | todo | | |
 | 06 | Auth & RBAC slice | todo | | |
 | 07 | Approval slice | todo | | |
@@ -117,3 +117,46 @@ open issues, anything the next phase must know.
   migration); strip those from future autogenerate output.
 - Root `pyrightconfig.json` points editors at `backend/.venv`.
 - 158 backend tests (52 storage).
+
+### Phase 04
+
+- Config: `app/catalog_config.py` (`load_catalog_config`,
+  `CatalogConfig` with `file_status`, `sources`, `policy`
+  (`PolicyConfig`: status configured/missing/invalid + domain `Policy`),
+  `rbac` (`RbacConfig.permissions_for(roles)`, `Permission` read/operate
+  — may move to `auth/rbac.py` in phase 06), `get_source(id)`),
+  `app/source_config.py` (`SourceRegistration`: `push_tokens`
+  SecretStr, `binding`, `pollable`, `intake`, `published_ref`).
+- Composition root: `app/composition.py` (`load_catalog`,
+  `build_store_provider`, `build_polling_service`, `start_catalog`,
+  `get_catalog_runtime`). Only place reading `os.environ` (secret env
+  var names). Lifespan syncs registrations; `/healthz` adds `config`,
+  `policy`, `registrations` keys.
+- Source port `app/sources/port.py`; registry `default_registry()`
+  registers `filesystem` and `gitlab` (lazy imports inside the
+  function). `SourceBinding.in_scope(project_path)` is what push intake
+  (phase 07) must use for the scope check.
+- Ingest: `app/services/ingest.py` — `prepare_document(IncomingDocument)
+  -> PreparedDocument` (pure), `ingest_document(store, prepared,
+  RecordState, *, create_only=False)`. Push intake: prepare, check UUID,
+  then ingest as CANDIDATE inside `lock_registration`.
+- Relationship issues (`missing_target`, `ambiguous_target`,
+  `duplicate_uuid`) are computed at READ time from
+  `list_relationship_summaries()` — phase 05 must do this.
+- Polling: `PollingService.poll_all()/poll_source(id)` (async; blocking
+  DB calls inside — run HTTP-triggered polls in a worker thread).
+  Three units of work: run start, locked ingest, run finish/status.
+- CLI `adriano poll [--source ID]`, `adriano check-config`; tasks
+  `poll`, `check-config`.
+- Filesystem adapter: token `mtime_ns:size`; source_url is the absolute
+  path; author None.
+- GitLab adapter (`gitlab.py`, `gitlab_settings.py`, `gitlab_api.py`):
+  https only; scope needs a group or project; token
+  `<blob_id>:<head>:<count>:<path_tag>` enables branch-head skip;
+  4 attempts with backoff (Retry-After honoured), 4 concurrent
+  requests, `follow_redirects=False`, cross-host Link URLs refused;
+  author None (self-approval check cannot block polled records).
+- Tests: 253 backend; fake adapter `tests/fakes.py`, fake GitLab
+  `tests/gitlab_fake.py`. Autouse fixture strips exported
+  `ADRIANO_GITLAB_TOKEN*` / `ADRIANO_PUSH_TOKEN*`. pyright 0 errors on
+  `app` and `tests`.

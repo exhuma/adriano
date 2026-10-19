@@ -6,6 +6,7 @@ object for the FastAPI test client always point at the test
 database.
 """
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -14,6 +15,19 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
 from app.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def _isolate_source_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Remove source secret env vars a developer may have exported.
+
+    Tests that read ``os.environ`` (via the composition root) must not
+    depend on the developer's shell, e.g. an exported GitLab token.
+    """
+    for name in list(os.environ):
+        if name.startswith(("ADRIANO_GITLAB_TOKEN", "ADRIANO_PUSH_TOKEN")):
+            monkeypatch.delenv(name)
 
 
 @pytest.fixture

@@ -77,7 +77,7 @@ def register_handlers(app: FastAPI) -> None:
 
 def _make_handler(
     status_code: int,
-) -> Callable[[Request, AdrianoError], Awaitable[JSONResponse]]:
+) -> Callable[[Request, Exception], Awaitable[JSONResponse]]:
     """Build a handler closure for one domain-error status code.
 
     :param status_code: HTTP status code to return for this error
@@ -85,15 +85,16 @@ def _make_handler(
     :returns: An async FastAPI exception handler.
     """
 
-    async def _handler(_request: Request, exc: AdrianoError) -> JSONResponse:
+    async def _handler(_request: Request, exc: Exception) -> JSONResponse:
         """Map a domain exception to a JSON error response.
 
         :param _request: The incoming request (unused).
         :param exc: The raised domain exception.
         :returns: A JSON response carrying the error detail.
         """
+        message = exc.message if isinstance(exc, AdrianoError) else str(exc)
         return JSONResponse(
-            status_code=status_code, content={"detail": exc.message}
+            status_code=status_code, content={"detail": message}
         )
 
     return _handler
