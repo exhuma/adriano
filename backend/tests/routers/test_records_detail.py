@@ -167,6 +167,25 @@ def test_candidate_detail_uses_identity_siblings_for_relationships(
     assert response.status_code == 200
     body = response.json()
     assert body["metadata"]["kind"] == "candidate"
-    [sibling] = body["siblings"]
+    assert body["siblings"] == []
+
+
+def test_detail_siblings_exclude_the_record_itself(
+    client: TestClient, provider: PostgresStoreProvider
+) -> None:
+    """Ensure siblings list the other revisions, never the record itself."""
+    adr_uuid = uuid.uuid4()
+    with provider.lock_registration("central") as store:
+        published_id = seed(store, content=adr(adr_uuid, title="Same"))
+        candidate_id = seed(
+            store,
+            ref="feature",
+            kind=RecordState.CANDIDATE,
+            content=adr(adr_uuid, title="Same, edited"),
+        )
+
+    response = client.get(f"/api/v1/records/{published_id}")
+
+    [sibling] = response.json()["siblings"]
     assert sibling["id"] == str(candidate_id)
     assert sibling["kind"] == "candidate"

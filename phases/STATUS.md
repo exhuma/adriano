@@ -9,7 +9,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 02 | Domain core | done | see git log | see notes |
 | 03 | Persistence | done | see git log | see notes |
 | 04 | Sources & ingest | done | see git log | see notes |
-| 05 | Browse slice | todo | | |
+| 05 | Browse slice | done | see git log | see notes |
 | 06 | Auth & RBAC slice | todo | | |
 | 07 | Approval slice | todo | | |
 | 08 | Samples, deploy, demo | todo | | |
@@ -160,3 +160,31 @@ open issues, anything the next phase must know.
   `tests/gitlab_fake.py`. Autouse fixture strips exported
   `ADRIANO_GITLAB_TOKEN*` / `ADRIANO_PUSH_TOKEN*`. pyright 0 errors on
   `app` and `tests`.
+
+### Phase 05
+
+- Read API: `app/services/catalog.py`, routers `records`, `sources`,
+  `facets`, schemas in `app/schemas/`. `get_store_provider` dependency
+  in `app/composition.py` (override in tests). New store method
+  `list_facets()`. Setting `ADRIANO_STALE_AFTER_MINUTES` (120).
+- Detail relationship index = published rows + the record's identity
+  siblings (candidates of other identities do not participate).
+  Siblings in the payload exclude the record itself. Building the
+  index per detail request is unoptimised — measure in phase 09.
+- Search list items carry no derived display status (detail only).
+- OpenAPI schema is at `/openapi.json` (docs at `/api/docs`).
+- Frontend: `npm run gen:types` regenerates `src/types/openapi.ts`
+  (committed, with snapshot `frontend/openapi.json`; recursive
+  `JsonValue` hoisted by the script). Business types in
+  `src/types/{records,sources,health}.ts`; API wrappers
+  `src/api/{records,sources}.ts`; `useSearchQuery` (URL sync, 300 ms
+  debounce, clear); label helpers `src/utils/labels.ts`; dates via Intl.
+  Views Search/Record/Sources implemented; app bar shows a
+  "Configuration issue" chip from `/healthz`.
+- Vitest mounts Vuetify: `server.deps.inline: ["vuetify"]`, polyfills
+  in `tests/setup.ts`. `SourcesView` uses `shallowRef` (recursive type).
+- Search field no longer autofocuses (it stole focus from the skip link).
+- Reusable smoke fixture (outside repo):
+  `/tmp/claude-1000/smoke-phase05ui/catalog.yaml` + `adr-root/`
+  (7 records incl. legacy, obsoleting, erratum, broken link, bad YAML).
+- Tests: 272 backend, 48 frontend.

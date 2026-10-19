@@ -9,7 +9,7 @@ import StatusChip from "@/components/StatusChip.vue";
 import { useHealth } from "@/composables/useHealth";
 import { isLoading } from "@/composables/useLoading";
 
-const { state: healthState } = useHealth();
+const { state: healthState, payload: healthPayload } = useHealth();
 
 const healthChip = computed(() => {
   switch (healthState.value) {
@@ -31,6 +31,20 @@ const healthChip = computed(() => {
       return { icon: "mdi-dots-horizontal", text: "Checking…", color: undefined };
   }
 });
+
+/** Whether `/healthz` reports a problem with `catalog.yaml` or the
+ *  approval policy, surfaced as a warning linking to Sources rather
+ *  than left for operators to discover only on the sources page. */
+const hasConfigProblem = computed(() => {
+  const payload = healthPayload.value;
+  if (!payload) {
+    return false;
+  }
+  const configProblem = payload.config !== undefined && payload.config !== "ok";
+  const policyProblem =
+    payload.policy !== undefined && payload.policy !== "configured";
+  return configProblem || policyProblem;
+});
 </script>
 
 <template>
@@ -44,6 +58,19 @@ const healthChip = computed(() => {
       <v-btn to="/sources" variant="text">Sources</v-btn>
 
       <v-spacer />
+
+      <router-link
+        v-if="hasConfigProblem"
+        to="/sources"
+        class="mr-4 config-warning-link"
+        aria-label="Configuration issue detected; go to Sources for details"
+      >
+        <StatusChip
+          icon="mdi-cog-outline"
+          text="Configuration issue"
+          color="warning"
+        />
+      </router-link>
 
       <StatusChip
         :icon="healthChip.icon"
@@ -82,5 +109,9 @@ const healthChip = computed(() => {
 
 .skip-link:focus {
   top: 0;
+}
+
+.config-warning-link {
+  text-decoration: none;
 }
 </style>

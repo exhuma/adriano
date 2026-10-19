@@ -808,7 +808,9 @@ def get_record_detail(
         inbound_links=_inbound_links(view.inbound, titles),
         errata=_errata(view.errata, titles),
         status=view.status,
-        siblings=_siblings(siblings, policy, event_views),
+        siblings=_siblings(
+            (s for s in siblings if s.id != record.id), policy, event_views
+        ),
         legacy_signoff_unverified=_legacy_signoff(record.metadata),
         approval=_approval_summary(
             policy=policy,
