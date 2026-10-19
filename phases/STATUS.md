@@ -6,7 +6,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 |---|---|---|---|---|
 | 00 | Planning + phases folder | done | | spec copied, decisions recorded |
 | 01 | Scaffold + skeleton UI | done | fcef2ad + next | see notes |
-| 02 | Domain core | todo | | |
+| 02 | Domain core | done | see git log | see notes |
 | 03 | Persistence | todo | | |
 | 04 | Sources & ingest | todo | | |
 | 05 | Browse slice | todo | | |
@@ -53,3 +53,33 @@ open issues, anything the next phase must know.
 - Notes: host inotify limit is near exhaustion (watcher EMFILE warnings
   under `task dev`, servers still work). `npm audit` reports a likely
   stale braces/micromatch advisory; installed braces 3.0.3 is fixed.
+
+### Phase 02
+
+- `backend/app/domain/`: `hashing` (`content_digest`, `Digest`,
+  `sha256-v1` / `sha256-raw-v1`), `issues` (`Issue`, `IssueCode`,
+  `Severity`, `to_dict/from_dict`), `values` (`RecordKind`, `Links`,
+  `Identity`, `record_key`), `titles`, `frontmatter`, `fields`,
+  `validation`, `records` (`parse_record(raw, filename=) ->
+  ParsedRecord`, re-exports values/titles), `relationships`
+  (`RecordSummary`, `RelationshipIndex`, `resolve_relationships`,
+  `DisplayStatus`), `approval` (`Policy`, `PolicyStatus`,
+  `DecisionEventView`, `evaluate`, `last_decided`, `is_eligible`,
+  `is_self_approval`, `principal`).
+- Persist `ParsedRecord.display_date` as `decision_date` and
+  `decision_date_inferred` as the flag.
+- SQL needs-approval must mirror `approval.py` rule order: no policy ->
+  policy_missing; required false -> not_required; latest event for the
+  current digest -> accepted/rejected; any acceptance of another digest
+  -> changed_since_acceptance; else pending. `approvable` only affects
+  `can_decide`.
+- Deviations: extra issue code `ambiguous_target` (warning);
+  `legacy_signoff` is a warning; bad-encoding files parsed with U+FFFD
+  replacement (still not approvable, raw digest).
+- `RelationshipIndex` expects one summary per row (normally published
+  rows); feeding candidates too reports them as duplicates — phase 05
+  must decide how candidates participate.
+- YAML loader keeps unquoted dates as strings. Only ATX H1 detected.
+- 104 domain tests (hypothesis added as dev dep). Pyright in an IDE on
+  Python 3.13 flags forward refs; the project targets Python 3.14
+  (PEP 649 deferred annotations) — use `backend/.venv`.
