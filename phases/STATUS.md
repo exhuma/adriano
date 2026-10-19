@@ -10,7 +10,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 03 | Persistence | done | see git log | see notes |
 | 04 | Sources & ingest | done | see git log | see notes |
 | 05 | Browse slice | done | see git log | see notes |
-| 06 | Auth & RBAC slice | todo | | |
+| 06 | Auth & RBAC slice | done | see git log | see notes |
 | 07 | Approval slice | todo | | |
 | 08 | Samples, deploy, demo | todo | | |
 | 09 | Benchmark & report | todo | | |
@@ -188,3 +188,37 @@ open issues, anything the next phase must know.
   `/tmp/claude-1000/smoke-phase05ui/catalog.yaml` + `adr-root/`
   (7 records incl. legacy, obsoleting, erratum, broken link, bad YAML).
 - Tests: 272 backend, 48 frontend.
+
+### Phase 06
+
+- Backend: `app/auth/` (`oidc.py` lazy discovery + cached PyJWKClient,
+  `dev.py` HS256, `tokens.py` alg routing, `deps.py` `Principal`,
+  `get_principal`, `require_permission`, `rbac.py` incl.
+  `reviewer_eligibility(policy_config, issuer=, subject=, roles=) ->
+  (eligible, reason)` for phase 07). `create_app(settings=None)` mounts
+  `/auth/dev/token` only with flag + secret. Errors `{detail, code}`:
+  401 not_authenticated/invalid_token/token_expired, 403
+  permission_required, 503 auth_unconfigured/auth_unavailable.
+- Routes: `/healthz`, docs public; `/api/v1/me` authenticated;
+  records/sources/facets need `read`; `POST /api/v1/sources/poll` and
+  `/sources/{id}/poll` need `operate` (202 `{accepted, message}`, 404
+  unknown_source, 409 not_pollable; runs via BackgroundTasks +
+  asyncio.run in a worker thread). Sweep test asserts every
+  `/api/v1` operation in OpenAPI returns 401 without a token — new
+  phase 07 routes must keep it green (push intake uses its own token
+  scheme: adjust the sweep to expect 401 there too).
+- Tests: test settings enable dev auth with `TEST_DEV_SECRET`
+  (`tests/auth_helpers.py`, also `FakeIdp` for RS256). 330 backend.
+- Frontend: `src/auth/{oidc,reauthGuard,devAuth}.ts`,
+  `src/composables/{useAuth,useMe}.ts` (`can(permission)`), sign-in /
+  blocking screens, `/auth/callback`, DEV LOGIN chip, Poll all / Poll
+  now on Sources (operate only). Tokens in memory: a full page reload
+  signs out (by design). Dev login is lazy-loaded behind the inline
+  build-time literal; `npm run build` runs
+  `scripts/check-no-dev-auth.sh`. `config.template.js` documents the
+  runtime env vars for phase 08 (API_BASE_URL, OIDC_*). RP-initiated
+  logout not implemented; full PKCE round trip untested without a
+  real IdP. 84 frontend tests.
+- Local dev login: in `.env` set `ADRIANO_DEV_AUTH_ENABLED=true`,
+  `ADRIANO_DEV_SHARED_SECRET=<random>`, `VITE_DEV_AUTH=true`; the
+  catalog file needs an `rbac` block.

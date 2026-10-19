@@ -27,10 +27,36 @@ export interface paths {
          *     :param response: Outgoing response, used to set the status code.
          *     :param db: Request-scoped database session.
          *     :param runtime: Startup state of the catalog.
+         *     :param settings: Application settings (auth status).
          *     :returns: A mapping with ``status``, ``database``, ``config``,
-         *         ``policy`` and ``registrations`` keys.
+         *         ``policy``, ``registrations``, ``rbac`` and ``auth`` keys.
          */
         get: operations["healthz_healthz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Me
+         * @description Describe the caller.
+         *
+         *     :param principal: The authenticated caller.
+         *     :param permissions: The caller's permissions.
+         *     :param runtime: Startup state (approval policy).
+         *     :returns: Identity, permissions and reviewer eligibility.
+         */
+        get: operations["get_me_api_v1_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -128,6 +154,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sources/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poll All Sources
+         * @description Poll every pollable registration in the background.
+         *
+         *     :param background: Background task queue.
+         *     :param principal: The operator (``operate`` permission).
+         *     :param runtime: Startup state.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :returns: The accepted ids (HTTP 202).
+         *     :raises app.errors.ConflictError: If nothing is pollable.
+         */
+        post: operations["poll_all_sources_api_v1_sources_poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sources/{source_id}/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poll One Source
+         * @description Poll one registration in the background.
+         *
+         *     :param source_id: Registration id.
+         *     :param background: Background task queue.
+         *     :param principal: The operator (``operate`` permission).
+         *     :param runtime: Startup state.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :returns: The accepted id (HTTP 202).
+         *     :raises app.errors.NotFoundError: If the id is not configured.
+         *     :raises app.errors.ConflictError: If it cannot be polled.
+         */
+        post: operations["poll_one_source_api_v1_sources__source_id__poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/facets": {
         parameters: {
             query?: never;
@@ -145,6 +227,31 @@ export interface paths {
         get: operations["get_facets_api_v1_facets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/dev/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Dev Token
+         * @description Mint a dev access token for the requested identity.
+         *
+         *     :param body: Subject, name, email and roles.
+         *     :param settings: Application settings.
+         *     :returns: The token and its lifetime in seconds.
+         *     :raises AuthUnavailableError: If the shared secret is not set.
+         */
+        post: operations["create_dev_token_auth_dev_token_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -201,6 +308,35 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * DevTokenIn
+         * @description Identity to put into a dev token.
+         */
+        DevTokenIn: {
+            /** Sub */
+            sub: string;
+            /** Name */
+            name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Roles */
+            roles?: string[];
+        };
+        /**
+         * DevTokenOut
+         * @description A minted dev access token (OAuth 2 token-response shape).
+         */
+        DevTokenOut: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Token Type
+             * @default Bearer
+             */
+            token_type: string;
+            /** Expires In */
+            expires_in: number;
         };
         /**
          * DisplayStatus
@@ -329,6 +465,25 @@ export interface components {
          */
         LinkType: "updates" | "obsoletes" | "corrects";
         /**
+         * MeOut
+         * @description The authenticated caller and what they may do.
+         */
+        MeOut: {
+            /** Issuer */
+            issuer: string;
+            /** Subject */
+            subject: string;
+            /** Display */
+            display: string;
+            /** Email */
+            email: string | null;
+            /** Roles */
+            roles: string[];
+            /** Permissions */
+            permissions: components["schemas"]["Permission"][];
+            reviewer: components["schemas"]["ReviewerOut"];
+        };
+        /**
          * MetadataOut
          * @description Identity and authored metadata of one record.
          */
@@ -372,6 +527,12 @@ export interface components {
             candidate_ids: string[];
         };
         /**
+         * Permission
+         * @description Permissions an IdP role can grant (review comes from the policy).
+         * @enum {string}
+         */
+        Permission: "read" | "operate";
+        /**
          * PolicyStatus
          * @description Configuration status of the global approval policy.
          * @enum {string}
@@ -389,6 +550,16 @@ export interface components {
             version: number | null;
             /** Required */
             required: boolean | null;
+        };
+        /**
+         * PollAcceptedOut
+         * @description An accepted background poll.
+         */
+        PollAcceptedOut: {
+            /** Accepted */
+            accepted: string[];
+            /** Message */
+            message: string;
         };
         /**
          * PollStatus
@@ -455,6 +626,16 @@ export interface components {
          * @enum {string}
          */
         Resolution: "same_project" | "same_registration" | "global";
+        /**
+         * ReviewerOut
+         * @description Whether the caller may record approval decisions, and why.
+         */
+        ReviewerOut: {
+            /** Eligible */
+            eligible: boolean;
+            /** Reason */
+            reason: string;
+        };
         /**
          * SearchItemOut
          * @description One search result row.
@@ -604,6 +785,26 @@ export interface operations {
             };
         };
     };
+    get_me_api_v1_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+        };
+    };
     list_records_api_v1_records_get: {
         parameters: {
             query?: {
@@ -695,6 +896,57 @@ export interface operations {
             };
         };
     };
+    poll_all_sources_api_v1_sources_poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollAcceptedOut"];
+                };
+            };
+        };
+    };
+    poll_one_source_api_v1_sources__source_id__poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollAcceptedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_facets_api_v1_facets_get: {
         parameters: {
             query?: never;
@@ -711,6 +963,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FacetsOut"];
+                };
+            };
+        };
+    };
+    create_dev_token_auth_dev_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevTokenOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

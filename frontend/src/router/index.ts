@@ -23,6 +23,14 @@ const router = createRouter({
       component: () => import("@/views/SourcesView.vue"),
     },
     {
+      // OIDC Authorization Code redirect target, registered at the
+      // IdP as an exact match (see `src/auth/oidc.ts`). Rendered
+      // regardless of sign-in state -- it is how sign-in completes.
+      path: "/auth/callback",
+      name: "auth-callback",
+      component: () => import("@/views/AuthCallbackView.vue"),
+    },
+    {
       path: "/:pathMatch(.*)*",
       name: "not-found",
       component: () => import("@/views/NotFoundView.vue"),

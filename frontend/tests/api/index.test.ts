@@ -78,6 +78,39 @@ describe("api client", () => {
     expect(headers.Authorization).toBeUndefined();
   });
 
+  it("awaits an asynchronous TokenProvider (e.g. the OIDC-backed one)", async () => {
+    // `UserManager.getUser()` returns a Promise; the seam must await
+    // whatever `getToken` returns rather than assuming it is
+    // synchronous (module-auth-oidc-vue "TokenProvider wiring").
+    setTokenProvider({
+      getToken: () => Promise.resolve("async-token"),
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    await api.get("/api/v1/records");
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = requestInit.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer async-token");
+  });
+
+  it("omits the Authorization header when an async TokenProvider resolves to null", async () => {
+    setTokenProvider({ getToken: () => Promise.resolve(null) });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    await api.get("/api/v1/records");
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = requestInit.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
+
   it("invokes the unauthorized handler on a 401 response", async () => {
     const handler = vi.fn();
     setUnauthorizedHandler(handler);

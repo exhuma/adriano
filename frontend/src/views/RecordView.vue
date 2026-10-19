@@ -11,6 +11,7 @@ import { computed, ref, watch } from "vue";
 
 import { ApiError } from "@/api";
 import { getRecord } from "@/api/records";
+import { forbiddenText, isForbidden } from "@/utils/apiErrors";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
 import StatusChip from "@/components/StatusChip.vue";
@@ -32,10 +33,14 @@ type LoadState = "loading" | "loaded" | "not-found" | "error";
 
 const loadState = ref<LoadState>("loading");
 const errorText = ref<string | null>(null);
+const errorTitle = ref("Couldn't load this record");
 const detail = ref<RecordDetail | null>(null);
 const copied = ref(false);
 
 function describeError(error: unknown): string {
+  if (isForbidden(error)) {
+    return forbiddenText(error);
+  }
   if (error instanceof ApiError) {
     return `The record could not be loaded (status ${error.status}). ` +
       "Check your connection and try again.";
@@ -54,6 +59,7 @@ async function load(): Promise<void> {
       loadState.value = "not-found";
       return;
     }
+    errorTitle.value = isForbidden(error) ? "No access" : "Couldn't load this record";
     errorText.value = describeError(error);
     loadState.value = "error";
   }
@@ -166,7 +172,7 @@ function linkTypeLabel(type: string): string {
 
     <ErrorState
       v-else-if="loadState === 'error'"
-      title="Couldn't load this record"
+      :title="errorTitle"
       :text="errorText ?? undefined"
       @retry="load"
     />

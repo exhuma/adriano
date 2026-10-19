@@ -18,6 +18,17 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
+// Vuetify's overlay positioning (`v-dialog`, `v-menu`, `v-snackbar`)
+// reads `window.visualViewport`, which jsdom does not implement.
+if (typeof window.visualViewport === "undefined") {
+  window.visualViewport = {
+    width: 1024,
+    height: 768,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  } as unknown as VisualViewport;
+}
+
 if (typeof window.matchMedia !== "function") {
   window.matchMedia = (query: string): MediaQueryList =>
     ({

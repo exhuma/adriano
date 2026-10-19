@@ -14,6 +14,7 @@ import { useRoute } from "vue-router";
 
 import { ApiError } from "@/api";
 import { getFacets, searchRecords } from "@/api/records";
+import { forbiddenText, isForbidden } from "@/utils/apiErrors";
 import EmptyState from "@/components/EmptyState.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
@@ -92,6 +93,7 @@ type LoadState = "loading" | "loaded" | "error";
 
 const loadState = ref<LoadState>("loading");
 const errorText = ref<string | null>(null);
+const errorTitle = ref("Couldn't load search results");
 const results = ref<SearchPage | null>(null);
 
 /** The committed (already-debounced) query, read from the URL
@@ -119,6 +121,9 @@ const hasActiveFilters = computed(
 );
 
 function describeError(error: unknown): string {
+  if (isForbidden(error)) {
+    return forbiddenText(error);
+  }
   if (error instanceof ApiError) {
     return `The catalog could not be searched (status ${error.status}). ` +
       "Check your connection and try again.";
@@ -134,6 +139,7 @@ async function fetchResults(): Promise<void> {
     results.value = page_result;
     loadState.value = "loaded";
   } catch (error) {
+    errorTitle.value = isForbidden(error) ? "No access" : "Couldn't load search results";
     errorText.value = describeError(error);
     loadState.value = "error";
   }
@@ -237,7 +243,7 @@ function recordHref(item: SearchItem): string {
 
     <ErrorState
       v-else-if="loadState === 'error'"
-      title="Couldn't load search results"
+      :title="errorTitle"
       :text="errorText ?? undefined"
       @retry="fetchResults"
     />

@@ -19,6 +19,15 @@ export type PolicyConfigStatus = "configured" | "missing" | "invalid" | "unknown
 /** Source registration sync status, as performed at startup. */
 export type RegistrationsSyncStatus = "synced" | "skipped" | "failed" | "unknown";
 
+/** Which token validators the backend has configured.
+ *  `"unconfigured"`: every protected route answers 503 -- nobody can
+ *  sign in at all. */
+export type AuthStatus = "oidc" | "dev" | "oidc+dev" | "unconfigured" | "unknown";
+
+/** Whether the `rbac` section of `catalog.yaml` grants any
+ *  permission. */
+export type RbacStatus = "configured" | "empty" | "unknown";
+
 /** Response body of `GET /healthz`. */
 export interface HealthPayload {
   /** `"ok"` when the app and its dependencies are healthy. */
@@ -31,4 +40,10 @@ export interface HealthPayload {
   policy?: PolicyConfigStatus;
   /** Outcome of syncing source registrations at startup. */
   registrations?: RegistrationsSyncStatus;
+  /** Which token validators are configured. `"unconfigured"` means
+   *  no one can authenticate; the app shell shows a blocking
+   *  explanation rather than a sign-in screen in that case. */
+  auth?: AuthStatus;
+  /** Whether any role grants a permission. */
+  rbac?: RbacStatus;
 }

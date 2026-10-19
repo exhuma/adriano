@@ -20,6 +20,13 @@ export default defineConfig({
     proxy: {
       "/api": backendDevUrl,
       "/healthz": backendDevUrl,
+      // Dev-only token endpoint (`POST /auth/dev/token`); mounted on
+      // the backend only when `ADRIANO_DEV_AUTH_ENABLED` is set (see
+      // DECISIONS.md "Auth"). Scoped to `/auth/dev`, not all of
+      // `/auth`, so the SPA's own `/auth/callback` route (the OIDC
+      // redirect target, served by the SPA itself via history
+      // fallback) is never proxied to the backend.
+      "/auth/dev": backendDevUrl,
     },
   },
 });

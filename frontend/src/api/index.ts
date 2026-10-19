@@ -25,8 +25,18 @@ export class ApiError extends Error {
 
 /** Supplies the bearer token to attach to outgoing API requests. */
 export interface TokenProvider {
-  /** Returns the current access token, or `null` when unauthenticated. */
-  getToken(): string | null;
+  /**
+   * Returns the current access token, or `null` when
+   * unauthenticated.
+   *
+   * May be asynchronous: the OIDC-backed provider calls
+   * `UserManager.getUser()`, which returns a `Promise` (it may read
+   * through to storage). A synchronous provider (e.g. one that holds
+   * a plain in-memory token, such as the dev-login provider) may
+   * still return the value directly -- callers always `await` the
+   * result either way.
+   */
+  getToken(): string | null | Promise<string | null>;
 }
 
 /** Default provider: no authentication is wired up yet. */
@@ -97,7 +107,7 @@ async function request<T>(
   body?: unknown,
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = tokenProvider.getToken();
+  const token = await tokenProvider.getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
