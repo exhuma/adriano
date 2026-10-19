@@ -277,6 +277,7 @@ def test_example_configuration_is_valid_apart_from_pending_types() -> None:
     assert config.file_status is ConfigFileStatus.OK
     assert config.policy.status is PolicyStatus.CONFIGURED
     assert [s.id for s in config.sources] == ["central", "gitlab-platform"]
-    for source in config.sources:
-        assert source.config_error is not None
-        assert "not available yet" in source.config_error
+    central, gitlab = config.sources
+    assert central.enabled and central.config_error is None
+    assert gitlab.config_error is not None
+    assert "not available yet" in gitlab.config_error

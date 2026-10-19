@@ -47,9 +47,11 @@ def test_startup_syncs_registrations_and_reports_health(
     assert body["registrations"] == "synced"
     with provider.unit_of_work() as store:
         rows = {r.id: r for r in store.list_registrations()}
-    assert rows["central"].enabled is False
-    assert "not available yet" in (rows["central"].config_error or "")
-    assert rows["central"].last_status is PollStatus.DISABLED
+    assert rows["central"].enabled is True
+    assert rows["central"].config_error is None
+    assert rows["central"].last_status is PollStatus.NEVER
+    assert rows["gitlab-platform"].enabled is False
+    assert "not available yet" in (rows["gitlab-platform"].config_error or "")
     assert rows["other"].enabled is False  # seeded, not in the file
 
 
@@ -90,22 +92,31 @@ def test_check_config_exit_codes(
     )
 
     assert failing == 1
-    assert "central [filesystem] DISABLED" in out.getvalue()
+    assert "gitlab-platform [gitlab] DISABLED" in out.getvalue()
     assert "Approval policy: configured" in out.getvalue()
     assert passing == 0
 
 
 def test_poll_command_handles_nothing_to_poll_and_unknown_ids(
-    test_settings: Settings, provider: PostgresStoreProvider
+    tmp_path: Path, test_settings: Settings, provider: PostgresStoreProvider
 ) -> None:
     """Ensure poll syncs, reports nothing to poll, and rejects bad ids."""
+    empty = tmp_path / "catalog.yaml"
+    empty.write_text(POLICY_ONLY, encoding="utf-8")
     settings = with_config(test_settings, EXAMPLE)
     out = io.StringIO()
 
-    nothing = main(["poll"], settings=settings, out=out)
+    nothing = main(
+        ["poll"], settings=with_config(test_settings, empty), out=out
+    )
     unknown = main(["poll", "--source", "nope"], settings=settings)
+    # central ([filesystem]) is now a valid, enabled registration (the
+    # sample ADR tree arrives in phase 08); gitlab-platform is still a
+    # pending, disabled type, so it is the one that stays "not pollable".
     disabled = main(
-        ["poll", "--source", "central"], settings=settings, out=io.StringIO()
+        ["poll", "--source", "gitlab-platform"],
+        settings=settings,
+        out=io.StringIO(),
     )
 
     assert nothing == 0
