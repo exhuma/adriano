@@ -12,7 +12,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 05 | Browse slice | done | see git log | see notes |
 | 06 | Auth & RBAC slice | done | see git log | see notes |
 | 07 | Approval slice | done | see git log | see notes |
-| 08 | Samples, deploy, demo | todo | | |
+| 08 | Samples, deploy, demo | done | see git log | see notes |
 | 09 | Benchmark & report | todo | | |
 
 ## Handoff notes
@@ -263,3 +263,28 @@ open issues, anything the next phase must know.
   (`ADRIANO_PUSH_TOKEN_CENTRAL`), rbac `adr-reviewer: [read]`, and an
   extra published file `2026-10-19-feature-flags.md`.
 - Tests: 389 backend, 109 frontend.
+
+### Phase 08
+
+- Containers: `backend/Dockerfile` (uv build, python 3.14 slim,
+  non-root, HEALTHCHECK on /healthz, `ADRIANO_WORKERS` default 4, CMD
+  only so `docker compose run backend adriano ...` works),
+  `frontend/Dockerfile` (nginx-unprivileged on 8080, entrypoint
+  `docker-entrypoint.d/40-render-app-config.sh` renders `config.js`,
+  `nginx.conf` proxies `/api/`, `/healthz`, `/auth/dev/`; CSP checked).
+- `docker-compose.yml` (name `adriano`): db (postgres:18, volume),
+  migrate (one-shot), backend (not published), frontend on host 8180.
+  DB password defaults to `adriano` for the demo only (documented).
+- Demo: `task demo` (generates gitignored `.env.demo`, builds, starts,
+  polls), `task demo:ui` (Vite dev login on 5180 proxied to the stack),
+  `task demo:poll`, `task demo:down`. `catalog.demo.yaml` points at
+  `samples/adr-root` (root relative to the config file).
+- Samples: `samples/adr-root/{platform,payments,central}` (15 ADRs +
+  ignored README), `samples/candidates/` (redis/kafka/circuit-breakers),
+  `samples/push-candidate.sh`. Index in `docs/examples/README.md`.
+- Docs: `docs/{schema,hashing,approval,operator,api-migration,
+  architecture}.md`; demo walk-through `docs/demo/README.md` with
+  screenshots mapped to criteria. Source failure demo: `mv
+  samples/adr-root samples/adr-root.bak`, poll, restore.
+- Fix: responsive app bar (`AppBarMenu.vue` below md; DEV chip stays
+  visible). Tests: 389 backend, 113 frontend.

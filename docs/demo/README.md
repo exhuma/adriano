@@ -247,19 +247,20 @@ $ # Poll now (UI) or: task demo:poll
 
 The same search page at a 390px mobile viewport: filters stack, result
 chips wrap, and every control stays reachable and legible without
-horizontal scrolling.
+horizontal scrolling. Below the `md` breakpoint the app bar itself
+collapses too: only the "adriano" product name and the "DEV LOGIN"
+mode indicator (shortened to "DEV", with its full meaning in an
+`aria-label`/`title`) stay inline; navigation, backend status, the
+configuration-issue warning, and the signed-in user's name/"Sign out"
+move behind a single "Open menu" button, reachable by keyboard and
+closing on Escape with focus returned to that button.
 
-![Search page at 390px width](13-mobile-search.png)
+![Search page at 390px width, collapsed app bar](13-mobile-search.png)
+
+![The collapsed app-bar menu open, listing Catalog, Sources, backend status, and the signed-in user](13b-mobile-menu.png)
 
 ## Known limitations observed during this walk-through
 
-- At very narrow widths (around 390px) the app bar's right-hand items
-  ("DEV LOGIN" chip, backend-status chip, identity, "Sign out") can be
-  visually clipped rather than wrapping or collapsing into a menu.
-  This does not cause page-level horizontal scrolling and every
-  affected control remains reachable by keyboard/tab order; it is a
-  cosmetic narrow-viewport limitation of the current app bar, not
-  captured as a fix in this phase.
 - The "Needs approval" filter in step 9 returns effectively the whole
   catalog in this demo, because none of the original 15 sample
   records have been explicitly decided (only the three pushed

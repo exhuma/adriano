@@ -8,7 +8,9 @@
  */
 import { computed, defineAsyncComponent, ref } from "vue";
 import { useRoute } from "vue-router";
+import { useDisplay } from "vuetify";
 
+import AppBarMenu from "@/components/AppBarMenu.vue";
 import AuthBlockingScreen from "@/components/AuthBlockingScreen.vue";
 import SignInScreen from "@/components/SignInScreen.vue";
 import StatusChip from "@/components/StatusChip.vue";
@@ -39,6 +41,13 @@ const DevLoginDialog =
 
 const route = useRoute();
 const { state: healthState, payload: healthPayload, check: recheckHealth } = useHealth();
+
+/** Vuetify breakpoint gate: on md+ the app bar shows every item
+ *  inline (unchanged layout); on xs/sm everything but the product
+ *  name and the mode indicator collapses into `AppBarMenu`
+ *  (module-ux-principles "Fitt's/Hick's law": fewer, larger targets
+ *  on a narrow viewport instead of cramped, shrinking controls). */
+const { mdAndUp } = useDisplay();
 
 const {
   me,
@@ -121,7 +130,7 @@ async function handleSignOut(): Promise<void> {
     <v-app-bar :elevation="1">
       <v-app-bar-title>adriano</v-app-bar-title>
 
-      <template v-if="signedIn || isCallbackRoute">
+      <template v-if="mdAndUp && (signedIn || isCallbackRoute)">
         <v-btn to="/" variant="text">Catalog</v-btn>
         <v-btn to="/sources" variant="text">Sources</v-btn>
       </template>
@@ -132,8 +141,12 @@ async function handleSignOut(): Promise<void> {
         Mode indicator for an active dev-login session
         (module-ux-principles "UI modes"): always expanded, never
         hidden behind a hover or an overflow menu, states what is in
-        effect. `role="status" aria-live="polite"` on the wrapper so
-        entering/leaving the mode is announced, not just shown.
+        effect, on every viewport -- including xs/sm, where it is the
+        only app-bar item besides the product name that stays outside
+        `AppBarMenu` below. `role="status" aria-live="polite"` on the
+        wrapper so entering/leaving the mode is announced, not just
+        shown. Below md the label shortens to "DEV" to fit; the full
+        meaning moves to `aria-label`/`title` so it is never lost.
       -->
       <span
         v-if="authMode === 'dev'"
@@ -141,35 +154,57 @@ async function handleSignOut(): Promise<void> {
         aria-live="polite"
         class="mr-4"
       >
-        <StatusChip icon="mdi-flask-outline" text="DEV LOGIN" color="warning" />
-      </span>
-
-      <router-link
-        v-if="hasConfigProblem"
-        to="/sources"
-        class="mr-4 config-warning-link"
-        aria-label="Configuration issue detected; go to Sources for details"
-      >
         <StatusChip
-          icon="mdi-cog-outline"
-          text="Configuration issue"
+          icon="mdi-flask-outline"
+          :text="mdAndUp ? 'DEV LOGIN' : 'DEV'"
           color="warning"
+          :aria-label="mdAndUp ? undefined : 'DEV LOGIN: development login mode is active'"
         />
-      </router-link>
-
-      <StatusChip
-        :icon="healthChip.icon"
-        :text="healthChip.text"
-        :color="healthChip.color"
-        class="mr-4"
-      />
-
-      <span v-if="signedIn" class="mr-2 text-body-2 d-none d-sm-inline">
-        {{ me!.display }}
       </span>
-      <v-btn v-if="signedIn" variant="text" prepend-icon="mdi-logout" @click="handleSignOut">
-        Sign out
-      </v-btn>
+
+      <template v-if="mdAndUp">
+        <router-link
+          v-if="hasConfigProblem"
+          to="/sources"
+          class="mr-4 config-warning-link"
+          aria-label="Configuration issue detected; go to Sources for details"
+        >
+          <StatusChip
+            icon="mdi-cog-outline"
+            text="Configuration issue"
+            color="warning"
+          />
+        </router-link>
+
+        <StatusChip
+          :icon="healthChip.icon"
+          :text="healthChip.text"
+          :color="healthChip.color"
+          class="mr-4"
+        />
+
+        <span v-if="signedIn" class="mr-2 text-body-2 d-none d-sm-inline">
+          {{ me!.display }}
+        </span>
+        <v-btn v-if="signedIn" variant="text" prepend-icon="mdi-logout" @click="handleSignOut">
+          Sign out
+        </v-btn>
+      </template>
+
+      <!--
+        xs/sm: everything above besides the product name and the mode
+        indicator collapses into one menu button, instead of shrinking
+        or clipping (Fitt's/Hick's law: one large, edge-anchored
+        target beats several cramped ones).
+      -->
+      <AppBarMenu
+        v-else
+        :show-nav="signedIn || isCallbackRoute"
+        :has-config-problem="hasConfigProblem"
+        :health="healthChip"
+        :user-display="signedIn ? me!.display : null"
+        @sign-out="handleSignOut"
+      />
 
       <v-progress-linear
         v-if="isLoading"
