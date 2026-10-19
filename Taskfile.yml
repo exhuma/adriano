@@ -120,6 +120,72 @@ tasks:
     cmds:
       - uv run --project backend adriano mint-dev-token {{.CLI_ARGS}}
 
+  bench:seed:
+    desc: >-
+      Reset and migrate the ephemeral dev database (NEVER the test
+      database), then seed the deterministic synthetic benchmark ADR
+      corpus into it via `adriano seed-synthetic` (default 20,000
+      records / 100 projects; override with e.g.
+      `task bench:seed -- --records 2000 --projects 100`). See
+      bench/catalog.bench.yaml and docs/benchmark.md.
+    cmds:
+      - task: db:reset
+      - task: migrate
+      - |
+        ADRIANO_CONFIG_FILE=bench/catalog.bench.yaml \
+          uv run --project backend adriano seed-synthetic \
+          --source-id synthetic --records 20000 --projects 100 \
+          {{.CLI_ARGS}}
+
+  bench:
+    desc: >-
+      End-to-end search/browse latency benchmark (SPEC.md "Phase 1
+      acceptance", P95 target): `task bench:seed` (20,000 records /
+      100 projects), start the backend (uvicorn, 4 workers like the
+      container default, port 8100, dev auth with a throwaway
+      secret, ADRIANO_CONFIG_FILE=bench/catalog.bench.yaml), run
+      backend/bench/bench.py at concurrency 1 and 8, then stop the
+      backend. Pass bench.py args after `--`, e.g.
+      `task bench -- --requests 500` (to reseed a different size
+      first, run `task bench:seed -- --records N --projects M`
+      yourself, then `task bench -- --requests 500`, since this task
+      always reseeds the default 20,000/100 size). Results:
+      bench-results.json plus the table on stdout. See
+      docs/benchmark.md.
+    cmds:
+      # A plain shell call (not `task: bench:seed`), so this task's
+      # own CLI_ARGS (meant for bench.py below) are not also passed
+      # to bench:seed.
+      - task bench:seed
+      - |
+        set -e
+        export ADRIANO_CONFIG_FILE=bench/catalog.bench.yaml
+        export ADRIANO_DEV_AUTH_ENABLED=true
+        export ADRIANO_DEV_SHARED_SECRET="$(python3 -c \
+          'import secrets; print(secrets.token_hex(32))')"
+        export ADRIANO_WORKERS=4
+        uv run --project backend uvicorn app.main:app \
+          --host 0.0.0.0 --port 8100 --workers "$ADRIANO_WORKERS" \
+          > /tmp/adriano-bench-backend.log 2>&1 &
+        backend_pid=$!
+        # `kill $backend_pid` alone only stops the `uv run` wrapper,
+        # not the uvicorn worker processes it execs as children, so
+        # also pkill by the exact command line.
+        trap '
+          kill "$backend_pid" 2>/dev/null || true
+          pkill -f "uvicorn app.main:app.*--port 8100" 2>/dev/null \
+            || true
+        ' EXIT
+        for i in $(seq 1 60); do
+          if curl -fsS http://localhost:8100/healthz >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
+        uv run --project backend python backend/bench/bench.py \
+          --base-url http://localhost:8100 --out bench-results.json \
+          {{.CLI_ARGS}}
+
   lint:
     desc: Lint and format-check the backend and the frontend.
     cmds:

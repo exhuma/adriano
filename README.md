@@ -133,6 +133,8 @@ at startup whenever the dev path is active.
   and its `ADR_VIEWER_*` configuration.
 - `docs/architecture.md` -- concern map, data flow, and storage
   choice.
+- `docs/benchmark.md` -- the search/browse latency benchmark against
+  the Phase 1 P95 target, dataset, environment, and results.
 - `docs/examples/README.md` -- pointers into `samples/adr-root/` for
   every schema/validation example.
 

@@ -17,6 +17,13 @@ Commands:
   [--roles a,b] [--minutes N]`` -- print a dev-only HS256 access token
   signed with ``ADRIANO_DEV_SHARED_SECRET`` (exit code 2 when the
   secret is not set). Roles go to ``ADRIANO_OIDC_ROLES_CLAIM``.
+- ``adriano seed-synthetic --records N --projects M --source-id ID
+  [--seed 42] [--candidates-ratio 0.1] [--decisions-ratio 0.3]
+  [--force]`` -- generate and ingest a deterministic synthetic ADR
+  corpus for benchmarking (see :mod:`app.services.seed_synthetic`).
+  Refuses a database whose name does not look like dev/test/bench
+  unless ``--force`` is given. Exit code 2 on usage or database
+  errors.
 
 Scheduling is external (cron, Kubernetes CronJob); see
 ``phases/DECISIONS.md``. This module only phrases results; the work is
@@ -48,6 +55,11 @@ from app.domain.frontmatter import JsonValue
 from app.errors import NotFoundError
 from app.services.polling import PollOutcome
 from app.services.registrations import sync_registrations
+from app.services.seed_synthetic import (
+    SeedConfig,
+    looks_like_dev_database,
+    seed_catalog,
+)
 from app.storage.port import PollStatus
 
 EXIT_OK = 0
@@ -86,7 +98,53 @@ def _parser() -> argparse.ArgumentParser:
         default=DEFAULT_MINUTES,
         help=f"lifetime in minutes (default {DEFAULT_MINUTES})",
     )
+    _add_seed_synthetic_parser(commands)
     return parser
+
+
+def _add_seed_synthetic_parser(
+    commands: argparse._SubParsersAction,
+) -> None:
+    """
+    Register the ``seed-synthetic`` subcommand's arguments.
+
+    :param commands: Subparsers action of the main parser.
+    """
+    seed = commands.add_parser(
+        "seed-synthetic",
+        help="seed a deterministic synthetic ADR corpus (dev/bench only)",
+    )
+    seed.add_argument(
+        "--records", type=int, required=True, help="published records"
+    )
+    seed.add_argument(
+        "--projects", type=int, required=True, help="number of projects"
+    )
+    seed.add_argument(
+        "--source-id",
+        required=True,
+        help="target registration id (configured in catalog.yaml)",
+    )
+    seed.add_argument(
+        "--seed", type=int, default=42, help="random seed (default 42)"
+    )
+    seed.add_argument(
+        "--candidates-ratio",
+        type=float,
+        default=0.1,
+        help="share of identities with a competing candidate (default 0.1)",
+    )
+    seed.add_argument(
+        "--decisions-ratio",
+        type=float,
+        default=0.3,
+        help="share of identities with a decision event (default 0.3)",
+    )
+    seed.add_argument(
+        "--force",
+        action="store_true",
+        help="seed even if the database name does not look like dev/bench",
+    )
 
 
 def _mint(settings: Settings, args: argparse.Namespace, out: TextIO) -> int:
@@ -252,6 +310,64 @@ def _poll(settings: Settings, source_id: str | None, out: TextIO) -> int:
     return EXIT_PROBLEMS
 
 
+def _seed_synthetic(
+    settings: Settings, args: argparse.Namespace, out: TextIO
+) -> int:
+    """
+    Run ``seed-synthetic``.
+
+    :param settings: Application settings.
+    :param args: Parsed arguments.
+    :param out: Output stream.
+    :returns: Exit code.
+    """
+    if args.records < 1 or args.projects < 1:
+        print("error: --records and --projects must be >= 1", file=sys.stderr)
+        return EXIT_USAGE
+    database_url = str(settings.database_url)
+    if not args.force and not looks_like_dev_database(database_url):
+        print(
+            "error: this database does not look like a dev/test/bench "
+            "database; pass --force to seed it anyway",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    config = load_catalog(settings)
+    log_problems(config)
+    provider = build_store_provider(settings)
+    seed_config = SeedConfig(
+        records=args.records,
+        projects=args.projects,
+        source_id=args.source_id,
+        seed=args.seed,
+        candidates_ratio=args.candidates_ratio,
+        decisions_ratio=args.decisions_ratio,
+    )
+    try:
+        summary = seed_catalog(
+            provider,
+            config,
+            seed_config,
+            progress=lambda message: print(message, file=out),
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    except SQLAlchemyError as exc:
+        print(
+            f"error: database unavailable ({type(exc).__name__}); run "
+            f"`task db:up && task migrate`",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    print(
+        f"seeded {summary.published} published, {summary.candidates} "
+        f"candidates, {summary.decisions} decisions",
+        file=out,
+    )
+    return EXIT_OK
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -276,6 +392,8 @@ def main(
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
     )
+    if args.command == "seed-synthetic":
+        return _seed_synthetic(settings, args, stream)
     return _poll(settings, args.source, stream)
 
 

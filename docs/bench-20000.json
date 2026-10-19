@@ -1,0 +1,112 @@
+[
+  {
+    "name": "free_text",
+    "concurrency": 1,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 37.0,
+    "p95_ms": 79.2,
+    "p99_ms": 195.0,
+    "max_ms": 218.4,
+    "mean_ms": 44.3
+  },
+  {
+    "name": "filtered",
+    "concurrency": 1,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 26.7,
+    "p95_ms": 116.9,
+    "p99_ms": 276.0,
+    "max_ms": 362.7,
+    "mean_ms": 41.8
+  },
+  {
+    "name": "needs_approval",
+    "concurrency": 1,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 1674.4,
+    "p95_ms": 1848.3,
+    "p99_ms": 1971.0,
+    "max_ms": 2372.5,
+    "mean_ms": 1684.8
+  },
+  {
+    "name": "detail",
+    "concurrency": 1,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 30.7,
+    "p95_ms": 45.8,
+    "p99_ms": 49.2,
+    "max_ms": 61.2,
+    "mean_ms": 32.5
+  },
+  {
+    "name": "sources",
+    "concurrency": 1,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 5.1,
+    "p95_ms": 8.1,
+    "p99_ms": 8.8,
+    "max_ms": 14.9,
+    "mean_ms": 5.5
+  },
+  {
+    "name": "free_text",
+    "concurrency": 8,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 74.4,
+    "p95_ms": 326.9,
+    "p99_ms": 447.3,
+    "max_ms": 470.1,
+    "mean_ms": 103.3
+  },
+  {
+    "name": "filtered",
+    "concurrency": 8,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 40.2,
+    "p95_ms": 81.9,
+    "p99_ms": 118.2,
+    "max_ms": 146.0,
+    "mean_ms": 44.6
+  },
+  {
+    "name": "needs_approval",
+    "concurrency": 8,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 3841.2,
+    "p95_ms": 4157.9,
+    "p99_ms": 4412.3,
+    "max_ms": 4586.3,
+    "mean_ms": 3853.9
+  },
+  {
+    "name": "detail",
+    "concurrency": 8,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 63.7,
+    "p95_ms": 100.8,
+    "p99_ms": 145.4,
+    "max_ms": 275.6,
+    "mean_ms": 67.1
+  },
+  {
+    "name": "sources",
+    "concurrency": 8,
+    "count": 400,
+    "errors": 0,
+    "p50_ms": 18.8,
+    "p95_ms": 41.0,
+    "p99_ms": 60.1,
+    "max_ms": 65.7,
+    "mean_ms": 21.5
+  }
+]

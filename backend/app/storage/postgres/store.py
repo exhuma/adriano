@@ -160,6 +160,14 @@ class PostgresCatalogStore:
         """See :meth:`.CatalogStore.list_relationship_summaries`."""
         return records.list_relationship_summaries(self._session, kind)
 
+    def list_relationship_candidates(
+        self, self_uuid: uuid.UUID, link_targets: Collection[uuid.UUID]
+    ) -> list[RecordSummary]:
+        """See :meth:`.CatalogStore.list_relationship_candidates`."""
+        return records.list_relationship_candidates(
+            self._session, self_uuid, link_targets
+        )
+
     def list_facets(self) -> list[FacetEntry]:
         """See :meth:`app.storage.port.CatalogStore.list_facets`."""
         return records.list_facets(self._session)

@@ -10,7 +10,7 @@ Public API: :func:`put_revision`, :func:`get_revision`,
 :func:`upsert_record`, :func:`create_candidate`, :func:`get_record`,
 :func:`list_change_tokens`, :func:`delete_published`,
 :func:`list_identity_siblings`, :func:`list_relationship_summaries`,
-:func:`list_facets`.
+:func:`list_relationship_candidates`, :func:`list_facets`.
 """
 
 import uuid
@@ -26,6 +26,7 @@ from sqlalchemy import (
     delete,
     func,
     literal_column,
+    or_,
     select,
     text,
 )
@@ -299,6 +300,42 @@ def list_identity_siblings(
     return [convert.stored_record(row) for row in rows]
 
 
+#: Columns needed to build a :class:`RecordSummary` (shared by
+#: :func:`list_relationship_summaries` and
+#: :func:`list_relationship_candidates`).
+_SUMMARY_COLUMNS = (
+    RECORD.c.id,
+    RECORD.c.source_id,
+    RECORD.c.project,
+    RECORD.c.record_key,
+    RECORD.c.adr_uuid,
+    RECORD.c.links,
+    RECORD.c.record_kind,
+    RECORD.c.path,
+    RECORD.c.kind,
+    RECORD.c.updated_at,
+)
+
+
+def _to_summary(row: Any) -> RecordSummary:
+    """
+    Build a :class:`RecordSummary` from one ``_SUMMARY_COLUMNS`` row.
+
+    :param row: A mapping of ``_SUMMARY_COLUMNS``.
+    :returns: The summary, keyed by ``str(record id)``.
+    """
+    return RecordSummary(
+        key=str(row["id"]),
+        identity=Identity(row["source_id"], row["project"], row["record_key"]),
+        adr_uuid=row["adr_uuid"],
+        links=Links.from_dict(row["links"]),
+        record_kind=RecordKind(row["record_kind"]),
+        path=row["path"],
+        published=row["kind"] == RecordState.PUBLISHED.value,
+        updated_at=row["updated_at"],
+    )
+
+
 def list_relationship_summaries(
     session: Session, kind: RecordState | None
 ) -> list[RecordSummary]:
@@ -309,38 +346,72 @@ def list_relationship_summaries(
     :param kind: Restrict to one state, or ``None`` for all rows.
     :returns: One summary per row, ordered by identity and path.
     """
-    stmt = select(
-        RECORD.c.id,
-        RECORD.c.source_id,
-        RECORD.c.project,
-        RECORD.c.record_key,
-        RECORD.c.adr_uuid,
-        RECORD.c.links,
-        RECORD.c.record_kind,
-        RECORD.c.path,
-        RECORD.c.kind,
-        RECORD.c.updated_at,
-    )
+    stmt = select(*_SUMMARY_COLUMNS)
     if kind is not None:
         stmt = stmt.where(RECORD.c.kind == kind.value)
     stmt = stmt.order_by(
         RECORD.c.source_id, RECORD.c.project, RECORD.c.path, RECORD.c.id
     )
-    return [
-        RecordSummary(
-            key=str(row["id"]),
-            identity=Identity(
-                row["source_id"], row["project"], row["record_key"]
+    return [_to_summary(row) for row in session.execute(stmt).mappings()]
+
+
+def list_relationship_candidates(
+    session: Session,
+    self_uuid: uuid.UUID,
+    link_targets: Collection[uuid.UUID],
+) -> list[RecordSummary]:
+    """
+    List the published rows that can affect one record's relationships.
+
+    A bounded alternative to ``list_relationship_summaries(PUBLISHED)``
+    for one detail request: instead of every published row, this
+    returns only rows that :class:`~app.domain.relationships.
+    RelationshipIndex` could possibly use to resolve *self_uuid*'s
+    relationships --
+
+    - other rows sharing *self_uuid* (duplicate-identity detection);
+    - rows whose ``adr_uuid`` is one of *link_targets* (candidates for
+      resolving *self_uuid*'s own outbound links, with every row
+      sharing a target so ambiguity still resolves correctly);
+    - rows that link to *self_uuid* via ``updates``, ``obsoletes`` or
+      ``corrects`` (inbound links and errata).
+
+    The Postgres planner still scans every published row (``links``
+    has no index), but only the rows that match are sent to the
+    client and turned into :class:`RecordSummary` objects, which is
+    where the cost of :func:`list_relationship_summaries` actually
+    goes at catalog scale (see ``docs/benchmark.md`` "Detail endpoint
+    optimisation"). The result, combined with
+    :meth:`~app.storage.port.CatalogStore.list_identity_siblings`, is
+    exactly the summary set :func:`list_relationship_summaries` would
+    have narrowed :class:`RelationshipIndex` to for this one record's
+    :meth:`~app.domain.relationships.RelationshipIndex.view`.
+
+    :param session: Unit-of-work session.
+    :param self_uuid: The viewed record's own UUID.
+    :param link_targets: UUIDs the viewed record's own ``updates``,
+        ``obsoletes`` and ``corrects`` links target.
+    :returns: The matching published rows, ordered by identity and
+        path.
+    """
+    uuids = {self_uuid, *link_targets}
+    target = str(self_uuid)
+    stmt = (
+        select(*_SUMMARY_COLUMNS)
+        .where(
+            RECORD.c.kind == RecordState.PUBLISHED.value,
+            or_(
+                RECORD.c.adr_uuid.in_(uuids),
+                RECORD.c.links["updates"].op("?")(target),
+                RECORD.c.links["obsoletes"].op("?")(target),
+                RECORD.c.links["corrects"].astext == target,
             ),
-            adr_uuid=row["adr_uuid"],
-            links=Links.from_dict(row["links"]),
-            record_kind=RecordKind(row["record_kind"]),
-            path=row["path"],
-            published=row["kind"] == RecordState.PUBLISHED.value,
-            updated_at=row["updated_at"],
         )
-        for row in session.execute(stmt).mappings()
-    ]
+        .order_by(
+            RECORD.c.source_id, RECORD.c.project, RECORD.c.path, RECORD.c.id
+        )
+    )
+    return [_to_summary(row) for row in session.execute(stmt).mappings()]
 
 
 def list_facets(session: Session) -> list[FacetEntry]:

@@ -243,6 +243,26 @@ class CatalogStore(Protocol):
         """
         ...
 
+    def list_relationship_candidates(
+        self, self_uuid: uuid.UUID, link_targets: Collection[uuid.UUID]
+    ) -> list[RecordSummary]:
+        """
+        List published rows that can affect one record's relationships.
+
+        A bounded alternative to ``list_relationship_summaries(
+        RecordState.PUBLISHED)`` for a single detail request: see
+        :func:`app.storage.postgres.records.list_relationship_candidates`
+        for exactly which rows this returns and why the result is
+        equivalent for that one record's
+        :meth:`~app.domain.relationships.RelationshipIndex.view`.
+
+        :param self_uuid: The viewed record's own UUID.
+        :param link_targets: UUIDs the viewed record's own ``updates``,
+            ``obsoletes`` and ``corrects`` links target.
+        :returns: The matching published rows.
+        """
+        ...
+
     def list_facets(self) -> list[FacetEntry]:
         """
         Count rows per ``(source_id, project)`` pair, for filter UIs.

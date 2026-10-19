@@ -23,15 +23,23 @@ Design decisions worth recording for later phases:
   candidate's detail view does not see duplicates held only by
   unrelated candidates. Revisit if a later phase needs candidates to
   participate more broadly.
-- **Cost of the detail endpoint.** Building the published-row
-  relationship index is one query over every published row, run again
-  on every detail request; at the catalog sizes planned for Phase 1
-  benchmarking (~20k records) this is not optimised further here
-  (no caching, no incremental index). Flagged as a phase 09 performance
-  item rather than solved prematurely, per the phase 05 task brief.
-  Looking up the title of every related record is one query per related
-  id (never per catalog row), so it stays bounded by the small number of
-  links a record has, not by catalog size.
+- **Cost of the detail endpoint.** Phase 09 benchmarking at 20,000
+  published records measured the naive "fetch every published row"
+  index build at ~780 ms per detail request, of which ~630 ms was
+  spent fetching and converting all 20,000 rows to
+  :class:`~app.domain.relationships.RecordSummary` in Python -- the
+  Postgres scan itself took ~80 ms (see ``docs/benchmark.md``
+  "Detail endpoint optimisation"). Since this one request only ever
+  looks at *one* record's view of the index, :meth:`~app.storage.port.
+  CatalogStore.list_relationship_candidates` fetches only the published
+  rows that can possibly affect that view (sharing the record's UUID,
+  matching one of its own link targets, or linking back to it) instead
+  of every published row; see its docstring for why the result is
+  exactly the summary set the full fetch would have narrowed the index
+  to for this one record. Looking up the title of every related record
+  is one query per related id (never per catalog row), so it stays
+  bounded by the small number of links a record has, not by catalog
+  size.
 
 Public API: :class:`OutboundLinkInfo`, :class:`InboundLinkInfo`,
 :class:`ErratumInfo`, :class:`RecordRelationships`,
@@ -158,24 +166,35 @@ def _summary(record: StoredRecord) -> RecordSummary:
 
 
 def _relationship_index(
-    store: CatalogStore, siblings: Sequence[StoredRecord]
+    store: CatalogStore,
+    record: StoredRecord,
+    siblings: Sequence[StoredRecord],
 ) -> RelationshipIndex:
     """
     Build the relationship index for one detail request.
 
-    Published rows form the index; *siblings* (every row of the
-    detail record's identity, always including that record itself)
-    are added for rows not already present. See the module docstring
-    for why.
+    Only the published rows that can affect *record*'s own view are
+    fetched (:meth:`~app.storage.port.CatalogStore.
+    list_relationship_candidates`; see the module docstring "Cost of
+    the detail endpoint"); *siblings* (every row of the detail
+    record's identity, always including that record itself) are added
+    for rows not already present. A record without a valid UUID has
+    no possible relationships (nothing can target a UUID it does not
+    have), so no candidate query is needed for it.
 
     :param store: Store of the caller's unit of work.
+    :param record: The record whose detail page is being assembled.
     :param siblings: Every row of the detail record's identity.
     :returns: The index.
     """
-    summaries = {
-        summary.key: summary
-        for summary in store.list_relationship_summaries(RecordState.PUBLISHED)
-    }
+    if record.adr_uuid is None:
+        summaries: dict[str, RecordSummary] = {}
+    else:
+        targets = [target for _link_type, target in record.links.pairs()]
+        candidates = store.list_relationship_candidates(
+            record.adr_uuid, targets
+        )
+        summaries = {summary.key: summary for summary in candidates}
     for sibling in siblings:
         summaries.setdefault(str(sibling.id), _summary(sibling))
     return RelationshipIndex(summaries.values())
@@ -261,7 +280,7 @@ def build_relationships(
     :param siblings: Every row of its identity (including itself).
     :returns: Links, errata, status and read-time issues.
     """
-    view = _relationship_index(store, siblings).view(str(record.id))
+    view = _relationship_index(store, record, siblings).view(str(record.id))
     titles = _related_titles(store, view)
     return RecordRelationships(
         outbound_links=_outbound_links(view.outbound, titles),

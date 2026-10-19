@@ -1,0 +1,44 @@
+# Benchmark catalog configuration (phase 09 Task 1, SPEC.md "Phase 1
+# acceptance" P95 target and criterion 25).
+#
+# `task bench` points ADRIANO_CONFIG_FILE at this file, seeds a
+# deterministic synthetic ADR corpus into it with
+# `adriano seed-synthetic --source-id synthetic`, then runs
+# backend/bench/bench.py against the running backend. This is NOT a
+# polling configuration: seeding writes rows directly through
+# services/ingest.py (see app/services/seed_synthetic.py), so `root`
+# below never needs to exist and this registration is never polled in
+# the benchmark flow. It only needs to:
+#
+#   - declare a registration with the `--source-id` seed-synthetic
+#     targets, so the API serves it (GET /api/v1/sources, record
+#     provenance, freshness);
+#   - configure an approval policy, so seeded decision events have a
+#     real policy id/version and the "needs approval" filter has
+#     meaningful states to benchmark;
+#   - grant `read` to an RBAC role, so a minted dev token can call the
+#     search/detail endpoints the benchmark exercises.
+#
+# Paths are relative to this file's directory (the repository root).
+
+sources:
+  - id: synthetic
+    type: filesystem
+    root: ./bench/synthetic-root
+    path: doc/decisions
+    published_ref: bench
+    intake: [poll]
+
+approval_policy:
+  id: bench
+  version: 1
+  required: true
+  reviewers:
+    users: ["adriano-synthetic|synthetic-reviewer"]
+    roles: [adr-reviewer]
+  allow_self_approval: false
+
+rbac:
+  roles:
+    admin: [read, operate]
+    bench-reader: [read]

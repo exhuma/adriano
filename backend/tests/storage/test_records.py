@@ -8,6 +8,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
 from app.domain.issues import IssueCode, error
+from app.domain.relationships import RelationshipIndex
 from app.domain.values import Identity, Links
 from app.errors import CandidateExistsError
 from app.storage.port import RecordState
@@ -16,6 +17,9 @@ from tests.storage.conftest import make_engine, put_record
 
 U1 = uuid.UUID("0b0c2f4e-1234-4abc-8def-0123456789ab")
 U2 = uuid.UUID("1b0c2f4e-1234-4abc-8def-0123456789ab")
+U3 = uuid.UUID("2b0c2f4e-1234-4abc-8def-0123456789ab")
+U4 = uuid.UUID("3b0c2f4e-1234-4abc-8def-0123456789ab")
+U5 = uuid.UUID("4b0c2f4e-1234-4abc-8def-0123456789ab")
 
 
 def test_revision_is_put_once(provider: PostgresStoreProvider) -> None:
@@ -199,6 +203,129 @@ def test_relationship_summaries_mark_kind(
     assert by_key[str(cand.id)].published is False
     assert stored is not None
     assert by_key[str(cand.id)].updated_at == stored.updated_at
+
+
+def test_relationship_candidates_match_self_uuid_and_targets(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure candidates cover self-duplicates and outbound targets."""
+    with provider.unit_of_work() as store:
+        # Duplicate: another published row sharing U1, elsewhere.
+        duplicate = store.upsert_published(
+            put_record(
+                store, project="other", adr_uuid=U1, path="doc/decisions/d.md"
+            )
+        )
+        # An outbound target of the viewed record.
+        target = store.upsert_published(
+            put_record(store, adr_uuid=U2, path="doc/decisions/t.md")
+        )
+        # Unrelated row: neither self, a target, nor linking back.
+        store.upsert_published(
+            put_record(store, adr_uuid=U3, path="doc/decisions/u.md")
+        )
+        candidates = store.list_relationship_candidates(U1, [U2])
+    assert {c.key for c in candidates} == {str(duplicate.id), str(target.id)}
+
+
+def test_relationship_candidates_match_inbound_links_and_errata(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure candidates cover rows linking back via updates/corrects."""
+    with provider.unit_of_work() as store:
+        updater = dataclasses.replace(
+            put_record(store, adr_uuid=U2, path="doc/decisions/updater.md"),
+            links=Links(updates=(U1,)),
+        )
+        store.upsert_published(updater)
+        erratum = dataclasses.replace(
+            put_record(store, adr_uuid=U3, path="doc/decisions/erratum.md"),
+            links=Links(corrects=U1),
+        )
+        store.upsert_published(erratum)
+        store.upsert_published(
+            put_record(store, adr_uuid=U4, path="doc/decisions/unrelated.md")
+        )
+        candidates = store.list_relationship_candidates(U1, [])
+    keys = {c.adr_uuid for c in candidates}
+    assert keys == {U2, U3}
+
+
+def test_relationship_candidates_excludes_candidate_rows(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure only published rows are returned, like the full fetch."""
+    with provider.unit_of_work() as store:
+        store.upsert_candidate(
+            put_record(store, adr_uuid=U1, ref="feature", path="d.md")
+        )
+        candidates = store.list_relationship_candidates(U1, [])
+    assert candidates == []
+
+
+def test_relationship_candidates_match_the_full_index_view(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure the targeted fetch yields the same view as the full one.
+
+    Builds a richer published catalog (duplicates, a chain of
+    updates/obsoletes, an erratum, and a dangling target) and asserts
+    that for every record, the relationship view computed from
+    ``list_relationship_candidates`` matches the view computed from
+    the full ``list_relationship_summaries(PUBLISHED)`` fetch exactly
+    -- proving the targeted query is a behaviour-preserving
+    optimisation, not just a plausible-looking one.
+    """
+    with provider.unit_of_work() as store:
+        store.upsert_published(
+            put_record(store, adr_uuid=U1, path="doc/decisions/1.md")
+        )
+        # Duplicate of U1 in another project.
+        store.upsert_published(
+            put_record(
+                store, project="other", adr_uuid=U1, path="doc/decisions/d.md"
+            )
+        )
+        store.upsert_published(
+            dataclasses.replace(
+                put_record(store, adr_uuid=U2, path="doc/decisions/2.md"),
+                links=Links(updates=(U1,)),
+            )
+        )
+        store.upsert_published(
+            dataclasses.replace(
+                put_record(store, adr_uuid=U3, path="doc/decisions/3.md"),
+                links=Links(obsoletes=(U2,)),
+            )
+        )
+        store.upsert_published(
+            dataclasses.replace(
+                put_record(store, adr_uuid=U4, path="doc/decisions/4.md"),
+                links=Links(corrects=U3),
+            )
+        )
+        # Dangling target: links to a UUID nothing has.
+        store.upsert_published(
+            dataclasses.replace(
+                put_record(store, adr_uuid=U5, path="doc/decisions/5.md"),
+                links=Links(obsoletes=(uuid.uuid4(),)),
+            )
+        )
+        full_index = RelationshipIndex(store.list_relationship_summaries())
+        all_summaries = store.list_relationship_summaries(None)
+        for summary in all_summaries:
+            if summary.adr_uuid is None:
+                continue
+            targets = [target for _link_type, target in summary.links.pairs()]
+            candidates = store.list_relationship_candidates(
+                summary.adr_uuid, targets
+            )
+            merged = {s.key: s for s in candidates}
+            merged.setdefault(summary.key, summary)  # siblings add itself
+            targeted_index = RelationshipIndex(merged.values())
+            assert targeted_index.view(summary.key) == full_index.view(
+                summary.key
+            )
 
 
 def test_rollback_on_error(provider: PostgresStoreProvider) -> None:
