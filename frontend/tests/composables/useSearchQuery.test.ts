@@ -120,9 +120,26 @@ describe("useSearchQuery", () => {
     expect(router.currentRoute.value.query.source).toBe("central");
   });
 
-  it("clearFilters resets every filter and clears the URL", async () => {
+  it("reads needs_approval from the URL and includes it in active filters", async () => {
+    const { api } = await mountSearchQuery("/?needs_approval=true");
+
+    expect(api.needsApproval.value).toBe(true);
+    expect(api.hasActiveFilters.value).toBe(true);
+  });
+
+  it("applies needs_approval immediately, without debounce", async () => {
+    const { router, api } = await mountSearchQuery("/");
+
+    api.needsApproval.value = true;
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.needs_approval).toBe("true");
+  });
+
+  it("clearFilters resets every filter (including needs_approval) and clears the URL", async () => {
     const { router, api } = await mountSearchQuery(
-      "/?q=postgres&source=central&project=platform&state=candidate&page=2",
+      "/?q=postgres&source=central&project=platform&state=candidate" +
+        "&needs_approval=true&page=2",
     );
 
     api.clearFilters();
@@ -132,6 +149,7 @@ describe("useSearchQuery", () => {
     expect(api.source.value).toBe("");
     expect(api.project.value).toBe("");
     expect(api.state.value).toBe("");
+    expect(api.needsApproval.value).toBe(false);
     expect(api.page.value).toBe(1);
     expect(router.currentRoute.value.query).toEqual({});
   });

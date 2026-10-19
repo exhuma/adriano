@@ -6,12 +6,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  approvalStateExplanation,
   approvalStateLabel,
+  decisionActionLabel,
   displayStatusLabel,
+  divergenceLabel,
   issueIndicatorLabel,
   pollStatusLabel,
   recordStateLabel,
 } from "@/utils/labels";
+import type { DivergenceKind, PolicyStatus } from "@/types/approval";
 import type { ApprovalStateCode, DisplayStatus } from "@/types/records";
 import type { PollStatus } from "@/types/sources";
 
@@ -54,6 +58,75 @@ describe("approvalStateLabel", () => {
       expect(label.icon.length).toBeGreaterThan(0);
       expect(label.text.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("approvalStateExplanation", () => {
+  it("distinguishes an unconfigured policy from an ordinary pending review", () => {
+    expect(approvalStateExplanation("policy_missing", "missing")).toContain(
+      "No approval policy is configured",
+    );
+    expect(approvalStateExplanation("pending", "configured")).toBe(
+      "Awaiting review.",
+    );
+  });
+
+  it("flags an invalid policy distinctly from a missing one", () => {
+    expect(approvalStateExplanation("policy_missing", "invalid")).toContain(
+      "invalid",
+    );
+  });
+
+  it.each([
+    ["rejected", "configured", "Rejected for this exact content."],
+    [
+      "changed_since_acceptance",
+      "configured",
+      "Changed since acceptance — the accepted version differs from the " +
+        "current content.",
+    ],
+    ["not_required", "configured", "Approval not required by policy."],
+    ["accepted", "configured", "Accepted for this exact content."],
+  ] as [ApprovalStateCode, PolicyStatus, string][])(
+    "explains %s as %s",
+    (state, policyStatus, expected) => {
+      expect(approvalStateExplanation(state, policyStatus)).toBe(expected);
+    },
+  );
+
+  it("every state has a non-empty explanation", () => {
+    const states: ApprovalStateCode[] = [
+      "policy_missing",
+      "not_required",
+      "accepted",
+      "rejected",
+      "changed_since_acceptance",
+      "pending",
+    ];
+    for (const state of states) {
+      expect(approvalStateExplanation(state, "configured").length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("decisionActionLabel", () => {
+  it("labels accepted and rejected with distinct icon+text", () => {
+    expect(decisionActionLabel("accepted").text).toBe("Accepted");
+    expect(decisionActionLabel("rejected").text).toBe("Rejected");
+    expect(decisionActionLabel("accepted").icon).not.toBe(
+      decisionActionLabel("rejected").icon,
+    );
+  });
+});
+
+describe("divergenceLabel", () => {
+  it.each([
+    "published_not_accepted",
+    "published_differs",
+  ] as DivergenceKind[])("labels %s with an icon and text", (kind) => {
+    const label = divergenceLabel(kind);
+    expect(label.icon.length).toBeGreaterThan(0);
+    expect(label.text.length).toBeGreaterThan(0);
   });
 });
 

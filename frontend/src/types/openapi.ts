@@ -76,14 +76,12 @@ export interface paths {
          * List Records
          * @description Search the catalog with the Phase 1 filters.
          *
-         *     The ``needs_approval`` filter is not available yet; it arrives in
-         *     phase 07 together with the decision/approval actions.
-         *
          *     :param q: Free text (titles, bodies, UUIDs, paths); blank or
          *         omitted matches everything.
          *     :param source: Restrict to one registration id.
          *     :param project: Restrict to one project path.
          *     :param state: Restrict to ``published`` or ``candidate``.
+         *     :param needs_approval: Restrict to records that need approval.
          *     :param page: 1-based page number.
          *     :param page_size: Page size, 1 to :data:`~app.storage.port.MAX_PAGE_SIZE`.
          *     :param provider: Storage provider (overridden by tests).
@@ -110,17 +108,48 @@ export interface paths {
          * Get Record
          * @description Fetch one record's detail page.
          *
-         *     Decision history is included (read-only); recording a new decision
-         *     arrives in phase 07.
+         *     ``approval.can_decide`` (and the blocked reason) is evaluated for
+         *     the caller.
          *
          *     :param record_id: Record id.
          *     :param provider: Storage provider (overridden by tests).
          *     :param runtime: Startup configuration state.
          *     :param settings: Application settings (for the stale threshold).
+         *     :param principal: The authenticated caller.
          *     :returns: The detail.
          *     :raises app.errors.NotFoundError: If the record does not exist.
          */
         get: operations["get_record_api_v1_records__record_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/records/{record_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Record Diff
+         * @description Diff two stored snapshots of the record's identity.
+         *
+         *     Only digests related to the record are accepted (404
+         *     ``unknown_revision`` otherwise); see :mod:`app.services.diff`.
+         *
+         *     :param record_id: Record id.
+         *     :param from_digest: Base digest (query ``from``).
+         *     :param to_digest: Target digest (query ``to``).
+         *     :param provider: Storage provider (overridden by tests).
+         *     :returns: The diff, or ``base: null`` with ``reason:
+         *         "no_prior_revision"``.
+         */
+        get: operations["get_record_diff_api_v1_records__record_id__diff_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -233,6 +262,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/records/{record_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Decision
+         * @description Record an accept/reject decision for the record's current digest.
+         *
+         *     :param record_id: Record id.
+         *     :param body: Action, optional comment and expected digest.
+         *     :param principal: The authenticated caller (``read`` required).
+         *     :param provider: Storage provider (overridden by tests).
+         *     :param runtime: Startup configuration state (approval policy).
+         *     :returns: The stored event.
+         */
+        post: operations["post_decision_api_v1_records__record_id__decisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Candidate
+         * @description Create or replace the candidate for (source, project, ADR, ref).
+         *
+         *     :param request: The request.
+         *     :param response: The response.
+         *     :param credentials: Push-token bearer credentials.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :param runtime: Startup configuration state.
+         *     :returns: Record id, server digest, issues and catalog path.
+         */
+        put: operations["put_candidate_api_v1_candidates_put"];
+        /**
+         * Post Candidate
+         * @description Create a candidate; 409 ``candidate_exists`` if it already exists.
+         *
+         *     :param request: The request.
+         *     :param response: The response.
+         *     :param credentials: Push-token bearer credentials.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :param runtime: Startup configuration state.
+         *     :returns: Record id, server digest, issues and catalog path.
+         */
+        post: operations["post_candidate_api_v1_candidates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/dev/token": {
         parameters: {
             query?: never;
@@ -264,15 +358,32 @@ export interface components {
     schemas: {
         /**
          * ApprovalOut
-         * @description Approval state of a record's current content.
+         * @description Approval state of a record's current content, for the caller.
          */
         ApprovalOut: {
             state: components["schemas"]["ApprovalStateCode"];
             /** Needs Approval */
             needs_approval: boolean;
+            /** Digest */
+            digest: string;
             policy: components["schemas"]["PolicySummaryOut"];
             /** History */
             history: components["schemas"]["DecisionSummaryOut"][];
+            /** Approvable */
+            approvable: boolean;
+            /** Approval Blocker */
+            approval_blocker: string | null;
+            /** Last Accepted Digest */
+            last_accepted_digest: string | null;
+            /** Can Decide */
+            can_decide: boolean;
+            /** Decide Blocked Code */
+            decide_blocked_code: string | null;
+            /** Decide Blocked Reason */
+            decide_blocked_reason: string | null;
+            divergence: components["schemas"]["DivergenceOut"] | null;
+            /** Competing Candidates */
+            competing_candidates: components["schemas"]["CompetingCandidateOut"][];
         };
         /**
          * ApprovalStateCode
@@ -281,14 +392,89 @@ export interface components {
          */
         ApprovalStateCode: "policy_missing" | "not_required" | "accepted" | "rejected" | "changed_since_acceptance" | "pending";
         /**
+         * CandidateResultOut
+         * @description Outcome of ``PUT``/``POST /api/v1/candidates``.
+         */
+        CandidateResultOut: {
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Digest */
+            digest: string;
+            /** Created */
+            created: boolean;
+            /** Updated */
+            updated: boolean;
+            /** Deduplicated */
+            deduplicated: boolean;
+            /** Issues */
+            issues: components["schemas"]["IssueOut"][];
+            /** Catalog Path */
+            catalog_path: string;
+        };
+        /**
+         * CompetingCandidateOut
+         * @description Another candidate of the identity with different content.
+         */
+        CompetingCandidateOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ref */
+            ref: string;
+            /** Path */
+            path: string;
+            /** Digest */
+            digest: string;
+            approval_state: components["schemas"]["ApprovalStateCode"];
+        };
+        /**
          * DecisionAction
          * @description Formal decision recorded by a reviewer.
          * @enum {string}
          */
         DecisionAction: "accepted" | "rejected";
         /**
+         * DecisionIn
+         * @description Body of ``POST /api/v1/records/{id}/decisions``.
+         */
+        DecisionIn: {
+            action: components["schemas"]["DecisionAction"];
+            /** Comment */
+            comment?: string | null;
+            /**
+             * Expected Digest
+             * @description Digest the reviewer saw; 409 `digest_changed` if the record's content changed since.
+             */
+            expected_digest?: string | null;
+        };
+        /**
+         * DecisionProvenanceOut
+         * @description The decided row as it was at decision time.
+         */
+        DecisionProvenanceOut: {
+            /** Record Id */
+            record_id: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Source Id */
+            source_id: string | null;
+            /** Project */
+            project: string | null;
+            /** Ref */
+            ref: string | null;
+            /** Path */
+            path: string | null;
+            /** Source Url */
+            source_url: string | null;
+        };
+        /**
          * DecisionSummaryOut
-         * @description One historical decision event, read-only in phase 05.
+         * @description One append-only decision event of the record's identity.
          */
         DecisionSummaryOut: {
             /**
@@ -298,11 +484,22 @@ export interface components {
             id: string;
             /** Digest */
             digest: string;
+            /** Current Digest */
+            current_digest: boolean;
             action: components["schemas"]["DecisionAction"];
+            /** Actor Issuer */
+            actor_issuer: string;
+            /** Actor Subject */
+            actor_subject: string;
             /** Actor Display */
             actor_display: string | null;
             /** Comment */
             comment: string | null;
+            /** Policy Id */
+            policy_id: string;
+            /** Policy Version */
+            policy_version: number;
+            provenance: components["schemas"]["DecisionProvenanceOut"];
             /**
              * Created At
              * Format: date-time
@@ -339,11 +536,44 @@ export interface components {
             expires_in: number;
         };
         /**
+         * DiffEndpointOut
+         * @description One side of a diff.
+         */
+        DiffEndpointOut: {
+            /** Digest */
+            digest: string;
+            /** Label */
+            label: string;
+            /** Decided At */
+            decided_at: string | null;
+        };
+        /**
          * DisplayStatus
          * @description Display status derived from inbound lifecycle links.
          * @enum {string}
          */
         DisplayStatus: "active" | "updated" | "obsoleted";
+        /**
+         * DivergenceKind
+         * @description Kinds of published/accepted divergence (module docstring).
+         * @enum {string}
+         */
+        DivergenceKind: "published_not_accepted" | "published_differs";
+        /**
+         * DivergenceOut
+         * @description Content divergence within the record's identity.
+         */
+        DivergenceOut: {
+            kind: components["schemas"]["DivergenceKind"];
+            /** Other Digest */
+            other_digest: string;
+            /** Other Record Ids */
+            other_record_ids: string[];
+            /** Other Accepted */
+            other_accepted: boolean;
+            /** Message */
+            message: string;
+        };
         /**
          * ErratumOut
          * @description One erratum record correcting the record being viewed.
@@ -504,6 +734,10 @@ export interface components {
             /** Title */
             title: string;
             title_source: components["schemas"]["TitleSource"];
+            /** Digest */
+            digest: string;
+            /** Previous Digest */
+            previous_digest: string | null;
         };
         /**
          * OutboundLinkOut
@@ -550,6 +784,8 @@ export interface components {
             version: number | null;
             /** Required */
             required: boolean | null;
+            /** Allow Self Approval */
+            allow_self_approval: boolean | null;
         };
         /**
          * PollAcceptedOut
@@ -607,6 +843,24 @@ export interface components {
             /** Legacy Signoff Unverified */
             legacy_signoff_unverified: string[];
             approval: components["schemas"]["ApprovalOut"];
+        };
+        /**
+         * RecordDiffOut
+         * @description A unified diff between two stored snapshots.
+         */
+        RecordDiffOut: {
+            base: components["schemas"]["DiffEndpointOut"] | null;
+            target: components["schemas"]["DiffEndpointOut"];
+            /** Reason */
+            reason: string | null;
+            /** Unified Diff */
+            unified_diff: string;
+            /** Identical */
+            identical: boolean;
+            /** Lines Added */
+            lines_added: number;
+            /** Lines Removed */
+            lines_removed: number;
         };
         /**
          * RecordKind
@@ -816,6 +1070,8 @@ export interface operations {
                 project?: string | null;
                 /** @description state */
                 state?: components["schemas"]["RecordState"] | null;
+                /** @description Only records whose current content does not satisfy the policy: pending, rejected, changed since acceptance, or policy missing. */
+                needs_approval?: boolean;
                 page?: number;
                 page_size?: number;
             };
@@ -863,6 +1119,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_record_diff_api_v1_records__record_id__diff_get: {
+        parameters: {
+            query?: {
+                /** @description Base digest; default: last decided snapshot, else the previous revision. */
+                from?: string | null;
+                /** @description Target digest; default: the current digest. */
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordDiffOut"];
                 };
             };
             /** @description Validation Error */
@@ -964,6 +1256,258 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FacetsOut"];
                 };
+            };
+        };
+    };
+    post_decision_api_v1_records__record_id__decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionSummaryOut"];
+                };
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_candidate_api_v1_candidates_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Source Id */
+                    source_id: string;
+                    /**
+                     * Project
+                     * @description Owning project path.
+                     */
+                    project: string;
+                    /**
+                     * Adr Uuid
+                     * Format: uuid
+                     * @description UUID of the pushed ADR.
+                     */
+                    adr_uuid: string;
+                    /**
+                     * Ref
+                     * @description Branch/ref the content comes from.
+                     */
+                    ref: string;
+                    /**
+                     * Content
+                     * @description The complete Markdown file.
+                     */
+                    content: string;
+                    /**
+                     * Path
+                     * @description File path inside the project (for title/date fallbacks and provenance); default `<registration path>/<adr_uuid>.md`.
+                     */
+                    path?: string | null;
+                    /**
+                     * Delivery Id
+                     * @description CI event/delivery id for retry dedup.
+                     */
+                    delivery_id?: string | null;
+                    /**
+                     * Author
+                     * @description Author email (self-approval check).
+                     */
+                    author?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateResultOut"];
+                };
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_candidate_api_v1_candidates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Source Id */
+                    source_id: string;
+                    /**
+                     * Project
+                     * @description Owning project path.
+                     */
+                    project: string;
+                    /**
+                     * Adr Uuid
+                     * Format: uuid
+                     * @description UUID of the pushed ADR.
+                     */
+                    adr_uuid: string;
+                    /**
+                     * Ref
+                     * @description Branch/ref the content comes from.
+                     */
+                    ref: string;
+                    /**
+                     * Content
+                     * @description The complete Markdown file.
+                     */
+                    content: string;
+                    /**
+                     * Path
+                     * @description File path inside the project (for title/date fallbacks and provenance); default `<registration path>/<adr_uuid>.md`.
+                     */
+                    path?: string | null;
+                    /**
+                     * Delivery Id
+                     * @description CI event/delivery id for retry dedup.
+                     */
+                    delivery_id?: string | null;
+                    /**
+                     * Author
+                     * @description Author email (self-approval check).
+                     */
+                    author?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateResultOut"];
+                };
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error body `{detail, code, hint}`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

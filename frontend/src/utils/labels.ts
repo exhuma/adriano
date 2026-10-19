@@ -5,6 +5,7 @@
  * function here is a pure mapping with no I/O, reused by both
  * `SearchView`/`RecordView`/`SourcesView` and their tests.
  */
+import type { DecisionAction, DivergenceKind, PolicyStatus } from "@/types/approval";
 import type {
   ApprovalStateCode,
   DisplayStatus,
@@ -61,6 +62,70 @@ export function approvalStateLabel(
     default:
       return { icon: "mdi-help-circle-outline", text: state };
   }
+}
+
+/**
+ * Explain a record's approval state in one reader-facing sentence,
+ * distinguishing an unconfigured/invalid policy from an ordinary
+ * pending review so a missing configuration is never mistaken for a
+ * reviewer delay (SPEC.md "Independent approval and sign-off
+ * workflow").
+ *
+ * :param state: Approval state of the record's current content.
+ * :param policyStatus: Configuration status of the global policy.
+ * :returns: A one-sentence explanation.
+ */
+export function approvalStateExplanation(
+  state: ApprovalStateCode,
+  policyStatus: PolicyStatus,
+): string {
+  if (state === "policy_missing" || policyStatus !== "configured") {
+    return policyStatus === "invalid"
+      ? "The configured approval policy is invalid — an operator " +
+        "must fix it."
+      : "No approval policy is configured — an operator must " +
+        "configure one.";
+  }
+  switch (state) {
+    case "pending":
+      return "Awaiting review.";
+    case "rejected":
+      return "Rejected for this exact content.";
+    case "changed_since_acceptance":
+      return "Changed since acceptance — the accepted version differs " +
+        "from the current content.";
+    case "not_required":
+      return "Approval not required by policy.";
+    case "accepted":
+      return "Accepted for this exact content.";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Describe a formal decision action for display (history table).
+ *
+ * :param action: Accepted or rejected.
+ * :returns: Icon, label text, and colour.
+ */
+export function decisionActionLabel(action: DecisionAction): StatusLabel {
+  return action === "accepted"
+    ? { icon: "mdi-check-circle", text: "Accepted", color: "success" }
+    : { icon: "mdi-close-circle", text: "Rejected", color: "error" };
+}
+
+/**
+ * Describe a divergence between published and accepted/candidate
+ * content for the record page's divergence banner.
+ *
+ * :param kind: Which divergence applies.
+ * :returns: Icon and label text (the banner supplies the message).
+ */
+export function divergenceLabel(kind: DivergenceKind): StatusLabel {
+  return kind === "published_not_accepted"
+    ? { icon: "mdi-alert-circle-outline", text: "Published content not accepted", color: "warning" }
+    : { icon: "mdi-alert-circle-outline", text: "Published content differs", color: "warning" };
 }
 
 /**

@@ -59,3 +59,35 @@ export function forbiddenText(error: ApiError): string {
 export function isAuthUnavailable(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 503;
 }
+
+/**
+ * Read the stable `code` string out of an error body shaped
+ * `{detail, code, hint?}`, when present.
+ *
+ * :param error: An `ApiError` from a failed `api.*` call.
+ * :returns: The server-provided code, or `undefined`.
+ */
+export function errorCode(error: ApiError): string | undefined {
+  const data = error.data;
+  if (typeof data === "object" && data !== null && "code" in data) {
+    const code = (data as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Read the `hint` string out of an error body shaped
+ * `{detail, code, hint?}`, when present.
+ *
+ * :param error: An `ApiError` from a failed `api.*` call.
+ * :returns: The server-provided hint, or `undefined`.
+ */
+export function errorHint(error: ApiError): string | undefined {
+  const data = error.data;
+  if (typeof data === "object" && data !== null && "hint" in data) {
+    const hint = (data as { hint?: unknown }).hint;
+    return typeof hint === "string" ? hint : undefined;
+  }
+  return undefined;
+}

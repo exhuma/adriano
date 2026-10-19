@@ -32,7 +32,8 @@ import {
 const PAGE_SIZE = 20;
 
 const route = useRoute();
-const { q, source, project, state, page, clearFilters } = useSearchQuery();
+const { q, source, project, state, needsApproval, page, clearFilters } =
+  useSearchQuery();
 
 const facets = ref<FacetsOut | null>(null);
 const facetsFailed = ref(false);
@@ -107,6 +108,7 @@ const committedParams = computed<SearchParams>(() => {
     source: typeof query.source === "string" ? query.source : undefined,
     project: typeof query.project === "string" ? query.project : undefined,
     state: (rawState as RecordState | undefined) ?? undefined,
+    needs_approval: query.needs_approval === "true" ? true : undefined,
     page: Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1,
     page_size: PAGE_SIZE,
   };
@@ -117,7 +119,8 @@ const hasActiveFilters = computed(
     Boolean(committedParams.value.q) ||
     Boolean(committedParams.value.source) ||
     Boolean(committedParams.value.project) ||
-    Boolean(committedParams.value.state),
+    Boolean(committedParams.value.state) ||
+    Boolean(committedParams.value.needs_approval),
 );
 
 function describeError(error: unknown): string {
@@ -224,6 +227,16 @@ function recordHref(item: SearchItem): string {
           Candidate
         </v-btn>
       </v-btn-toggle>
+
+      <v-switch
+        v-model="needsApproval"
+        label="Needs approval"
+        hint="Pending, rejected, changed since acceptance, or no approval policy"
+        persistent-hint
+        density="comfortable"
+        color="warning"
+        class="needs-approval-switch"
+      />
 
       <v-btn
         variant="text"
@@ -335,6 +348,11 @@ function recordHref(item: SearchItem): string {
   min-width: 10rem;
   max-width: 16rem;
   flex: 1 1 10rem;
+}
+
+.needs-approval-switch {
+  flex: 0 0 auto;
+  max-width: 18rem;
 }
 
 .results-list {

@@ -73,6 +73,8 @@ export interface SearchParams {
   project?: string;
   /** Restrict to `published` or `candidate`. */
   state?: RecordState;
+  /** Restrict to records whose current content needs approval. */
+  needs_approval?: boolean;
   /** 1-based page number. */
   page?: number;
   /** Page size, 1 to 50. */

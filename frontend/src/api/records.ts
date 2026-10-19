@@ -5,6 +5,7 @@
  * paths and query strings.
  */
 import { api } from "@/api";
+import type { RecordDiffOut } from "@/types/approval";
 import type {
   RecordDetail,
   SearchItem,
@@ -13,13 +14,14 @@ import type {
 } from "@/types/records";
 import type { FacetsOut } from "@/types/sources";
 
-export type { SearchItem, SearchPage, SearchParams, RecordDetail };
+export type { RecordDetail, SearchItem, SearchPage, SearchParams };
 
-/** Build a query string from a params object, dropping empty values. */
-function toQueryString(params: SearchParams): string {
+/** Build a query string from a params object, dropping empty/false
+ *  values so the URL stays minimal. */
+function toQueryString<T extends object>(params: T): string {
   const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === "") {
+  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+    if (value === undefined || value === null || value === "" || value === false) {
       continue;
     }
     search.set(key, String(value));
@@ -58,4 +60,30 @@ export function getRecord(id: string): Promise<RecordDetail> {
  */
 export function getFacets(): Promise<FacetsOut> {
   return api.get<FacetsOut>("/api/v1/facets");
+}
+
+/** Digests to diff; omitted sides fall back to the server default. */
+export interface DiffParams {
+  /** Base digest (query `from`); default: last decided, else previous. */
+  from?: string;
+  /** Target digest (query `to`); default: the current digest. */
+  to?: string;
+}
+
+/**
+ * Diff two stored snapshots of a record's identity.
+ *
+ * :param id: Record id.
+ * :param params: Optional base/target digests; only digests related
+ *     to the record are accepted (404 `unknown_revision` otherwise).
+ * :returns: The diff payload.
+ */
+export function getRecordDiff(
+  id: string,
+  params: DiffParams = {},
+): Promise<RecordDiffOut> {
+  const query = toQueryString({ from: params.from, to: params.to });
+  return api.get<RecordDiffOut>(
+    `/api/v1/records/${encodeURIComponent(id)}/diff${query}`,
+  );
 }

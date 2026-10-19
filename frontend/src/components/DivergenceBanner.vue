@@ -1,0 +1,62 @@
+<script setup lang="ts">
+/**
+ * Divergence and competing-candidate warnings for the record page:
+ * content divergence within one identity (published vs. accepted),
+ * and other candidates of the same identity holding different
+ * content, each a separate concern that can occur independently.
+ */
+import StatusChip from "@/components/StatusChip.vue";
+import type { CompetingCandidateOut, DivergenceOut } from "@/types/approval";
+import { shortDigest } from "@/utils/digest";
+import { approvalStateLabel, divergenceLabel } from "@/utils/labels";
+
+defineProps<{
+  /** Content divergence within the record's identity, if any. */
+  divergence: DivergenceOut | null;
+  /** Other candidates of the identity holding different content. */
+  competingCandidates: CompetingCandidateOut[];
+}>();
+</script>
+
+<template>
+  <v-alert
+    v-if="divergence"
+    type="warning"
+    variant="tonal"
+    :icon="divergenceLabel(divergence.kind).icon"
+    class="mb-4"
+  >
+    <div>{{ divergence.message }}</div>
+    <ul v-if="divergence.other_record_ids.length > 0" class="mt-2">
+      <li v-for="id in divergence.other_record_ids" :key="id">
+        <router-link :to="`/records/${id}`">
+          View the {{ shortDigest(divergence.other_digest) }} revision
+        </router-link>
+      </li>
+    </ul>
+  </v-alert>
+
+  <v-card v-if="competingCandidates.length > 0" class="mb-4" variant="outlined">
+    <v-card-title class="text-subtitle-1">
+      <v-icon icon="mdi-source-branch" size="small" aria-hidden="true" class="mr-1" />
+      Competing candidates
+    </v-card-title>
+    <v-card-text class="text-body-2 text-medium-emphasis">
+      Other candidates of this same decision hold different content. A
+      decision on one never affects another.
+    </v-card-text>
+    <v-list density="compact">
+      <v-list-item v-for="candidate in competingCandidates" :key="candidate.id">
+        <router-link :to="`/records/${candidate.id}`">
+          {{ candidate.ref }}
+        </router-link>
+        <template #append>
+          <code class="mr-2" :title="candidate.digest">
+            {{ shortDigest(candidate.digest) }}
+          </code>
+          <StatusChip v-bind="approvalStateLabel(candidate.approval_state, 'candidate')" />
+        </template>
+      </v-list-item>
+    </v-list>
+  </v-card>
+</template>
