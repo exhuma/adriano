@@ -9,12 +9,16 @@ Both the FastAPI lifespan (:mod:`app.main`) and the CLI
 (:mod:`app.cli`) build their object graph here.
 
 :class:`CatalogRuntime` is the startup state kept on ``app.state`` and
-read by routes through :func:`get_catalog_runtime`.
+read by routes through :func:`get_catalog_runtime`. Read routes get
+their storage provider through the :func:`get_store_provider`
+dependency, which tests override with a provider bound to the test
+database, exactly like :func:`app.config.get_settings`.
 
 Public API: :class:`SyncStatus`, :class:`CatalogRuntime`,
 :func:`load_catalog`, :func:`build_store_provider`,
 :func:`build_polling_service`, :func:`start_catalog`,
-:func:`log_problems`, :func:`get_catalog_runtime`.
+:func:`log_problems`, :func:`get_catalog_runtime`,
+:func:`get_store_provider`.
 """
 
 import logging
@@ -22,11 +26,11 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 
-from fastapi import Request
+from fastapi import Depends, Request
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.catalog_config import CatalogConfig, load_catalog_config
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.database import get_engine
 from app.domain.issues import Severity
 from app.services.polling import PollingService
@@ -141,3 +145,19 @@ def get_catalog_runtime(request: Request) -> CatalogRuntime | None:
     :returns: The runtime state, or ``None``.
     """
     return getattr(request.app.state, "catalog", None)
+
+
+def get_store_provider(
+    settings: Settings = Depends(get_settings),
+) -> CatalogStoreProvider:
+    """
+    FastAPI dependency: the storage provider for the configured database.
+
+    Routers depend on this (never on a concrete store implementation),
+    so tests can override it -- or override :func:`app.config.get_settings`
+    to point it at the test database, as every other test already does.
+
+    :param settings: Application settings, injected for overriding.
+    :returns: The provider.
+    """
+    return build_store_provider(settings)

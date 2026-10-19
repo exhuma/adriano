@@ -41,6 +41,7 @@ from app.storage.values import (
     MAX_PAGE_SIZE,
     ChangeTokenEntry,
     DecisionEvent,
+    FacetEntry,
     IntakeKind,
     IntakeRun,
     IntakeStatus,
@@ -64,6 +65,7 @@ __all__ = [
     "CatalogStoreProvider",
     "ChangeTokenEntry",
     "DecisionEvent",
+    "FacetEntry",
     "IntakeKind",
     "IntakeRun",
     "IntakeStatus",
@@ -238,6 +240,17 @@ class CatalogStore(Protocol):
 
         :param kind: Restrict to one state; ``None`` means all rows.
         :returns: One summary per row.
+        """
+        ...
+
+    def list_facets(self) -> list[FacetEntry]:
+        """
+        Count rows per ``(source_id, project)`` pair, for filter UIs.
+
+        Counts include both published and candidate rows.
+
+        :returns: One entry per non-empty ``(source_id, project)``
+            pair, ordered by source id then project.
         """
         ...
 

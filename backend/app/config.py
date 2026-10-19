@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         mounted. Must be ``False`` in production.
     :cvar dev_shared_secret: Shared secret for the dev-only auth
         bypass. Has no default; must be explicitly configured.
+    :cvar stale_after_minutes: Minutes after the last successful poll
+        of a registration before its freshness is reported as
+        ``stale`` (see ``GET /api/v1/sources`` and the record detail
+        freshness field).
     """
 
     model_config = SettingsConfigDict(
@@ -56,6 +60,8 @@ class Settings(BaseSettings):
 
     dev_auth_enabled: bool = False
     dev_shared_secret: str | None = None
+
+    stale_after_minutes: int = 120
 
 
 @lru_cache

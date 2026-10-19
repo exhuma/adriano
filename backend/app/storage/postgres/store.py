@@ -34,6 +34,7 @@ from app.domain.values import Identity
 from app.storage.port import (
     ChangeTokenEntry,
     DecisionEvent,
+    FacetEntry,
     IntakeKind,
     IntakeRun,
     IntakeStatus,
@@ -158,6 +159,10 @@ class PostgresCatalogStore:
     ) -> list[RecordSummary]:
         """See :meth:`.CatalogStore.list_relationship_summaries`."""
         return records.list_relationship_summaries(self._session, kind)
+
+    def list_facets(self) -> list[FacetEntry]:
+        """See :meth:`app.storage.port.CatalogStore.list_facets`."""
+        return records.list_facets(self._session)
 
     def search(
         self,

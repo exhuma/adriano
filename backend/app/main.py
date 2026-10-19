@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from app.composition import start_catalog
 from app.config import get_settings
 from app.errors import register_handlers
-from app.routers import health
+from app.routers import facets, health, records, sources
 
 
 @asynccontextmanager
@@ -46,6 +46,9 @@ def create_app() -> FastAPI:
     app = FastAPI(title="adriano", docs_url="/api/docs", lifespan=_lifespan)
 
     app.include_router(health.router)
+    app.include_router(records.router)
+    app.include_router(sources.router)
+    app.include_router(facets.router)
 
     register_handlers(app)
 

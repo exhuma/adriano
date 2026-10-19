@@ -13,7 +13,8 @@ Public API:
   :class:`Revision`, :class:`RecordWrite`, :class:`StoredRecord`,
   :class:`UpsertResult`, :class:`ChangeTokenEntry`,
   :class:`SearchFilters`, :class:`SearchItem`, :class:`SearchPage`,
-  :class:`NewDecision`, :class:`DecisionEvent`, :class:`IntakeRun`
+  :class:`FacetEntry`, :class:`NewDecision`, :class:`DecisionEvent`,
+  :class:`IntakeRun`
 """
 
 import datetime
@@ -323,6 +324,25 @@ class SearchPage:
     total: int
     page: int
     page_size: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FacetEntry:
+    """
+    Row count for one ``(source_id, project)`` pair.
+
+    Used to populate the source/project filter select in the UI
+    (:meth:`app.storage.port.CatalogStore.list_facets`); counts include
+    both published and candidate rows.
+
+    :param source_id: Registration id.
+    :param project: Project path.
+    :param count: Number of rows for this source and project.
+    """
+
+    source_id: str
+    project: str
+    count: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

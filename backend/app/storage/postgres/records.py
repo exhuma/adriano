@@ -9,7 +9,8 @@ a database trigger, so it is never written here.
 Public API: :func:`put_revision`, :func:`get_revision`,
 :func:`upsert_record`, :func:`create_candidate`, :func:`get_record`,
 :func:`list_change_tokens`, :func:`delete_published`,
-:func:`list_identity_siblings`, :func:`list_relationship_summaries`.
+:func:`list_identity_siblings`, :func:`list_relationship_summaries`,
+:func:`list_facets`.
 """
 
 import uuid
@@ -36,6 +37,7 @@ from app.domain.values import Identity, Links, RecordKind
 from app.errors import CandidateExistsError
 from app.storage.port import (
     ChangeTokenEntry,
+    FacetEntry,
     RecordState,
     RecordWrite,
     Revision,
@@ -332,6 +334,32 @@ def list_relationship_summaries(
             links=Links.from_dict(row["links"]),
             record_kind=RecordKind(row["record_kind"]),
             path=row["path"],
+        )
+        for row in session.execute(stmt).mappings()
+    ]
+
+
+def list_facets(session: Session) -> list[FacetEntry]:
+    """
+    Count rows per ``(source_id, project)`` pair, for filter UIs.
+
+    :param session: Unit-of-work session.
+    :returns: One entry per pair, ordered by source id then project.
+    """
+    stmt = (
+        select(
+            RECORD.c.source_id,
+            RECORD.c.project,
+            func.count().label("count"),
+        )
+        .group_by(RECORD.c.source_id, RECORD.c.project)
+        .order_by(RECORD.c.source_id, RECORD.c.project)
+    )
+    return [
+        FacetEntry(
+            source_id=row["source_id"],
+            project=row["project"],
+            count=row["count"],
         )
         for row in session.execute(stmt).mappings()
     ]
