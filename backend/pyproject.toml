@@ -1,0 +1,65 @@
+[project]
+name = "adriano-backend"
+version = "0.1.0"
+description = "ADR governance catalog backend (adriano)"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi>=0.148.0",
+    "httpx>=0.28.1",
+    "markdown-it-py>=4.2.0",
+    "nh3>=0.3.7",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.16.0",
+    "pyjwt[crypto]>=2.15.1",
+    "pyyaml>=6.0.3",
+    "sqlalchemy>=2.1.5",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 80
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "D", "C90", "B", "UP"]
+# D203/D211 and D212/D213 are mutually exclusive style choices; keep
+# the opening triple-quote alone on its own line, summary on the next
+# line (matches the quartermaster module-fastapi/code-style examples).
+ignore = ["D211", "D212"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection pattern calls Depends()/Query() etc.
+# in argument defaults by design; treat them as immutable.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.params.Depends",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D100", "D103"]
+"alembic/*" = ["D100", "D103", "D401"]

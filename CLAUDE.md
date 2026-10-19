@@ -16,3 +16,12 @@ and don't keep a fixed kit list here.
 - Use `get_kit` / `search_kit_content` to pull additional kit sections when needed.
 - If no kit covers what you need, or guidance is ambiguous, use
   `request_clarification_or_addition` (check `check_existing_gap_issue` first).
+
+## UI route
+
+The frontend uses Vuetify (quartermaster `stack-fastapi-vuetify`, which
+composes `module-fastapi` and `module-vue-vuetify`), not the
+`module-vue-ui-toolbelt` Reka UI + plain CSS route: the catalog's record
+and sources screens need data-table-like list/filter components and
+Material Design is an acceptable look for an internal governance tool,
+so Vuetify's ready-made components outweigh hand-rolled ARIA primitives.

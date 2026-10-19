@@ -1,0 +1,144 @@
+version: "3"
+
+dotenv: [".env"]
+
+tasks:
+  db:up:
+    desc: >-
+      Start the ephemeral dev/test Postgres container (no-op if
+      already running).
+    status:
+      - test -n "$(docker ps -q -f name=^/adriano-db$ -f status=running)"
+    cmds:
+      - >-
+        docker run -d --rm --name adriano-db -p 55432:5432
+        --tmpfs /var/lib/postgresql
+        -e POSTGRES_USER=adriano
+        -e POSTGRES_PASSWORD=adriano
+        -e POSTGRES_DB=adriano
+        postgres:18
+      - task: db:wait-ready
+      - task: db:create-test-db
+
+  db:wait-ready:
+    internal: true
+    desc: Wait for the dev Postgres container to accept connections.
+    cmds:
+      - |
+        for i in $(seq 1 30); do
+          if docker exec adriano-db pg_isready -U adriano \
+              -d adriano >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "adriano-db did not become ready in time" >&2
+        exit 1
+
+  db:create-test-db:
+    internal: true
+    desc: Create the adriano_test database if it does not exist yet.
+    cmds:
+      - |
+        exists=$(docker exec adriano-db psql -U adriano -d adriano \
+          -tAc "SELECT 1 FROM pg_database WHERE datname='adriano_test'")
+        if [ "$exists" != "1" ]; then
+          docker exec adriano-db psql -U adriano -d adriano \
+            -c 'CREATE DATABASE adriano_test'
+        fi
+
+  db:down:
+    desc: Stop and discard the ephemeral dev/test Postgres container.
+    cmds:
+      - docker stop adriano-db >/dev/null 2>&1 || true
+
+  db:reset:
+    desc: Discard and recreate the ephemeral dev/test Postgres container.
+    cmds:
+      - task: db:down
+      - task: db:up
+
+  migrate:
+    desc: Apply Alembic migrations to the dev database.
+    dir: backend
+    cmds:
+      - uv run alembic upgrade head
+
+  dev:
+    desc: >-
+      Start the ephemeral DB, apply migrations, then run the backend
+      (8100) and frontend (5173) dev servers in parallel. Ctrl-C stops
+      both servers; the DB keeps running until `task db:down`.
+    cmds:
+      - task: db:up
+      - task: migrate
+      - task: dev:servers
+
+  dev:servers:
+    internal: true
+    deps: [dev:backend, dev:frontend]
+
+  dev:backend:
+    desc: Run the FastAPI dev server with reload on port 8100.
+    dir: backend
+    cmds:
+      - uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
+
+  dev:frontend:
+    desc: >-
+      Run the Vite dev server on port 5173 (skips gracefully until
+      the frontend is scaffolded).
+    cmds:
+      - |
+        if [ ! -f frontend/package.json ]; then
+          echo "frontend/package.json not found; skipping" \
+            "dev:frontend (frontend not scaffolded yet)."
+          exit 0
+        fi
+        cd frontend && npm run dev
+
+  lint:
+    desc: Lint and format-check the backend and the frontend.
+    cmds:
+      - cd backend && uv run ruff check .
+      - cd backend && uv run ruff format --check .
+      - task: lint:frontend
+
+  lint:frontend:
+    internal: true
+    cmds:
+      - |
+        if [ ! -f frontend/package.json ]; then
+          echo "frontend/package.json not found; skipping frontend" \
+            "lint/typecheck (frontend not scaffolded yet)."
+          exit 0
+        fi
+        cd frontend && npm run lint && npm run typecheck
+
+  test:
+    desc: Run the backend and frontend test suites.
+    cmds:
+      - cd backend && uv run pytest
+      - task: test:frontend
+
+  test:frontend:
+    internal: true
+    cmds:
+      - |
+        if [ ! -f frontend/package.json ]; then
+          echo "frontend/package.json not found; skipping frontend" \
+            "tests (frontend not scaffolded yet)."
+          exit 0
+        fi
+        cd frontend && npm run test
+
+  build:
+    desc: Build the production frontend bundle.
+    cmds:
+      - |
+        if [ ! -f frontend/package.json ]; then
+          echo "frontend/package.json not found; skipping build" \
+            "(frontend not scaffolded yet)."
+          exit 0
+        fi
+        cd frontend && npm run build

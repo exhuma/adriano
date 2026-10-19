@@ -1,0 +1,71 @@
+# Example adriano catalog configuration.
+#
+# Copy to catalog.yaml (or point ADRIANO_CONFIG_FILE at a copy) and
+# adjust for your deployment. This file is read once at startup;
+# changing it requires an application restart. It is not loaded
+# until phase 04 wires up the sources/intake services, but is kept
+# here, documented, from phase 01 onward.
+#
+# Secrets referenced below (GitLab tokens, CI push tokens) are
+# environment variable NAMES, resolved at startup. Never put an
+# actual secret value in this file.
+
+sources:
+  # A filesystem source reads ADR files from a folder on disk. It
+  # is a phase-1 convenience adapter (authorized as a deviation from
+  # the spec's GitLab-only requirement) so the catalog can be
+  # demoed without an external GitLab instance.
+  - id: central
+    type: filesystem
+    root: ./samples/adr-root
+    # Optional filter: only index these project subdirectories.
+    scope:
+      projects: [platform, payments]
+    # Path to the ADRs inside each project directory.
+    path: doc/decisions
+    # Explicit label for the "published" ref of this registration.
+    published_ref: local
+    # This registration accepts both scheduled polling and CI push.
+    intake: [poll, push]
+    # Env var NAMES holding the CI push bearer tokens for this
+    # registration (never the token values themselves).
+    push_tokens_env: [ADRIANO_PUSH_TOKEN_CENTRAL]
+
+  # A gitlab source reads ADR files from one or more GitLab groups
+  # or projects over the GitLab REST API.
+  - id: gitlab-platform
+    type: gitlab
+    base_url: https://gitlab.example.com
+    # Env var NAME holding the GitLab personal/project access token.
+    token_env: ADRIANO_GITLAB_TOKEN_PLATFORM
+    scope:
+      groups: [platform]
+      include_subgroups: true
+      projects: []
+    path: doc/decisions
+    # Either an explicit branch name, or "@project-default" to use
+    # each project's configured default branch.
+    published_ref: "@project-default"
+    intake: [poll, push]
+    push_tokens_env: [ADRIANO_PUSH_TOKEN_PLATFORM]
+
+# The single global approval policy. A missing or invalid policy
+# does not stop startup; it yields the policy_missing state
+# everywhere instead, and decisions are refused until it is fixed.
+approval_policy:
+  id: global
+  version: 1
+  required: true
+  reviewers:
+    # issuer|subject pairs, matched against the verified token.
+    users: ["https://idp.example.com|subject-123"]
+    # IdP roles that are also eligible to review.
+    roles: [adr-reviewer]
+  allow_self_approval: false
+
+# Maps each IdP role (as it appears in the configured roles claim)
+# to the permissions it grants.
+rbac:
+  roles:
+    admin: [read, operate]
+    adr-reader: [read]

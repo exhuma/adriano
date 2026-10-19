@@ -74,7 +74,9 @@ override). Commit with:
 git commit --author="Claude Code agent (for Michel Albert) <michel@albert.lu>"
 ```
 
-Do not touch the committer. End commit messages with the attribution
+Do not touch the committer. Signing is disabled for this repository
+only (`git config --local commit.gpgsign false`, approved by the user),
+because the GPG pinentry cannot be answered unattended. End commit messages with the attribution
 trailer lines required by the session (Co-Authored-By / Claude-Session)
 when the harness provides them.
 
