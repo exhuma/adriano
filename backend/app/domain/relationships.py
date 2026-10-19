@@ -8,10 +8,14 @@ resolves to the record with that UUID, preferring, in order:
 2. the same registration (``same_registration``),
 3. any registration (``global``).
 
-If several records share the best tier the link is *ambiguous*: it is
-left unresolved and reported (``ambiguous_target``); nothing is picked
-arbitrarily. An unknown UUID yields ``missing_target``. A record never
-resolves a link to itself.
+Rows of one logical identity (the published row and its candidates on
+other refs) are revisions of one decision, not separate targets: each
+identity is represented by its published row, else by its most
+recently updated candidate. If several identities (or several published
+rows of one identity) share the best tier the link is *ambiguous*: it
+is left unresolved and reported (``ambiguous_target``); nothing is
+picked arbitrarily. An unknown UUID yields ``missing_target``. A record
+never resolves a link to itself or to another revision of itself.
 
 From the resolved links the index derives, for one record:
 
@@ -19,13 +23,16 @@ From the resolved links the index derives, for one record:
 - errata: erratum records whose ``corrects`` resolves to the record;
 - display status: ``obsoleted`` if anything obsoletes it, else
   ``updated`` if anything updates it, else ``active``;
-- ``duplicate_uuid`` issues: an error when another file in the same
-  identity (same registration, project and UUID) uses the UUID, a
-  warning when other identities use it.
+- ``duplicate_uuid`` issues: an error when another *published* file of
+  the same identity (same registration, project and UUID) uses the UUID
+  (only for a published record), a warning when other identities use
+  it. Candidates of the record's own identity are revisions and are
+  never reported.
 
 Records without a valid UUID take no part in UUID relationships.
 
-Callers pass one summary per stored row (normally the published rows).
+Callers pass one summary per stored row: normally the published rows
+plus, optionally, candidate rows (``published=False``).
 
 Public API: :class:`DisplayStatus`, :class:`InboundType`,
 :class:`Resolution`, :class:`RecordSummary`, :class:`ResolvedLink`,
@@ -33,9 +40,10 @@ Public API: :class:`DisplayStatus`, :class:`InboundType`,
 :class:`RelationshipIndex`, :func:`resolve_relationships`.
 """
 
+import datetime
 import uuid
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -89,6 +97,10 @@ class RecordSummary:
     :param links: Validated outbound links.
     :param record_kind: Decision or erratum.
     :param path: File path, used only in messages.
+    :param published: ``True`` for a published row, ``False`` for a
+        candidate (a revision on another ref).
+    :param updated_at: When the row's content last changed; picks the
+        representative candidate of an unpublished identity.
     """
 
     key: str
@@ -97,6 +109,8 @@ class RecordSummary:
     links: Links = Links()
     record_kind: RecordKind = RecordKind.DECISION
     path: str = ""
+    published: bool = True
+    updated_at: datetime.datetime | None = None
 
     @property
     def label(self) -> str:
@@ -202,6 +216,51 @@ def _tier(source: Identity, target: Identity) -> Resolution:
     return Resolution.SAME_PROJECT
 
 
+_EPOCH = datetime.datetime.min.replace(tzinfo=datetime.UTC)
+
+
+def _recency(summary: RecordSummary) -> tuple[datetime.datetime, str]:
+    """
+    Order candidates by recency, ties broken by key for determinism.
+
+    :param summary: A candidate row.
+    :returns: A sort key; larger is more recent.
+    """
+    return (summary.updated_at or _EPOCH, summary.key)
+
+
+def _representatives(
+    rows: Iterable[RecordSummary],
+) -> list[RecordSummary]:
+    """
+    Collapse rows to one representative per logical identity.
+
+    An identity is represented by its published rows (several only for
+    a genuine duplicate), else by its most recently updated candidate.
+
+    :param rows: Rows sharing one UUID.
+    :returns: Representatives, sorted by key.
+    """
+    groups: dict[Identity, list[RecordSummary]] = defaultdict(list)
+    for row in rows:
+        groups[row.identity].append(row)
+    chosen: list[RecordSummary] = []
+    for group in groups.values():
+        published = [row for row in group if row.published]
+        chosen += published or [max(group, key=_recency)]
+    return sorted(chosen, key=lambda row: row.key)
+
+
+def _labels(rows: Sequence[RecordSummary]) -> str:
+    """
+    Join row labels for a message.
+
+    :param rows: The rows.
+    :returns: Sorted, comma-separated labels.
+    """
+    return ", ".join(sorted(row.label for row in rows))
+
+
 def _link_issue(link: ResolvedLink) -> Issue | None:
     """
     Describe an unresolved outbound link.
@@ -286,14 +345,17 @@ class RelationshipIndex:
         candidates = [
             other
             for other in self._by_uuid.get(target, [])
-            if other.key != source.key
+            if other.identity != source.identity
         ]
         for tier in _TIER_ORDER:
-            best = sorted(
+            best = [
                 other.key
-                for other in candidates
-                if _tier(source.identity, other.identity) is tier
-            )
+                for other in _representatives(
+                    other
+                    for other in candidates
+                    if _tier(source.identity, other.identity) is tier
+                )
+            ]
             if len(best) == 1:
                 return ResolvedLink(link_type, target, best[0], tier)
             if best:
@@ -302,7 +364,12 @@ class RelationshipIndex:
 
     def _duplicate_issues(self, summary: RecordSummary) -> list[Issue]:
         """
-        Report other rows that use the same UUID.
+        Report other identities and published files using the UUID.
+
+        Candidates of the record's own identity are revisions of it, not
+        duplicates. Another published row of the same identity is a
+        genuine duplicate (two files claiming one UUID), reported on
+        published rows only.
 
         :param summary: The record to check.
         :returns: At most one error (same identity) and one warning
@@ -315,9 +382,15 @@ class RelationshipIndex:
             for other in self._by_uuid[summary.adr_uuid]
             if other.key != summary.key
         ]
-        same = sorted(o.label for o in others if o.identity == summary.identity)
-        elsewhere = sorted(
-            o.label for o in others if o.identity != summary.identity
+        same = [
+            other
+            for other in others
+            if other.identity == summary.identity
+            and other.published
+            and summary.published
+        ]
+        elsewhere = _representatives(
+            other for other in others if other.identity != summary.identity
         )
         issues: list[Issue] = []
         if same:
@@ -325,7 +398,7 @@ class RelationshipIndex:
                 error(
                     IssueCode.DUPLICATE_UUID,
                     f"UUID {summary.adr_uuid} is also used in the same "
-                    f"project by {', '.join(same)}; give each file its "
+                    f"project by {_labels(same)}; give each file its "
                     f"own UUID",
                 )
             )
@@ -334,7 +407,7 @@ class RelationshipIndex:
                 warning(
                     IssueCode.DUPLICATE_UUID,
                     f"UUID {summary.adr_uuid} is also used by "
-                    f"{', '.join(elsewhere)}; these are separate records",
+                    f"{_labels(elsewhere)}; these are separate records",
                 )
             )
         return issues

@@ -2,7 +2,8 @@
 HTTP routes for searching and viewing catalog records.
 
 Thin: query-parameter validation and status codes only; all assembly
-logic lives in :mod:`app.services.catalog`. These routes only use the
+logic lives in :mod:`app.services.search` and
+:mod:`app.services.record_detail`. These routes only use the
 storage provider (:func:`app.composition.get_store_provider`) and the
 catalog configuration loaded at startup
 (:func:`app.composition.get_catalog_runtime`) -- never a source
@@ -27,7 +28,7 @@ from app.domain.approval import Policy, PolicyStatus
 from app.errors import NotFoundError
 from app.routers.decisions import reviewer_from
 from app.schemas.records import RecordDetailOut, RecordDiffOut, SearchPageOut
-from app.services import catalog
+from app.services import record_detail, search
 from app.services.diff import diff_record
 from app.storage.port import MAX_PAGE_SIZE, CatalogStoreProvider, RecordState
 
@@ -93,7 +94,7 @@ def list_records(
     """
     policy, _status = _policy(runtime)
     with provider.unit_of_work() as store:
-        page_result = catalog.search_records(
+        page_result = search.search_records(
             store,
             query=q,
             source_id=source,
@@ -131,7 +132,7 @@ def get_record(
     """
     policy, policy_status = _policy(runtime)
     with provider.unit_of_work() as store:
-        detail = catalog.get_record_detail(
+        detail = record_detail.get_record_detail(
             store,
             record_id,
             policy=policy,

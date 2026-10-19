@@ -318,6 +318,8 @@ def list_relationship_summaries(
         RECORD.c.links,
         RECORD.c.record_kind,
         RECORD.c.path,
+        RECORD.c.kind,
+        RECORD.c.updated_at,
     )
     if kind is not None:
         stmt = stmt.where(RECORD.c.kind == kind.value)
@@ -334,6 +336,8 @@ def list_relationship_summaries(
             links=Links.from_dict(row["links"]),
             record_kind=RecordKind(row["record_kind"]),
             path=row["path"],
+            published=row["kind"] == RecordState.PUBLISHED.value,
+            updated_at=row["updated_at"],
         )
         for row in session.execute(stmt).mappings()
     ]

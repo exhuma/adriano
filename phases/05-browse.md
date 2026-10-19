@@ -21,7 +21,7 @@ freshness — all from the local index without source calls.
 
 ### Task 1 — Read API (model: sonnet)
 
-- `services/catalog.py` (store only) and routers:
+- `services/{search,record_detail,record_relationships}.py` (store only) and routers:
   - `GET /api/v1/records` with `q`, `source`, `project`, `state`,
     `page`, `page_size` (max 50). Result items: id, title, source,
     project, path, ref, kind, approval state summary, issue counts,

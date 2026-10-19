@@ -1,5 +1,7 @@
 """Tests for relationship resolution (``app.domain.relationships``)."""
 
+import dataclasses
+import datetime
 import uuid
 
 import pytest
@@ -230,3 +232,118 @@ def test_outbound_preserves_link_types() -> None:
         LinkType.UPDATES,
         LinkType.OBSOLETES,
     ]
+
+
+def revision(
+    of: RecordSummary,
+    key: str,
+    *,
+    updated_at: datetime.datetime | None = None,
+    links: Links | None = None,
+) -> RecordSummary:
+    """
+    Build a candidate row of the same identity as *of*.
+
+    :param of: The row whose identity the candidate shares.
+    :param key: Row key of the candidate.
+    :param updated_at: When the candidate last changed.
+    :param links: Outbound links (default: those of *of*).
+    :returns: The candidate summary.
+    """
+    return dataclasses.replace(
+        of,
+        key=key,
+        published=False,
+        updated_at=updated_at,
+        links=of.links if links is None else links,
+    )
+
+
+T1 = datetime.datetime(2024, 3, 1, tzinfo=datetime.UTC)
+T2 = datetime.datetime(2024, 3, 2, tzinfo=datetime.UTC)
+
+
+def test_candidate_of_same_identity_is_not_a_duplicate() -> None:
+    """Ensure a published row and its candidate are revisions, not dupes."""
+    published = summary("pub", OLD)
+    candidate = revision(published, "cand", updated_at=T1)
+    index = RelationshipIndex([published, candidate])
+
+    assert index.view("pub").issues == ()
+    assert index.view("cand").issues == ()
+
+
+def test_two_published_paths_same_uuid_are_a_duplicate_error() -> None:
+    """Ensure two published files claiming one UUID stay an error."""
+    a = summary("a", OLD)
+    b = summary("b", OLD)
+    candidate = revision(a, "cand", updated_at=T1)
+
+    view = resolve_relationships([a, b, candidate], "a")
+
+    (issue,) = view.issues
+    assert (issue.code, issue.severity) == (
+        IssueCode.DUPLICATE_UUID,
+        Severity.ERROR,
+    )
+    assert "doc/decisions/b.md" in issue.message
+    assert "decisions/a.md" not in issue.message
+
+
+def test_cross_project_duplicate_is_still_a_warning_with_candidates() -> None:
+    """Ensure another project's UUID reuse warns once despite revisions."""
+    a = summary("a", OLD, project="platform")
+    candidate = revision(a, "a-cand", updated_at=T1)
+    b = summary("b", OLD, project="payments")
+
+    view = resolve_relationships([a, candidate, b], "a")
+
+    (issue,) = view.issues
+    assert (issue.code, issue.severity) == (
+        IssueCode.DUPLICATE_UUID,
+        Severity.WARNING,
+    )
+    assert "central/payments/doc/decisions/b.md" in issue.message
+
+
+def test_link_to_identity_with_candidate_prefers_published() -> None:
+    """Ensure a target with revisions resolves to its published row."""
+    old = summary("old", OLD)
+    candidate = revision(old, "old-cand", updated_at=T2)
+    new = summary("new", NEW, links=Links(obsoletes=(OLD,)))
+    index = RelationshipIndex([old, candidate, new])
+
+    link = index.view("new").outbound[0]
+
+    assert (link.target_key, link.resolution) == (
+        "old",
+        Resolution.SAME_PROJECT,
+    )
+    assert not link.ambiguous
+    assert index.view("new").issues == ()
+    assert index.view("old").status is DisplayStatus.OBSOLETED
+
+
+def test_link_to_unpublished_identity_picks_latest_candidate() -> None:
+    """Ensure an unpublished target resolves to its newest candidate."""
+    first = revision(summary("x", OLD), "older", updated_at=T1)
+    second = revision(first, "newer", updated_at=T2)
+    new = summary("new", NEW, links=Links(updates=(OLD,)))
+
+    view = resolve_relationships([first, second, new], "new")
+
+    assert view.outbound[0].target_key == "newer"
+    assert view.issues == ()
+
+
+def test_revisions_do_not_link_to_each_other() -> None:
+    """Ensure a candidate never resolves a link to its published row."""
+    published = summary("pub", OLD)
+    candidate = revision(
+        published, "cand", updated_at=T1, links=Links(updates=(OLD,))
+    )
+
+    view = resolve_relationships([published, candidate], "cand")
+
+    assert view.outbound[0].target_key is None
+    assert resolve_relationships([published, candidate], "pub").inbound == ()

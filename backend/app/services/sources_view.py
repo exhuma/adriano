@@ -1,7 +1,7 @@
 """
 Read-only views of source registrations and search facets.
 
-Split from :mod:`app.services.catalog` (same rules: a
+Same rules as :mod:`app.services.search` (a
 :class:`~app.storage.port.CatalogStore` inside the caller's unit of
 work, plain dataclasses out, no FastAPI, no source adapter).
 

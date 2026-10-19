@@ -11,7 +11,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 04 | Sources & ingest | done | see git log | see notes |
 | 05 | Browse slice | done | see git log | see notes |
 | 06 | Auth & RBAC slice | done | see git log | see notes |
-| 07 | Approval slice | todo | | |
+| 07 | Approval slice | done | see git log | see notes |
 | 08 | Samples, deploy, demo | todo | | |
 | 09 | Benchmark & report | todo | | |
 
@@ -163,7 +163,7 @@ open issues, anything the next phase must know.
 
 ### Phase 05
 
-- Read API: `app/services/catalog.py`, routers `records`, `sources`,
+- Read API: `app/services/{search,record_detail,record_relationships}.py`, routers `records`, `sources`,
   `facets`, schemas in `app/schemas/`. `get_store_provider` dependency
   in `app/composition.py` (override in tests). New store method
   `list_facets()`. Setting `ADRIANO_STALE_AFTER_MINUTES` (120).
@@ -222,3 +222,44 @@ open issues, anything the next phase must know.
 - Local dev login: in `.env` set `ADRIANO_DEV_AUTH_ENABLED=true`,
   `ADRIANO_DEV_SHARED_SECRET=<random>`, `VITE_DEV_AUTH=true`; the
   catalog file needs an `rbac` block.
+
+### Phase 07
+
+- Intake: `app/auth/push.py` (constant-time push tokens, separate
+  OpenAPI scheme `PushToken`), `app/services/{intake,intake_checks}.py`,
+  router `candidates.py`. `PUT|POST /api/v1/candidates` body
+  `{source_id, project, adr_uuid, ref, content, path?, delivery_id?,
+  author?}` (extra keys 422). Codes: 401 not_authenticated /
+  invalid_push_token (also for unknown sources), 413
+  payload_too_large / content_too_large, 422 invalid_request /
+  published_ref_not_allowed / invalid_document / uuid_mismatch /
+  bad_encoding, 403 push_disabled / project_out_of_scope, 409
+  candidate_exists. Every request logs an intake_run. Only the literal
+  `published_ref` is refused (no adapter call for `@project-default`).
+- Decisions: `app/services/decisions.py` (`decision_blocker` shared by
+  POST and detail `can_decide`), router `decisions.py`. Codes 404
+  record_not_found, 409 policy_missing / approval_not_required /
+  not_approvable / digest_changed / already_decided, 403 not_eligible
+  / self_approval. `expected_digest` guards against reviewing stale
+  content.
+- Detail approval block (`app/services/approval_view.py`): history,
+  divergence, competing candidates, `can_decide` + blocked code/reason.
+  Diff `app/services/diff.py` (`GET /records/{id}/diff`), limited to
+  digests related to the identity. `needs_approval=true` search filter.
+- `catalog.py` split into `services/search.py`, `record_detail.py`,
+  `record_relationships.py`; `sources_view.py` holds sources/facets.
+  All modules <= 500 lines.
+- Fix: `RecordSummary` carries `published` + `updated_at`; rows of one
+  identity are revisions, not duplicates. `duplicate_uuid` is an error
+  only for two published paths of one identity, a warning across
+  identities. Links resolve to the identity's published row (else the
+  newest candidate). Genuine duplicates are shown but do not block
+  approval (DECISIONS.md lists only missing UUID / bad encoding as
+  blocking) — recorded as a known limitation.
+- Frontend: `useDecision` (core) + `DecisionDialog` (adapter),
+  `ApprovalCard`, `DecisionHistoryTable`, `DivergenceBanner`,
+  `DiffPanel`; Needs approval switch. Types regenerated.
+- Smoke fixture `/tmp/claude-1000/smoke-phase05ui/` now has push intake
+  (`ADRIANO_PUSH_TOKEN_CENTRAL`), rbac `adr-reviewer: [read]`, and an
+  extra published file `2026-10-19-feature-flags.md`.
+- Tests: 389 backend, 109 frontend.

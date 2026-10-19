@@ -1,8 +1,8 @@
 """
 Response models for source registrations and search facets.
 
-Field names match the :mod:`app.services.catalog` dataclasses they are
-built from (``from_attributes=True``); see :mod:`app.schemas` for the
+Field names match the :mod:`app.services.sources_view` dataclasses
+they are built from (``from_attributes=True``); see :mod:`app.schemas` for the
 convention.
 """
 

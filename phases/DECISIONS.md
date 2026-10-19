@@ -93,7 +93,7 @@ docs/                   schema.md, examples/, hashing.md, approval.md,
                         benchmark.md, phase1-report.md
 ```
 
-Normal browse/search requests go only through `services/catalog.py` and
+Normal browse/search requests go only through `services/{search,record_detail,record_relationships}.py` and
 the store. Source adapters are constructed only by `services/polling.py`
 (and intake never calls adapters). A test must prove that read routes
 never construct or call an adapter.

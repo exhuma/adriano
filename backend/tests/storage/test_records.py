@@ -186,6 +186,21 @@ def test_relationship_summaries(provider: PostgresStoreProvider) -> None:
     assert len(everything) == 2
 
 
+def test_relationship_summaries_mark_kind(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure summaries tell published rows from candidates."""
+    with provider.unit_of_work() as store:
+        published = store.upsert_published(put_record(store, adr_uuid=U1))
+        cand = store.upsert_candidate(put_record(store, adr_uuid=U1, ref="f"))
+        by_key = {s.key: s for s in store.list_relationship_summaries(None)}
+        stored = store.get_record(cand.id)
+    assert by_key[str(published.id)].published is True
+    assert by_key[str(cand.id)].published is False
+    assert stored is not None
+    assert by_key[str(cand.id)].updated_at == stored.updated_at
+
+
 def test_rollback_on_error(provider: PostgresStoreProvider) -> None:
     """Ensure a failing unit of work leaves nothing behind."""
     with pytest.raises(RuntimeError), provider.unit_of_work() as store:

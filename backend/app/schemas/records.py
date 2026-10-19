@@ -1,8 +1,10 @@
 """
 Response models for search results and the record detail page.
 
-Field names match the :mod:`app.services.catalog` dataclasses they are
-built from, so every model here reads straight off those dataclasses
+Field names match the :mod:`app.services.search`,
+:mod:`app.services.record_detail` and
+:mod:`app.services.record_relationships` dataclasses they are built
+from, so every model here reads straight off those dataclasses
 through ``model_validate`` (``from_attributes=True``); none of this
 module performs business logic.
 """
