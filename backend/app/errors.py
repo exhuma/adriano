@@ -37,6 +37,18 @@ class ConflictError(AdrianoError):
     """Raised when a write conflicts with existing state (HTTP 409)."""
 
 
+class DecisionExistsError(ConflictError):
+    """Raised when the identity already has a decision for the digest."""
+
+
+class CandidateExistsError(ConflictError):
+    """Raised when a create-only candidate write finds an existing row."""
+
+
+class DeliveryExistsError(ConflictError):
+    """Raised when an intake run with the same delivery id exists."""
+
+
 class ForbiddenError(AdrianoError):
     """Raised when the caller lacks permission for an action."""
 

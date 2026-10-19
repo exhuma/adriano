@@ -9,13 +9,11 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
+import app.storage.postgres.models  # noqa: F401  (registers the tables)
 from alembic import context
 from app.config import get_settings
 from app.database import Base, _make_engine_url
 
-# No model modules are imported yet; later phases add an import of
-# the ORM model module here (with an unused-import lint suppression)
-# so autogenerate can see the schema.
 target_metadata = Base.metadata
 
 # this is the Alembic Config object, which provides
@@ -24,12 +22,22 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.config_file_name is not None:
+# Programmatic callers (the test suite) pass
+# ``attributes["configure_logger"] = False`` so running migrations does
+# not reconfigure (and disable) the caller's loggers.
+if config.config_file_name is not None and config.attributes.get(
+    "configure_logger", True
+):
     fileConfig(config.config_file_name)
 
+# Programmatic callers (the test suite) may pass a plain DSN through
+# ``Config.attributes["database_url"]``; otherwise use the app Settings.
 config.set_main_option(
     "sqlalchemy.url",
-    _make_engine_url(str(get_settings().database_url)),
+    _make_engine_url(
+        config.attributes.get("database_url")
+        or str(get_settings().database_url)
+    ),
 )
 
 # other values from the config, defined by the needs of env.py,

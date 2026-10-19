@@ -7,7 +7,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 00 | Planning + phases folder | done | | spec copied, decisions recorded |
 | 01 | Scaffold + skeleton UI | done | fcef2ad + next | see notes |
 | 02 | Domain core | done | see git log | see notes |
-| 03 | Persistence | todo | | |
+| 03 | Persistence | done | see git log | see notes |
 | 04 | Sources & ingest | todo | | |
 | 05 | Browse slice | todo | | |
 | 06 | Auth & RBAC slice | todo | | |
@@ -83,3 +83,37 @@ open issues, anything the next phase must know.
 - 104 domain tests (hypothesis added as dev dep). Pyright in an IDE on
   Python 3.13 flags forward refs; the project targets Python 3.14
   (PEP 649 deferred annotations) — use `backend/.venv`.
+
+### Phase 03
+
+- Port: `app.storage.port` — `CatalogStoreProvider` (`unit_of_work()`,
+  `lock_registration(source_id)`: both context managers yielding a
+  `CatalogStore`, one transaction, commit on exit) and `CatalogStore`
+  (registrations sync/get/list/update_poll_status; revisions put/get;
+  `upsert_published`, `upsert_candidate`, `create_candidate`,
+  `get_record`, `list_change_tokens`, `delete_published`,
+  `list_identity_siblings`, `list_relationship_summaries`;
+  `search(query, filters, page, page_size, *, policy)`;
+  `append_decision`, `list_decisions`; intake runs start/finish/find).
+  Value types in `app/storage/values.py`, re-exported by `port.py`.
+- Implementation: `app.storage.postgres.store.PostgresStoreProvider(
+  engine)`. Not yet wired into FastAPI: build it at the composition
+  root from `get_engine(str(settings.database_url))`.
+- Migration `0001_initial`: tables per DECISIONS.md; partial unique
+  indexes; trigger-maintained weighted tsvector (simple + english
+  body); statement-level append-only trigger on `decision_event`;
+  `intake_run.source_id` has no FK (log pushes to unknown ids).
+- Errors added: `DecisionExistsError`, `CandidateExistsError`,
+  `DeliveryExistsError` (409). Conflicts use ON CONFLICT DO NOTHING so
+  the unit of work survives.
+- SQL approval state mirrors domain; parity test in
+  `tests/storage/test_approval_parity.py`. `NEEDS_APPROVAL_STATES` in
+  `postgres/search.py`.
+- Code-written timestamps use `clock_timestamp()`.
+- Polling (phase 04): record `intake_run` / poll status in a separate
+  unit of work from the locked ingest transaction, so a rollback does
+  not lose the run log.
+- `alembic check` reports comment-only diffs (comments live in the
+  migration); strip those from future autogenerate output.
+- Root `pyrightconfig.json` points editors at `backend/.venv`.
+- 158 backend tests (52 storage).
