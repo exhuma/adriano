@@ -122,74 +122,83 @@ raw SQL.
    a JSON file (`--out`); this report's raw output is saved as
    `docs/bench-2000.json` / `docs/bench-20000.json`.
 
-Reproduce with: `task bench:seed -- --records 2000 --projects 100 &&
-task bench -- --requests 400 --warmup 50`, or `task bench` alone for
-the 20,000/100 default.
+Reproduce the 20,000/100 run with `task bench -- --requests 400
+--warmup 50 --concurrency 1,8 --out docs/bench-20000.json` (it reseeds
+the default size itself). `task bench` always reseeds 20,000/100, so
+the 2,000 run was produced with `task bench:seed -- --records 2000
+--projects 100` followed by the same backend start-up and `bench.py`
+invocation `task bench` uses (same environment variables, 4 workers,
+port 8100), with `--out docs/bench-2000.json`.
 
 ## Results
 
 ### 2,000 records / 100 projects
 
 Same method, concurrency and request counts as the 20,000-record
-run below; see `docs/bench-2000.json` for the raw output.
+run below, after the `needs_approval` fix; see `docs/bench-2000.json`
+for the raw output.
 
 | scenario | conc | n | err | p50 | p95 | p99 | max | mean |
 |---|---|---|---|---|---|---|---|---|
-| free_text | 1 | 400 | 0 | 11.3 | 17.8 | 29.7 | 139.5 | 12.3 |
-| filtered | 1 | 400 | 0 | 9.4 | 16.3 | 25.0 | 49.6 | 10.5 |
-| needs_approval | 1 | 400 | 0 | 60.1 | 75.5 | 91.5 | 210.8 | 60.6 |
-| detail | 1 | 400 | 0 | 11.4 | 18.7 | 21.2 | 49.4 | 12.4 |
-| sources | 1 | 400 | 0 | 3.5 | 6.9 | 9.4 | 14.8 | 4.1 |
-| free_text | 8 | 400 | 0 | 22.6 | 68.8 | 219.5 | 259.5 | 34.5 |
-| filtered | 8 | 400 | 0 | 18.2 | 77.0 | 149.5 | 155.1 | 29.9 |
-| needs_approval | 8 | 400 | 0 | 131.0 | 174.2 | 206.5 | 238.2 | 132.6 |
-| detail | 8 | 400 | 0 | 29.7 | 117.6 | 136.5 | 140.1 | 46.9 |
-| sources | 8 | 400 | 0 | 13.1 | 51.7 | 69.4 | 82.1 | 19.2 |
+| free_text | 1 | 400 | 0 | 10.8 | 19.5 | 33.1 | 97.7 | 12.2 |
+| filtered | 1 | 400 | 0 | 8.6 | 14.1 | 25.2 | 128.5 | 9.9 |
+| needs_approval | 1 | 400 | 0 | 18.4 | 26.5 | 49.0 | 92.3 | 19.8 |
+| detail | 1 | 400 | 0 | 11.3 | 18.4 | 20.8 | 22.7 | 12.2 |
+| sources | 1 | 400 | 0 | 3.5 | 7.0 | 8.2 | 63.5 | 4.2 |
+| free_text | 8 | 400 | 0 | 23.1 | 89.6 | 122.8 | 148.9 | 38.3 |
+| filtered | 8 | 400 | 0 | 19.8 | 90.4 | 244.6 | 297.3 | 34.7 |
+| needs_approval | 8 | 400 | 0 | 40.5 | 109.4 | 129.7 | 150.1 | 54.4 |
+| detail | 8 | 400 | 0 | 28.9 | 98.3 | 115.8 | 144.1 | 42.8 |
+| sources | 8 | 400 | 0 | 11.4 | 53.2 | 170.1 | 175.6 | 19.7 |
 
-Every scenario meets the P95 < 1 s target at this size, including
-`needs_approval` (p95 75.5 ms at concurrency 1, 174.2 ms at
-concurrency 8) -- confirming the gap below is specific to the
-20,000-record scale, not the query shape in general.
+Before the fix, `needs_approval` at this size measured p95 75.5 ms
+(concurrency 1) and 174.2 ms (concurrency 8); the other scenarios
+are within run-to-run noise of the earlier run.
 
 ### 20,000 records / 100 projects
 
-All measured after warm-up, with the optimisation in "Detail endpoint
-optimisation" below already applied; see `docs/bench-20000.json` for
-the raw output. Latencies in milliseconds; `n` = measured requests
-per scenario (400, well above the required 300).
+All measured after warm-up, with both optimisations below ("Detail
+endpoint optimisation" and "The `needs_approval` filter") applied;
+see `docs/bench-20000.json` for the raw output. Latencies in
+milliseconds; `n` = measured requests per scenario (400, well above
+the required 300).
 
 | scenario | conc | n | err | p50 | p95 | p99 | max | mean |
 |---|---|---|---|---|---|---|---|---|
-| free_text | 1 | 400 | 0 | 37.0 | 79.2 | 195.0 | 218.4 | 44.3 |
-| filtered | 1 | 400 | 0 | 26.7 | 116.9 | 276.0 | 362.7 | 41.8 |
+| free_text | 1 | 400 | 0 | 25.1 | 57.9 | 145.1 | 156.0 | 30.9 |
+| filtered | 1 | 400 | 0 | 10.6 | 15.7 | 26.9 | 83.6 | 11.8 |
+| needs_approval | 1 | 400 | 0 | 100.0 | 114.1 | 128.6 | 178.4 | 99.5 |
+| detail | 1 | 400 | 0 | 29.0 | 41.4 | 47.0 | 49.7 | 30.4 |
+| sources | 1 | 400 | 0 | 4.3 | 7.2 | 8.0 | 96.0 | 5.1 |
+| free_text | 8 | 400 | 0 | 61.1 | 134.1 | 348.1 | 442.1 | 75.3 |
+| filtered | 8 | 400 | 0 | 29.4 | 81.9 | 295.3 | 303.4 | 41.4 |
+| needs_approval | 8 | 400 | 0 | 219.8 | 269.7 | 312.8 | 349.3 | 217.6 |
+| detail | 8 | 400 | 0 | 64.6 | 96.9 | 116.2 | 151.2 | 67.2 |
+| sources | 8 | 400 | 0 | 18.6 | 42.7 | 61.3 | 77.7 | 21.4 |
+
+`needs_approval` before the fix (same dataset, same method):
+
+| scenario | conc | n | err | p50 | p95 | p99 | max | mean |
+|---|---|---|---|---|---|---|---|---|
 | needs_approval | 1 | 400 | 0 | 1674.4 | 1848.3 | 1971.0 | 2372.5 | 1684.8 |
-| detail | 1 | 400 | 0 | 30.7 | 45.8 | 49.2 | 61.2 | 32.5 |
-| sources | 1 | 400 | 0 | 5.1 | 8.1 | 8.8 | 14.9 | 5.5 |
-| free_text | 8 | 400 | 0 | 74.4 | 326.9 | 447.3 | 470.1 | 103.3 |
-| filtered | 8 | 400 | 0 | 40.2 | 81.9 | 118.2 | 146.0 | 44.6 |
 | needs_approval | 8 | 400 | 0 | 3841.2 | 4157.9 | 4412.3 | 4586.3 | 3853.9 |
-| detail | 8 | 400 | 0 | 63.7 | 100.8 | 145.4 | 275.6 | 67.1 |
-| sources | 8 | 400 | 0 | 18.8 | 41.0 | 60.1 | 65.7 | 21.5 |
 
 ## Verdict against the P95 < 1 s target
 
-- **`free_text`, `filtered`, `detail`, `sources` meet the target** at
-  both sizes and both concurrencies: worst observed p95 is 326.9 ms
-  (`free_text`, 20,000 records, concurrency 8). `detail` in
-  particular -- the scenario this phase was specifically asked to
-  check -- is comfortably inside budget after the fix below: p95
-  45.8 ms at concurrency 1, 100.8 ms at concurrency 8, down from an
-  unfixed ~780 ms per request (see "Detail endpoint optimisation").
-- **`needs_approval` misses the target badly** at 20,000 records:
-  p95 1848.3 ms at concurrency 1 and 4157.9 ms at concurrency 8 --
-  roughly 2x and 4x the 1 s budget. It still meets the target at
-  2,000 records (see the table above), so the gap is specific to
-  catalog scale, not a general problem with the endpoint. This is a
-  **new finding** from this benchmark, not the endpoint phase 05/09
-  flagged in advance; see "A second finding" below for the measured
-  root cause. Not fixed in this phase (out of the authorized scope),
-  reported as SPEC.md criterion 25's "measured gap" for this one
-  scenario.
+**Every scenario meets the target** at both sizes and both
+concurrencies. The worst observed p95 is 269.7 ms (`needs_approval`,
+20,000 records, concurrency 8), followed by 134.1 ms (`free_text`,
+20,000 records, concurrency 8).
+
+- `needs_approval` used to miss the target badly at 20,000 records
+  (p95 1848.3 ms at concurrency 1, 4157.9 ms at concurrency 8). After
+  the query rewrite described in "The `needs_approval` filter" below
+  it measures p95 114.1 ms and 269.7 ms: about 16x faster, and well
+  inside the 1 s budget.
+- `detail` -- the scenario phase 05/09 flagged in advance -- stays
+  comfortably inside budget after its own fix (p95 41.4 ms at
+  concurrency 1, 96.9 ms at concurrency 8, down from an unfixed
+  ~780 ms per request; see "Detail endpoint optimisation").
 
 ## Detail endpoint optimisation
 
@@ -261,32 +270,130 @@ request handling, Pydantic serialization and the
 `list_identity_siblings`/`list_decisions` queries already counted
 above.
 
-### A second finding: the `needs_approval` filter (not fixed)
+## The `needs_approval` filter
 
-Benchmarking surfaced a **second**, unrelated cost at 20,000 records:
-`GET /api/v1/records?needs_approval=true` builds its approval-state
-expression (`app/storage/postgres/search.py::approval_state`) as a
-`CASE` with two correlated `ORDER BY ... LIMIT 1` subqueries plus a
-correlated `EXISTS`, evaluated once per row, for both the `count(*)`
-and the paginated `SELECT` (so twice per request). `EXPLAIN (ANALYZE,
-BUFFERS)` of just the `count(*)` half, on the same 20,000-record / ~6k-
-decision-event dataset, measured **~750-880 ms**: the per-row
-correlated-subquery index lookups are individually cheap (each a
-sub-millisecond `Index Scan` on `uq_decision_event_identity_digest`),
-but Postgres ran that lookup **21,967** and **17,305** times
-respectively for the two subqueries (once per catalog row), and query
-JIT compilation added a further ~200-400 ms on top. This is a
-different module (`app/storage/postgres/search.py`, not
-`app/services/record_relationships.py`) and a schema/query-shape
-problem (most likely needing a precomputed or materialized approval
-state, or a `LEFT JOIN LATERAL` restructuring, to avoid the per-row
-round trips) -- too large a change to qualify as the "small, safe,
-contained" fix this task authorized, so **it was not implemented**.
-Reported here as a gap for the coordinator/product owner: the
-`needs_approval` scenario in the results tables above is the measured
-evidence; a follow-up phase should profile and fix
-`app/storage/postgres/search.py` the same way this phase fixed
-`record_relationships.py`.
+Benchmarking surfaced a second, unrelated cost at 20,000 records:
+`GET /api/v1/records?needs_approval=true` had p95 1.85 s
+(concurrency 1) and 4.16 s (concurrency 8).
+
+**Root cause (measured).** The approval-state expression
+(`app/storage/postgres/search.py`) was a `CASE` with two correlated
+`ORDER BY created_at DESC, id DESC LIMIT 1` subqueries (latest event
+for the identity and the current digest) plus a correlated `EXISTS`
+(any accepted event of the identity). It was evaluated once per row,
+for both the `count(*)` and the paginated `SELECT`. `EXPLAIN (ANALYZE,
+BUFFERS)` on the seeded dev database (21,967 record rows, 5,901
+decision events), trimmed:
+
+```text
+-- count(*), before
+Aggregate (cost=560315.63..) (actual time=667.4 ms)
+  -> Seq Scan on record (rows=17305, removed by filter 4662)
+     SubPlan 1 -> Limit -> Sort -> Index Scan using
+       uq_decision_event_identity_digest  (loops=21967)
+     SubPlan 2 -> Limit -> Sort -> Index Scan ... (loops=17305)
+     SubPlan 4 -> Seq Scan on decision_event (hashed)
+JIT: Functions 37, Inlining/Optimization true, Total 400.5 ms
+Execution Time: 720.7 ms
+
+-- page (LIMIT 20), before
+Limit (cost=560327.31..) -> Sort (top-N) -> Seq Scan on record
+     (the same SubPlans, loops=21967 / 17305)
+JIT: Functions 74, Total 823.1 ms
+Execution Time: 1110.1 ms
+```
+
+Each probe was cheap (~5 µs, served by the existing unique index), but
+there were ~39,000 of them per statement. The resulting cost estimate
+(~560,000) was above `jit_optimize_above_cost` and
+`jit_inline_above_cost` (500,000), so PostgreSQL also spent 0.4 to
+0.8 s per statement on JIT compilation. JIT accounted for about two
+thirds of the ~1.8 s per request.
+
+**Fix (query shape only, no schema change).**
+`app.storage.postgres.search.approval_join` now builds the state
+from set-based joins instead of per-row subqueries:
+
+- Rules 3/4 (accepted/rejected for the current digest) are a single
+  `LEFT JOIN decision_event` on identity and digest. The unique
+  constraint `uq_decision_event_identity_digest` (one formal decision
+  per content hash, `phases/DECISIONS.md` "Persistence") guarantees at
+  most one matching event. That event is therefore exactly the
+  domain's "latest event for the current digest", and the join can
+  never duplicate a record row. The old `ORDER BY ... LIMIT 1` was a
+  no-op, so the new join needs no `DISTINCT ON`.
+- Rule 5 (an acceptance of another digest) stays an `EXISTS`, which
+  PostgreSQL can now plan as one hashed scan of the accepted events
+  for the filtered statements, and as per-row probes of the existing
+  index for a single page.
+- With `needs_approval=true`, the join and the state predicate run
+  before `LIMIT`/`OFFSET`. Without the filter, the page is selected
+  first and only its rows (at most 100) are joined, so plain browsing
+  and free-text search do not pay for the join over the whole
+  catalog.
+
+```text
+-- count(*), after
+Aggregate (cost=4371.45..) (actual time=34.9 ms)
+  -> Hash Left Join (record x decision_event current_decision)
+       Filter: CASE ... (hashed SubPlan 2) ... = ANY (...)
+     -> Seq Scan on record (rows=21967)
+     -> Hash -> Seq Scan on decision_event (rows=5901)
+     SubPlan 2 -> Seq Scan on decision_event accepted_decision
+Execution Time: 28-35 ms (no JIT)
+
+-- page (LIMIT 20), after
+Limit -> Sort (top-N) -> Hash Left Join (as above)
+Execution Time: 40-41 ms (no JIT)
+
+-- browse page without the filter, after
+Nested Loop Left Join
+  -> Limit -> Sort (top-N) -> Seq Scan on record
+  -> Index Scan using uq_decision_event_identity_digest (loops=20)
+  SubPlan 1 -> Index Scan using uq_decision_event_identity_digest
+Execution Time: ~41 ms (dominated by the pre-existing title sort)
+```
+
+**What was measured and deliberately not done:**
+
+- *New indexes / migration.* A composite index on `(source_id,
+  project, record_key, digest, created_at DESC, id DESC) INCLUDE
+  (action)` and a partial index on `(source_id, project, record_key)
+  WHERE action = 'accepted'` were tried in a rolled-back
+  transaction. The planner ignored the first one (sorting 5,901 rows
+  is cheaper), and the second saved about 1 ms. Neither justifies
+  extra write cost or a migration, so no migration was added. The
+  existing `uq_decision_event_identity_digest` index serves every
+  remaining probe.
+- *Disabling JIT.* Not needed: the new statements cost about 4,400
+  to 5,000, far below `jit_above_cost` (100,000), so JIT no longer
+  triggers. No `SET LOCAL jit = off` and no server setting were
+  added. The cost grows roughly linearly with catalog size, so JIT
+  would only kick in again at about 20 times this catalog size.
+- *Single statement for count and page.* Computing the total with
+  `count(*) OVER ()` in the page query measured ~45-55 ms against
+  ~70 ms for the two statements. That needs a separate count path
+  for pages past the end. The two-statement form was kept because
+  the target is met with large headroom.
+- *Materialised / denormalised approval state.* Not needed (see
+  above). The state is still derived on read from the append-only
+  `decision_event` table.
+
+**Correctness.** `backend/tests/storage/test_approval_parity.py`
+compares the SQL state with `app.domain.approval.evaluate` for every
+row under each policy variant (missing, not required, required). It
+covers:
+
+- multiple decisions across three digests of one identity;
+- rejected then accepted (and accepted then rejected) on different
+  digests;
+- published and candidate rows of one identity, including competing
+  candidates and implicit promotion;
+- the same UUID in another project and in another registration;
+- text queries, so both the "join before paging" and "page then
+  join" paths are checked;
+- paging in pages of 4, which must reproduce the single-page rows,
+  order and states.
 
 ## Limitations and how to reproduce
 

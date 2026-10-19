@@ -1,14 +1,14 @@
 """
 Full-text search and the SQL approval-state expression.
 
-:func:`approval_state` mirrors :func:`app.domain.approval.evaluate` rule
-by rule (see that module's docstring) as a SQL expression over
-``decision_event``, so the "needs approval" filter is applied before
-pagination:
+:func:`approval_join` mirrors :func:`app.domain.approval.evaluate` rule
+by rule (see that module's docstring) as a set-based SQL expression
+over ``decision_event``, so the "needs approval" filter is applied
+before pagination:
 
 1. no valid policy -> ``policy_missing``;
 2. policy not required -> ``not_required``;
-3. / 4. latest event for (identity, current digest) is accepted /
+3. / 4. the event for (identity, current digest) is accepted /
    rejected -> ``accepted`` / ``rejected``;
 5. an accepted event for the identity exists (necessarily for another
    digest, because rules 3/4 did not apply) ->
@@ -19,17 +19,38 @@ Rules 1 and 2 depend only on the policy and are resolved in Python to a
 constant. A parity test compares this expression with the domain
 function on a fixture set.
 
+Rules 3/4 join ``decision_event`` on identity and digest directly: the
+unique constraint ``uq_decision_event_identity_digest`` (one formal
+decision per content hash, see ``phases/DECISIONS.md``) guarantees at
+most one event, so that event *is* the domain's "latest event for the
+current digest" and the join never duplicates a record row. Rule 5
+is an ``EXISTS`` over the identity's accepted events, which
+PostgreSQL plans as a hashed subplan (one scan of the accepted events)
+when many rows are evaluated and as per-row probes of
+``uq_decision_event_identity_digest`` (identity prefix) for a single
+page. This replaced two correlated ``ORDER BY ... LIMIT 1`` subqueries
+that ran ~20,000 index probes per statement at 20,000 records and
+whose cost estimate pushed PostgreSQL into ~0.4-0.8 s of JIT
+compilation per statement (see ``docs/benchmark.md``); the new
+statements cost far below ``jit_above_cost``, so JIT stays off without
+any setting.
+
+Without the "needs approval" filter the state does not restrict the
+rows, so the page is selected first and only its rows are joined to
+the decision events; with the filter the join precedes ``LIMIT``.
+
 Text queries use ``websearch_to_tsquery`` with the ``simple``
 configuration (exact tokens: identifiers, UUIDs, paths) OR'ed with the
 ``english`` configuration (stemmed body words), matching how the
 ``record.search`` vector is built by the migration trigger.
 
-Public API: :data:`NEEDS_APPROVAL_STATES`, :func:`approval_state`,
+Public API: :data:`NEEDS_APPROVAL_STATES`, :func:`approval_join`,
 :func:`search`.
 """
 
 from sqlalchemy import (
     ColumnElement,
+    FromClause,
     Select,
     Table,
     and_,
@@ -68,6 +89,8 @@ NEEDS_APPROVAL_STATES: frozenset[ApprovalStateCode] = frozenset(
 _SIMPLE = literal_column("'simple'::regconfig")
 _ENGLISH = literal_column("'english'::regconfig")
 
+_IDENTITY = ("source_id", "project", "record_key")
+
 _SEARCH_COLUMNS = (
     "id",
     "kind",
@@ -85,48 +108,70 @@ _SEARCH_COLUMNS = (
     "issues",
 )
 
+#: Labels of the sort keys carried by the paged subquery.
+_RANK = "search_rank"
+_TITLE_KEY = "title_key"
 
-def approval_state(policy: Policy | None) -> ColumnElement[str]:
+
+def _same_identity(left: FromClause, right: FromClause) -> ColumnElement:
     """
-    Build the per-row approval-state expression for ``record``.
+    Match the logical identity columns of two relations.
 
+    :param left: Relation with ``source_id``, ``project``, ``record_key``.
+    :param right: Relation with the same columns.
+    :returns: The AND of the three equalities.
+    """
+    return and_(*(left.c[name] == right.c[name] for name in _IDENTITY))
+
+
+def approval_join(
+    base: FromClause, policy: Policy | None
+) -> tuple[FromClause, ColumnElement[str]]:
+    """
+    Join record rows to the evidence their approval state depends on.
+
+    :param base: ``record`` or a subquery of it exposing the identity
+        columns and ``digest``.
     :param policy: The configured policy, or ``None`` if missing or
         invalid.
-    :returns: A text expression yielding an
-        :class:`~app.domain.approval.ApprovalStateCode` value.
+    :returns: The relation to select from (*base* itself when the
+        policy alone decides the state) and the state expression
+        yielding an :class:`~app.domain.approval.ApprovalStateCode`
+        value per row.
     """
     if policy is None:
-        return literal(ApprovalStateCode.POLICY_MISSING.value)
+        return base, literal(ApprovalStateCode.POLICY_MISSING.value)
     if not policy.required:
-        return literal(ApprovalStateCode.NOT_REQUIRED.value)
-    event = DECISION.alias("de")
-    same_identity = and_(
-        event.c.source_id == RECORD.c.source_id,
-        event.c.project == RECORD.c.project,
-        event.c.record_key == RECORD.c.record_key,
-    )
-    current_action = (
-        select(event.c.action)
-        .where(same_identity, event.c.digest == RECORD.c.digest)
-        .order_by(event.c.created_at.desc(), event.c.id.desc())
-        .limit(1)
-        .scalar_subquery()
-    )
+        return base, literal(ApprovalStateCode.NOT_REQUIRED.value)
+    current = DECISION.alias("current_decision")
+    accepted = DECISION.alias("accepted_decision")
     accepted_any = exists().where(
-        same_identity, event.c.action == DecisionAction.ACCEPTED.value
+        _same_identity(accepted, base),
+        accepted.c.action == DecisionAction.ACCEPTED.value,
     )
-    return case(
+    joined = base.outerjoin(
+        current,
+        and_(
+            _same_identity(current, base),
+            current.c.digest == base.c.digest,
+        ),
+    )
+    state = case(
         (
-            current_action == DecisionAction.ACCEPTED.value,
+            current.c.action == DecisionAction.ACCEPTED.value,
             ApprovalStateCode.ACCEPTED.value,
         ),
         (
-            current_action == DecisionAction.REJECTED.value,
+            current.c.action == DecisionAction.REJECTED.value,
             ApprovalStateCode.REJECTED.value,
         ),
-        (accepted_any, ApprovalStateCode.CHANGED_SINCE_ACCEPTANCE.value),
+        (
+            accepted_any,
+            ApprovalStateCode.CHANGED_SINCE_ACCEPTANCE.value,
+        ),
         else_=ApprovalStateCode.PENDING.value,
     )
+    return joined, state
 
 
 def _tsquery(query: str | None) -> ColumnElement | None:
@@ -145,15 +190,13 @@ def _tsquery(query: str | None) -> ColumnElement | None:
 
 
 def _conditions(
-    filters: SearchFilters,
-    state: ColumnElement[str],
-    tsquery: ColumnElement | None,
+    filters: SearchFilters, tsquery: ColumnElement | None
 ) -> list[ColumnElement[bool]]:
     """
-    Translate filters into WHERE conditions.
+    Translate the state-independent filters into WHERE conditions.
 
-    :param filters: Search filters.
-    :param state: Approval-state expression.
+    :param filters: Search filters (``needs_approval`` is handled by
+        the caller).
     :param tsquery: Text query, if any.
     :returns: Conditions to AND together.
     """
@@ -164,8 +207,6 @@ def _conditions(
         result.append(RECORD.c.project == filters.project)
     if filters.kind is not None:
         result.append(RECORD.c.kind == filters.kind.value)
-    if filters.needs_approval:
-        result.append(state.in_([code.value for code in NEEDS_APPROVAL_STATES]))
     if tsquery is not None:
         result.append(RECORD.c.search.op("@@")(tsquery))
     return result
@@ -187,26 +228,122 @@ def _check_bounds(page: int, page_size: int) -> None:
         )
 
 
-def _page_query(
-    state: ColumnElement[str],
+def _sort_keys(tsquery: ColumnElement | None) -> list[ColumnElement]:
+    """
+    Build the result order over ``record``: rank, title, id.
+
+    :param tsquery: Text query, if any (ranks the hits first).
+    :returns: Labelled sort expressions, in order.
+    """
+    keys: list[ColumnElement] = []
+    if tsquery is not None:
+        keys.append(func.ts_rank(RECORD.c.search, tsquery).label(_RANK))
+    keys += [func.lower(RECORD.c.title).label(_TITLE_KEY), RECORD.c.id]
+    return keys
+
+
+def _key_columns(relation: FromClause, ranked: bool) -> list[ColumnElement]:
+    """
+    Select the sort keys of :func:`_sort_keys` from a subquery.
+
+    :param relation: Subquery exposing the labelled sort keys.
+    :param ranked: Whether a rank key is present.
+    :returns: The key columns, in order.
+    """
+    names = ([_RANK] if ranked else []) + [_TITLE_KEY, "id"]
+    return [relation.c[name] for name in names]
+
+
+def _order(keys: list[ColumnElement], ranked: bool) -> list[ColumnElement]:
+    """
+    Turn sort keys into ORDER BY expressions (rank descending).
+
+    :param keys: Keys from :func:`_sort_keys` or :func:`_key_columns`.
+    :param ranked: Whether the first key is the rank.
+    :returns: ORDER BY expressions.
+    """
+    if not ranked:
+        return keys
+    return [keys[0].desc(), *keys[1:]]
+
+
+def _needs_approval_page(
     conditions: list[ColumnElement[bool]],
     tsquery: ColumnElement | None,
-) -> Select:
+    policy: Policy | None,
+) -> tuple[Select, Select]:
     """
-    Build the ordered result query (without limit/offset).
+    Build count and page queries filtered to records needing approval.
 
-    :param state: Approval-state expression.
-    :param conditions: WHERE conditions.
-    :param tsquery: Text query, if any (ranks the hits).
-    :returns: The select.
+    The state join precedes ``LIMIT`` because it restricts the rows.
+
+    :param conditions: State-independent WHERE conditions.
+    :param tsquery: Text query, if any.
+    :param policy: Configured policy, or ``None``.
+    :returns: ``(count query, unpaginated ordered page query)``.
     """
+    source, state = approval_join(RECORD, policy)
+    needed = state.in_([code.value for code in NEEDS_APPROVAL_STATES])
+    where = [*conditions, needed]
+    count = select(func.count()).select_from(source).where(*where)
     columns = [RECORD.c[name] for name in _SEARCH_COLUMNS]
-    stmt = select(*columns, state.label("approval_state")).where(*conditions)
-    order: list[ColumnElement] = []
-    if tsquery is not None:
-        order.append(func.ts_rank(RECORD.c.search, tsquery).desc())
-    order += [func.lower(RECORD.c.title), RECORD.c.id]
-    return stmt.order_by(*order)
+    keys = _sort_keys(tsquery)
+    ranked = tsquery is not None
+    inner = (
+        select(*columns, *keys[:-1], state.label("approval_state"))
+        .select_from(source)
+        .where(*where)
+        .subquery("hit")
+    )
+    page = select(
+        *(inner.c[name] for name in _SEARCH_COLUMNS),
+        inner.c.approval_state,
+    ).order_by(*_order(_key_columns(inner, ranked), ranked))
+    return count, page
+
+
+def _browse_page(
+    conditions: list[ColumnElement[bool]],
+    tsquery: ColumnElement | None,
+    policy: Policy | None,
+    limit: int,
+    offset: int,
+) -> tuple[Select, Select]:
+    """
+    Build count and page queries without the state filter.
+
+    The page is selected first; only its rows are joined to the
+    decision events for their state.
+
+    :param conditions: State-independent WHERE conditions.
+    :param tsquery: Text query, if any.
+    :param policy: Configured policy, or ``None``.
+    :param limit: Page size.
+    :param offset: Rows to skip.
+    :returns: ``(count query, paginated ordered page query)``.
+    """
+    count = select(func.count()).select_from(RECORD).where(*conditions)
+    keys = _sort_keys(tsquery)
+    ranked = tsquery is not None
+    columns = [RECORD.c[name] for name in _SEARCH_COLUMNS if name != "id"]
+    paged = (
+        select(*columns, *keys)
+        .where(*conditions)
+        .order_by(*_order(keys, ranked))
+        .limit(limit)
+        .offset(offset)
+        .subquery("paged")
+    )
+    source, state = approval_join(paged, policy)
+    page = (
+        select(
+            *(paged.c[name] for name in _SEARCH_COLUMNS),
+            state.label("approval_state"),
+        )
+        .select_from(source)
+        .order_by(*_order(_key_columns(paged, ranked), ranked))
+    )
+    return count, page
 
 
 def search(
@@ -230,17 +367,17 @@ def search(
     :raises ValueError: If *page* or *page_size* is out of bounds.
     """
     _check_bounds(page, page_size)
-    state = approval_state(policy)
     tsquery = _tsquery(query)
-    conditions = _conditions(filters, state, tsquery)
-    total = session.execute(
-        select(func.count()).select_from(RECORD).where(*conditions)
-    ).scalar_one()
-    stmt = (
-        _page_query(state, conditions, tsquery)
-        .limit(page_size)
-        .offset((page - 1) * page_size)
-    )
+    conditions = _conditions(filters, tsquery)
+    offset = (page - 1) * page_size
+    if filters.needs_approval:
+        count, stmt = _needs_approval_page(conditions, tsquery, policy)
+        stmt = stmt.limit(page_size).offset(offset)
+    else:
+        count, stmt = _browse_page(
+            conditions, tsquery, policy, page_size, offset
+        )
+    total = session.execute(count).scalar_one()
     rows = session.execute(stmt).mappings()
     return SearchPage(
         items=tuple(convert.search_item(row) for row in rows),

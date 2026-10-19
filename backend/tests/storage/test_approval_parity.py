@@ -3,7 +3,10 @@ Parity between the SQL approval state and ``domain.approval.evaluate``.
 
 Every scenario gets its own identity. For each policy variant the state
 computed by the store (search items and the ``needs_approval`` filter)
-must equal the domain evaluation over the identity's stored events.
+must equal the domain evaluation over the identity's stored events. The
+browse path (state joined after paging) and the filtered path (state
+joined before paging) are both checked, with and without a text query
+and across page boundaries.
 """
 
 import uuid
@@ -22,6 +25,7 @@ from app.storage.port import (
     CatalogStore,
     NewDecision,
     SearchFilters,
+    SearchItem,
 )
 from app.storage.postgres.store import PostgresStoreProvider
 from tests.storage.conftest import put_record
@@ -30,7 +34,8 @@ A = DecisionAction.ACCEPTED
 R = DecisionAction.REJECTED
 
 #: name -> (events as (digest label, action), expected required state).
-#: Digest labels: "cur" is the record's content, "old" another revision.
+#: Digest labels: "cur" is the published content, "old"/"old2" other
+#: revisions of the same identity. Events are appended in list order.
 SCENARIOS: dict[str, tuple[list[tuple[str, DecisionAction]], str]] = {
     "none": ([], "pending"),
     "accepted": ([("cur", A)], "accepted"),
@@ -39,18 +44,97 @@ SCENARIOS: dict[str, tuple[list[tuple[str, DecisionAction]], str]] = {
     "old_rejected_only": ([("old", R)], "pending"),
     "old_accepted_cur_rejected": ([("old", A), ("cur", R)], "rejected"),
     "cur_accepted_old_rejected": ([("old", R), ("cur", A)], "accepted"),
+    "accepted_then_rejected_other": (
+        [("old", A), ("old2", R)],
+        "changed_since_acceptance",
+    ),
+    "rejected_then_accepted_other": (
+        [("old", R), ("old2", A)],
+        "changed_since_acceptance",
+    ),
+    "two_old_rejected": ([("old", R), ("old2", R)], "pending"),
+    "three_digests_cur_accepted": (
+        [("old", A), ("old2", R), ("cur", A)],
+        "accepted",
+    ),
+    "three_digests_cur_rejected": (
+        [("old", R), ("old2", A), ("cur", R)],
+        "rejected",
+    ),
 }
 
-SCENARIOS_UUID = {
-    name: uuid.uuid5(uuid.NAMESPACE_URL, name) for name in SCENARIOS
+#: Identities with several rows. name -> (rows as ref -> content label,
+#: events as (content label, action), expected required state per ref).
+#: Ref "main" is the published row, any other ref a candidate.
+MULTI_ROW: dict[
+    str,
+    tuple[
+        dict[str, str],
+        list[tuple[str, DecisionAction]],
+        dict[str, str],
+    ],
+] = {
+    "candidate_accepted_published_diverged": (
+        {"main": "pub", "feature": "cand"},
+        [("cand", A)],
+        {"main": "changed_since_acceptance", "feature": "accepted"},
+    ),
+    "published_rejected_candidate_accepted": (
+        {"main": "pub", "feature": "cand"},
+        [("pub", R), ("cand", A)],
+        {"main": "rejected", "feature": "accepted"},
+    ),
+    "published_accepted_candidate_undecided": (
+        {"main": "pub", "feature": "cand"},
+        [("pub", A)],
+        {"main": "accepted", "feature": "changed_since_acceptance"},
+    ),
+    "competing_candidates": (
+        {"main": "pub", "feature-a": "a", "feature-b": "b"},
+        [("a", A), ("b", R)],
+        {
+            "main": "changed_since_acceptance",
+            "feature-a": "accepted",
+            "feature-b": "rejected",
+        },
+    ),
+    "candidate_only_rejected": (
+        {"feature": "cand"},
+        [("cand", R)],
+        {"feature": "rejected"},
+    ),
+    "promoted": (
+        {"main": "same", "feature": "same"},
+        [("same", A)],
+        {"main": "accepted", "feature": "accepted"},
+    ),
 }
 
+#: Rows outside the scenario identities: an accepted copy of the "none"
+#: UUID in another project and in another registration.
+ELSEWHERE = (("central", "elsewhere"), ("other", "platform"))
+
+ROW_COUNT = (
+    len(SCENARIOS)
+    + sum(len(rows) for rows, _, _ in MULTI_ROW.values())
+    + len(ELSEWHERE)
+)
 
 POLICIES = {
     "missing": None,
     "not_required": Policy(id="global", version=1, required=False),
     "required": Policy(id="global", version=1),
 }
+
+
+def scenario_uuid(name: str) -> uuid.UUID:
+    """
+    Derive the stable UUID of a scenario identity.
+
+    :param name: Scenario name.
+    :returns: The UUID.
+    """
+    return uuid.uuid5(uuid.NAMESPACE_URL, name)
 
 
 def _decide(
@@ -81,59 +165,131 @@ def _decide(
     )
 
 
+def _store_single(store: CatalogStore) -> None:
+    """
+    Store one published record plus its events per :data:`SCENARIOS`.
+
+    :param store: Store in the current unit of work.
+    """
+    for name, (events, _) in SCENARIOS.items():
+        adr_uuid = scenario_uuid(name)
+        digests = {
+            label: put_record(
+                store, adr_uuid=adr_uuid, body=f"{label} {name}"
+            ).digest
+            for label in ("old", "old2")
+        }
+        cur = put_record(
+            store, adr_uuid=adr_uuid, path=f"{name}.md", title=name
+        )
+        store.upsert_published(cur)
+        digests["cur"] = cur.digest
+        for label, action in events:
+            _decide(store, cur.identity, digests[label], action)
+
+
+def _store_multi(store: CatalogStore) -> None:
+    """
+    Store the rows and events of every :data:`MULTI_ROW` identity.
+
+    Rows carry the title ``<name>/<content label>`` and the body word
+    ``divergent``, so rows with one label have identical content.
+
+    :param store: Store in the current unit of work.
+    """
+    for name, (rows, events, _) in MULTI_ROW.items():
+        digests: dict[str, str] = {}
+        identity = None
+        for ref, label in rows.items():
+            write = put_record(
+                store,
+                adr_uuid=scenario_uuid(name),
+                path=f"{name}.md",
+                ref=ref,
+                title=f"{name}/{label}",
+                body=f"divergent {label}",
+            )
+            if ref == "main":
+                store.upsert_published(write)
+            else:
+                store.upsert_candidate(write)
+            digests[label] = write.digest
+            identity = write.identity
+        assert identity is not None
+        for label, action in events:
+            _decide(store, identity, digests[label], action)
+
+
 @pytest.fixture
 def scenarios(provider: PostgresStoreProvider) -> PostgresStoreProvider:
     """
-    Store one published record plus its events per scenario.
+    Store every single-row and multi-row scenario.
 
-    Also stores an accepted candidate whose identical content is
-    published (implicit promotion), and an accepted copy of the "none"
-    record in another project (a different identity, which must not
-    leak into "none").
+    Also stores accepted copies of the "none" record in another project
+    and another registration (different identities, which must not leak
+    into "none").
 
     :param provider: Clean provider.
     :returns: The provider.
     """
     with provider.unit_of_work() as store:
-        for name, (events, _) in SCENARIOS.items():
-            adr_uuid = SCENARIOS_UUID[name]
-            old = put_record(store, adr_uuid=adr_uuid, body=f"old {name}")
-            cur = put_record(
-                store, adr_uuid=adr_uuid, path=f"{name}.md", title=name
+        _store_single(store)
+        _store_multi(store)
+        for source_id, project in ELSEWHERE:
+            elsewhere = put_record(
+                store,
+                source_id=source_id,
+                adr_uuid=scenario_uuid("none"),
+                project=project,
+                path="none.md",
+                title="none",
             )
-            store.upsert_published(cur)
-            digests = {"cur": cur.digest, "old": old.digest}
-            for label, action in events:
-                _decide(store, cur.identity, digests[label], action)
-        promoted = uuid.uuid5(uuid.NAMESPACE_URL, "promoted")
-        candidate = put_record(store, adr_uuid=promoted, ref="feature")
-        store.upsert_candidate(candidate)
-        store.upsert_published(put_record(store, adr_uuid=promoted))
-        _decide(store, candidate.identity, candidate.digest, A)
-        elsewhere = put_record(
-            store,
-            adr_uuid=SCENARIOS_UUID["none"],
-            project="elsewhere",
-            path="none.md",
-            title="none",
-        )
-        store.upsert_published(elsewhere)
-        _decide(store, elsewhere.identity, elsewhere.digest, A)
+            store.upsert_published(elsewhere)
+            _decide(store, elsewhere.identity, elsewhere.digest, A)
     return provider
 
 
+def _all_pages(
+    store: CatalogStore,
+    query: str | None,
+    filters: SearchFilters,
+    policy: Policy | None,
+    page_size: int,
+) -> list[SearchItem]:
+    """
+    Collect every page of a search.
+
+    :param store: Store.
+    :param query: Text query.
+    :param filters: Filters.
+    :param policy: Policy.
+    :param page_size: Page size.
+    :returns: The items of all pages, in order.
+    """
+    items: list[SearchItem] = []
+    page = 1
+    while True:
+        result = store.search(query, filters, page, page_size, policy=policy)
+        items += result.items
+        if page * page_size >= result.total:
+            assert len(items) == result.total
+            return items
+        page += 1
+
+
+@pytest.mark.parametrize("query", [None, "divergent", "body"])
 @pytest.mark.parametrize("policy_name", list(POLICIES))
 def test_sql_state_matches_domain(
-    scenarios: PostgresStoreProvider, policy_name: str
+    scenarios: PostgresStoreProvider, policy_name: str, query: str | None
 ) -> None:
     """Ensure every row's SQL state equals the domain evaluation."""
     policy = POLICIES[policy_name]
     with scenarios.unit_of_work() as store:
         page = store.search(
-            None, SearchFilters(), 1, MAX_PAGE_SIZE, policy=policy
+            query, SearchFilters(), 1, MAX_PAGE_SIZE, policy=policy
         )
         needs = store.search(
-            None,
+            query,
             SearchFilters(needs_approval=True),
             1,
             MAX_PAGE_SIZE,
@@ -150,13 +306,34 @@ def test_sql_state_matches_domain(
                 item.digest,
                 approvable=True,
             )
-    assert page.total == len(SCENARIOS) + 3
+    assert page.items
+    if query is None:
+        assert page.total == ROW_COUNT
     for item in page.items:
         assert item.approval_state is expected[item.id].state, item.title
-    assert {item.id for item in needs.items} == {
-        key for key, state in expected.items() if state.needs_approval
+    assert [item.id for item in needs.items] == [
+        item.id for item in page.items if expected[item.id].needs_approval
+    ]
+    assert {item.id: item.approval_state for item in needs.items} == {
+        item.id: item.approval_state
+        for item in page.items
+        if expected[item.id].needs_approval
     }
     assert needs.total == len(needs.items)
+
+
+@pytest.mark.parametrize("needs_approval", [False, True])
+@pytest.mark.parametrize("policy_name", list(POLICIES))
+def test_small_pages_match_one_large_page(
+    scenarios: PostgresStoreProvider, policy_name: str, needs_approval: bool
+) -> None:
+    """Ensure paging yields the same rows, order and states."""
+    policy = POLICIES[policy_name]
+    filters = SearchFilters(needs_approval=needs_approval)
+    with scenarios.unit_of_work() as store:
+        whole = store.search(None, filters, 1, MAX_PAGE_SIZE, policy=policy)
+        paged = _all_pages(store, None, filters, policy, page_size=4)
+    assert paged == list(whole.items)
 
 
 def test_fixture_covers_every_required_state(
@@ -171,13 +348,19 @@ def test_fixture_covers_every_required_state(
             MAX_PAGE_SIZE,
             policy=POLICIES["required"],
         )
-    platform = [item for item in page.items if item.project == "platform"]
-    by_title = {item.title: item.approval_state for item in platform}
+    by_location = {
+        (item.source_id, item.project, item.title): item.approval_state
+        for item in page.items
+    }
     for name, (_, state) in SCENARIOS.items():
-        assert by_title[name] == state, name
-    promoted = [
-        item.approval_state for item in platform if item.title == "A decision"
-    ]
-    assert promoted == [ApprovalStateCode.ACCEPTED] * 2
-    (elsewhere,) = [i for i in page.items if i.project == "elsewhere"]
-    assert elsewhere.approval_state is ApprovalStateCode.ACCEPTED
+        assert by_location["central", "platform", name] == state, name
+    by_ref = {
+        (item.record_key, item.ref): item.approval_state for item in page.items
+    }
+    for name, (_, _, states) in MULTI_ROW.items():
+        for ref, state in states.items():
+            key = (str(scenario_uuid(name)), ref)
+            assert by_ref[key] == state, (name, ref)
+    for source_id, project in ELSEWHERE:
+        state = by_location[source_id, project, "none"]
+        assert state is ApprovalStateCode.ACCEPTED

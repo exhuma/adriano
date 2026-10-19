@@ -295,6 +295,13 @@ docker compose run --rm migrate
 docker compose run --rm backend alembic upgrade head
 ```
 
+The schema is still the single migration `0001_initial`; the faster
+"Needs approval" filter (see `docs/benchmark.md`) is a query change
+only and adds no migration. It relies on the existing unique
+constraint/index `uq_decision_event_identity_digest` (one decision per
+identity and digest) both for correctness and for its lookups: do not
+drop or replace it manually.
+
 ## Multi-replica notes
 
 - `backend` is a stateless, share-nothing process (module-twelve-
