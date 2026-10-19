@@ -205,6 +205,32 @@ export function pollStatusLabel(status: PollStatus, stale: boolean): StatusLabel
 }
 
 /**
+ * Describe an outbound or inbound record-link type for display, on
+ * the record detail page's links/errata cards and its "superseded
+ * by" note (shared so both name the same relationship the same way).
+ *
+ * :param type: Outbound (`LinkType`) or inbound (`InboundType`) link
+ *     type name.
+ * :returns: A short display label, or the raw type when unknown.
+ */
+export function linkTypeLabel(type: string): string {
+  switch (type) {
+    case "updates":
+      return "Updates";
+    case "obsoletes":
+      return "Obsoletes";
+    case "corrects":
+      return "Corrects";
+    case "updated_by":
+      return "Updated by";
+    case "obsoleted_by":
+      return "Obsoleted by";
+    default:
+      return type;
+  }
+}
+
+/**
  * Summarise a record's validation issue counts for display.
  *
  * :param counts: Error and warning counts.
