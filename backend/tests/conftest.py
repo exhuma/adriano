@@ -7,6 +7,7 @@ database.
 """
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,12 +20,19 @@ from app.main import create_app
 def test_settings() -> Settings:
     """Build settings pointed at the test database.
 
+    The configuration file points at a path that does not exist, so the
+    app lifespan never syncs a developer's ``catalog.yaml`` into the
+    test database.
+
     :returns: A :class:`Settings` instance whose ``database_url`` is
         read from ``ADRIANO_TEST_DATABASE_URL``.
     """
     settings = Settings()
     return settings.model_copy(
-        update={"database_url": settings.test_database_url}
+        update={
+            "database_url": settings.test_database_url,
+            "config_file": str(Path(__file__).parent / "no-catalog.yaml"),
+        }
     )
 
 

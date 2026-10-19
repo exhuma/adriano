@@ -1,14 +1,30 @@
 # Example adriano catalog configuration.
 #
 # Copy to catalog.yaml (or point ADRIANO_CONFIG_FILE at a copy) and
-# adjust for your deployment. This file is read once at startup;
-# changing it requires an application restart. It is not loaded
-# until phase 04 wires up the sources/intake services, but is kept
-# here, documented, from phase 01 onward.
+# adjust for your deployment. This file is read once at startup (by
+# the web app and by every `adriano` CLI run); changing it requires an
+# application restart. Validate it with `task check-config` (or
+# `adriano check-config`), which prints every registration, the policy
+# status and all problems, and exits non-zero on errors.
+#
+# Problems never stop startup: an invalid source entry disables only
+# that registration (with a readable `config_error`), and a missing or
+# invalid approval_policy blocks decisions until it is fixed.
 #
 # Secrets referenced below (GitLab tokens, CI push tokens) are
 # environment variable NAMES, resolved at startup. Never put an
 # actual secret value in this file.
+#
+# Common fields of every source entry:
+#   id              stable registration id (letters, digits, . _ -)
+#   type            filesystem | gitlab
+#   path            ADR path inside each project (default doc/decisions)
+#   published_ref   explicit published ref label/branch (required)
+#   scope           type-specific project filter (optional)
+#   intake          [poll], [push] or [poll, push] (default [poll])
+#   push_tokens_env env var names of the CI push bearer tokens
+# Earlier entries own a (project, path) first: if two registrations
+# yield the same file, the first one in this list keeps it.
 
 sources:
   # A filesystem source reads ADR files from a folder on disk. It
@@ -17,6 +33,7 @@ sources:
   # demoed without an external GitLab instance.
   - id: central
     type: filesystem
+    # Relative paths are resolved against this file's directory.
     root: ./samples/adr-root
     # Optional filter: only index these project subdirectories.
     scope:

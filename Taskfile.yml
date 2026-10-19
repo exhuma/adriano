@@ -97,6 +97,21 @@ tasks:
         fi
         cd frontend && npm run dev
 
+  poll:
+    desc: >-
+      Poll all source registrations into the dev database (pass
+      `-- --source ID` for one). Reads ADRIANO_CONFIG_FILE (default
+      ./catalog.yaml in the repository root).
+    cmds:
+      - uv run --project backend adriano poll {{.CLI_ARGS}}
+
+  check-config:
+    desc: >-
+      Validate the catalog configuration (ADRIANO_CONFIG_FILE, default
+      ./catalog.yaml) and print registrations, policy and problems.
+    cmds:
+      - uv run --project backend adriano check-config
+
   lint:
     desc: Lint and format-check the backend and the frontend.
     cmds:

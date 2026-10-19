@@ -13,7 +13,12 @@ def test_healthz_reports_ok_when_database_is_reachable(
     response = client.get("/healthz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "database": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "ok"
+    assert body["config"] == "missing"
+    assert body["policy"] == "missing"
+    assert body["registrations"] == "skipped"
 
 
 def test_healthz_reports_degraded_with_an_unreachable_database(
@@ -32,7 +37,6 @@ def test_healthz_reports_degraded_with_an_unreachable_database(
         response = broken_client.get("/healthz")
 
     assert response.status_code == 503
-    assert response.json() == {
-        "status": "degraded",
-        "database": "unavailable",
-    }
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["database"] == "unavailable"
