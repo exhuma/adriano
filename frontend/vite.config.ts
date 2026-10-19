@@ -5,8 +5,12 @@ import { defineConfig } from "vite";
 import vuetify from "vite-plugin-vuetify";
 
 // Dev-only proxy target for the FastAPI backend (see DECISIONS.md:
-// backend on 8100, Vite dev server on 5173).
-const backendDevUrl = "http://localhost:8100";
+// backend on 8100, Vite dev server on 5173). Overridable so `task
+// demo:ui` (phase 08) can point the same dev server at the
+// docker-compose demo stack's frontend (which itself proxies to the
+// containerised backend) instead, without a second published port.
+const backendDevUrl =
+  process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8100";
 
 // https://vitejs.dev/config/
 export default defineConfig({

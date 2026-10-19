@@ -1,0 +1,41 @@
+# Demo catalog configuration for the containerised stack
+# (docker-compose.yml, `task demo`).
+#
+# This is NOT the documented reference configuration -- see
+# `catalog.example.yaml` for the fully annotated GitLab + filesystem
+# example meant for operators to copy from. This file exists only to
+# drive the local demo against the bundled `samples/adr-root/` tree
+# and is mounted read-only into the `backend`/`migrate` containers by
+# `docker-compose.yml`.
+#
+# Paths are relative to this file's directory (the repository root
+# inside the container, see the `backend`/`frontend` Dockerfiles and
+# docker-compose.yml volumes).
+
+sources:
+  # One filesystem registration, scoped to all three demo projects
+  # (including the cross-project `central` project itself).
+  - id: central
+    type: filesystem
+    root: ./samples/adr-root
+    scope:
+      projects: [platform, payments, central]
+    path: doc/decisions
+    published_ref: local
+    intake: [poll, push]
+    push_tokens_env: [ADRIANO_PUSH_TOKEN_CENTRAL]
+
+approval_policy:
+  id: global
+  version: 1
+  required: true
+  reviewers:
+    users: []
+    roles: [adr-reviewer]
+  allow_self_approval: false
+
+rbac:
+  roles:
+    admin: [read, operate]
+    adr-reviewer: [read]
+    reader: [read]

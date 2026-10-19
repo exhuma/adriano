@@ -1,0 +1,114 @@
+# adriano deployment stack: db -> migrate (one-shot) -> backend ->
+# frontend. See docs/operator.md for the full configuration reference,
+# and README.md / Taskfile.yml (`task demo`) for a one-command local
+# demo. Do not confuse this stack with the ephemeral dev/test database
+# started by `task db:up` (container `adriano-db`, host port 55432):
+# this stack's `db` service is independent and uses a named volume.
+#
+# Project name is pinned so this stack never collides with another
+# compose project on the same Docker host.
+name: adriano
+
+x-backend-image: &backend-image
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: adriano-backend:local
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ADRIANO_DB_USER:-adriano}
+      POSTGRES_PASSWORD: ${ADRIANO_DB_PASSWORD:-adriano}
+      POSTGRES_DB: ${ADRIANO_DB_NAME:-adriano}
+    volumes:
+      - adriano-db-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${ADRIANO_DB_USER:-adriano} -d ${ADRIANO_DB_NAME:-adriano}
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # One-shot: applies migrations, then exits. `backend` waits for this
+  # to succeed before starting (module-database-postgresql "deploy
+  # order is always migrations first, then app").
+  migrate:
+    <<: *backend-image
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      ADRIANO_DATABASE_URL: postgresql://${ADRIANO_DB_USER:-adriano}:${ADRIANO_DB_PASSWORD:-adriano}@db:5432/${ADRIANO_DB_NAME:-adriano}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    <<: *backend-image
+    restart: unless-stopped
+    environment:
+      ADRIANO_DATABASE_URL: postgresql://${ADRIANO_DB_USER:-adriano}:${ADRIANO_DB_PASSWORD:-adriano}@db:5432/${ADRIANO_DB_NAME:-adriano}
+      ADRIANO_CONFIG_FILE: /app/catalog.yaml
+      ADRIANO_WORKERS: ${ADRIANO_WORKERS:-4}
+      ADRIANO_OIDC_AUTHORITY: ${ADRIANO_OIDC_AUTHORITY:-}
+      ADRIANO_OIDC_ISSUER: ${ADRIANO_OIDC_ISSUER:-}
+      ADRIANO_OIDC_AUDIENCE: ${ADRIANO_OIDC_AUDIENCE:-adr_viewer}
+      ADRIANO_OIDC_ROLES_CLAIM: ${ADRIANO_OIDC_ROLES_CLAIM:-roles}
+      # Dev-only HS256 bypass -- MUST stay unset outside a throwaway
+      # local demo (module-dev-auth-bypass). `task demo` sets these
+      # from a gitignored .env.demo it generates; never commit values
+      # here.
+      ADRIANO_DEV_AUTH_ENABLED: ${ADRIANO_DEV_AUTH_ENABLED:-false}
+      ADRIANO_DEV_SHARED_SECRET: ${ADRIANO_DEV_SHARED_SECRET:-}
+      ADRIANO_STALE_AFTER_MINUTES: ${ADRIANO_STALE_AFTER_MINUTES:-120}
+      # Catalog-referenced secrets (env var NAMES, never values, are
+      # what catalog.yaml/catalog.demo.yaml point at).
+      ADRIANO_PUSH_TOKEN_CENTRAL: ${ADRIANO_PUSH_TOKEN_CENTRAL:-}
+    volumes:
+      # Read-only: the filesystem source and the demo catalog config.
+      # Point ADRIANO_CATALOG_FILE_HOST at your own catalog.yaml for a
+      # non-demo deployment (see docs/operator.md "Configuration").
+      - ${ADRIANO_CATALOG_FILE_HOST:-./catalog.demo.yaml}:/app/catalog.yaml:ro
+      - ./samples:/app/samples:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    # Optional: publish the backend directly for debugging without
+    # going through the frontend's /api/ proxy. Uncomment and pick a
+    # free host port (8000 is commonly already in use):
+    # ports:
+    #   - "8190:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: adriano-frontend:local
+    restart: unless-stopped
+    environment:
+      # Empty API_BASE_URL -> same-origin relative requests; nginx
+      # proxies /api/, /healthz and /auth/dev/ to the backend service
+      # (see frontend/nginx.conf).
+      API_BASE_URL: ${ADRIANO_FRONTEND_API_BASE_URL:-}
+      OIDC_AUTHORITY: ${ADRIANO_OIDC_AUTHORITY:-}
+      OIDC_CLIENT_ID: ${ADRIANO_OIDC_CLIENT_ID:-}
+      OIDC_REDIRECT_URI: ${ADRIANO_OIDC_REDIRECT_URI:-}
+      OIDC_POST_LOGOUT_REDIRECT_URI: ${ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI:-}
+      OIDC_SCOPE: ${ADRIANO_OIDC_SCOPE:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Host 8000 and 8080 are commonly already in use on a dev
+      # machine; this stack publishes on 8180 instead (documented in
+      # README.md / docs/operator.md).
+      - "${ADRIANO_FRONTEND_PORT:-8180}:8080"
+
+volumes:
+  adriano-db-data:

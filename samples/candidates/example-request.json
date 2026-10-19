@@ -1,0 +1,7 @@
+{
+  "source_id": "central",
+  "project": "platform",
+  "adr_uuid": "b87a5fc5-a48f-49cb-a029-ac1f7c56c717",
+  "ref": "feature/redis-cache",
+  "content": "---\ntitle: Use Redis for application-level caching\nuuid: b87a5fc5-a48f-49cb-a029-ac1f7c56c717\ndecision-date: 2026-01-05\nkind: decision\n---\n# Use Redis for application-level caching\n...\n"
+}

@@ -1,6 +1,7 @@
 # Environment / secrets
 .env
 .env.local
+.env.demo
 
 # Python
 __pycache__/

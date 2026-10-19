@@ -52,6 +52,33 @@ task test
 Once the backend is running, `curl -fsS localhost:8100/healthz`
 should return `{"status": "ok", "database": "ok"}`.
 
+## Running in containers (Docker Compose)
+
+For a one-command local demo with sample ADR data, dev sign-in, and
+the full containerised stack (db, migrations, backend, frontend):
+
+```sh
+task demo         # build + start + poll + print URLs and sign-in help
+task demo:poll    # re-poll the demo stack later
+task demo:down    # stop and discard the demo stack
+```
+
+The demo stack publishes the frontend on **<http://localhost:8180>**
+(host ports 8000/8080 are commonly already in use; see
+`docs/operator.md`). The frontend container is a *production* build
+with no dev-login UI; run `task demo:ui` in another terminal for an
+interactive sign-in (a Vite dev server with dev login, proxying to
+the same demo backend), or mint a token on the command line:
+
+```sh
+docker compose exec backend adriano mint-dev-token --sub alice --roles admin
+```
+
+For a non-demo deployment, see `docs/operator.md` "Install and run";
+it covers `docker compose build && docker compose up -d` against your
+own `catalog.yaml` and `.env`, with no dev auth and a real OIDC
+provider.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and adjust as needed; the defaults
@@ -92,10 +119,37 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8100/api/v1/me
 Never set either variable in production; the backend logs a warning
 at startup whenever the dev path is active.
 
+## Documentation
+
+- `docs/schema.md` -- the ADR Markdown/frontmatter schema and legacy
+  compatibility.
+- `docs/hashing.md` -- the canonical content-hash algorithm and its
+  limits.
+- `docs/approval.md` -- the approval policy, states, and review
+  workflow.
+- `docs/operator.md` -- install, configure, run, back up, and
+  troubleshoot a deployment.
+- `docs/api-migration.md` -- mapping from the legacy `/adr/` service
+  and its `ADR_VIEWER_*` configuration.
+- `docs/architecture.md` -- concern map, data flow, and storage
+  choice.
+- `docs/examples/README.md` -- pointers into `samples/adr-root/` for
+  every schema/validation example.
+
 ## Project layout
 
 - `backend/` — FastAPI application (`uv` project).
 - `frontend/` — Vue 3 / Vuetify 4 / TypeScript application (Vite).
+- `samples/adr-root/` — sample ADR tree for the bundled `filesystem`
+  source (legacy and current schema, errata, and every validation
+  issue, see `docs/examples/README.md`).
+- `samples/candidates/` + `samples/push-candidate.sh` — CI push demo
+  files and a runnable push script.
+- `docker-compose.yml` — the deploy stack (db, migrate, backend,
+  frontend); `catalog.demo.yaml` — the demo-only catalog
+  configuration (`catalog.example.yaml` is the documented reference).
+- `docs/` — schema, hashing, approval, operator, migration, and
+  architecture documentation.
 - `phases/` — the implementation plan, decisions, and status for
   this build.
 - `Taskfile.yml` — all developer commands (`task --list-all`).
