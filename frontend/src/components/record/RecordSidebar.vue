@@ -24,7 +24,7 @@ import type {
   RecordState,
   SiblingOut,
 } from "@/types/records";
-import { approvalStateLabel } from "@/utils/labels";
+import { approvalStateLabel, erratumStatusLabel } from "@/utils/labels";
 
 defineProps<{
   /** Whether this record is a normal decision or an erratum; picks
@@ -46,7 +46,9 @@ defineProps<{
   provenance: ProvenanceOut;
   /** Freshness of the owning registration. */
   freshness: FreshnessOut;
-  /** Outbound `updates`/`obsoletes`/`corrects` links. */
+  /** Outbound `updates`/`obsoletes` links. An erratum's own
+   *  `corrects` link is replaced by `erratum_for` (shown in the
+   *  status banner) and never appears here. */
   outboundLinks: OutboundLinkOut[];
   /** Other records linking to this one. */
   inboundLinks: InboundLinkOut[];
@@ -65,7 +67,11 @@ defineProps<{
 
     <v-card class="mb-3" variant="outlined" density="compact">
       <v-card-text class="d-flex align-center justify-space-between flex-wrap ga-2">
-        <StatusChip v-bind="approvalStateLabel(approvalState, kind)" />
+        <StatusChip
+          v-if="recordKind === 'erratum'"
+          v-bind="erratumStatusLabel(approvalState, kind, provenance.ref)"
+        />
+        <StatusChip v-else v-bind="approvalStateLabel(approvalState, kind)" />
         <a href="#approval" class="text-body-2">View approval</a>
       </v-card-text>
     </v-card>

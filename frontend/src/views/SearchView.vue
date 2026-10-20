@@ -19,11 +19,14 @@ import EmptyState from "@/components/EmptyState.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
 import StatusChip from "@/components/StatusChip.vue";
-import { useSearchQuery } from "@/composables/useSearchQuery";
+import {
+  DEFAULT_RECORD_TYPE,
+  readRecordType,
+  useSearchQuery,
+} from "@/composables/useSearchQuery";
 import { withLoading } from "@/composables/useLoading";
 import type {
   RecordState,
-  RecordTypeFilter,
   SearchItem,
   SearchPage,
   SearchParams,
@@ -31,6 +34,7 @@ import type {
 import type { FacetsOut } from "@/types/sources";
 import {
   approvalStateLabel,
+  erratumStatusLabel,
   issueIndicatorLabel,
   recordKindTypeLabel,
   recordStateLabel,
@@ -109,7 +113,11 @@ const results = ref<SearchPage | null>(null);
 const committedParams = computed<SearchParams>(() => {
   const query = route.query;
   const rawState = typeof query.state === "string" ? query.state : undefined;
-  const rawRecordType = typeof query.record_type === "string" ? query.record_type : undefined;
+  // Mirror `useSearchQuery`'s own normalisation: an invalid value
+  // falls back to the default (decisions only), and the default is
+  // never sent as an explicit filter, so a hand-edited or stale URL
+  // behaves exactly like one with `record_type` omitted.
+  const normalizedRecordType = readRecordType(query.record_type);
   const pageRaw = typeof query.page === "string" ? Number.parseInt(query.page, 10) : 1;
   return {
     q: typeof query.q === "string" ? query.q : undefined,
@@ -117,7 +125,8 @@ const committedParams = computed<SearchParams>(() => {
     project: typeof query.project === "string" ? query.project : undefined,
     state: (rawState as RecordState | undefined) ?? undefined,
     needs_approval: query.needs_approval === "true" ? true : undefined,
-    record_type: (rawRecordType as RecordTypeFilter | undefined) ?? undefined,
+    record_type:
+      normalizedRecordType === DEFAULT_RECORD_TYPE ? undefined : normalizedRecordType,
     page: Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1,
     page_size: PAGE_SIZE,
   };
@@ -179,6 +188,20 @@ const resultSummary = computed(() => {
 
 function recordHref(item: SearchItem): string {
   return `/records/${item.id}`;
+}
+
+/** The result row's primary title: for an erratum, "Erratum for
+ *  <target>" leads (so two rows both stored as "Erratum: Decision"
+ *  are distinguishable by their target), with the erratum's own
+ *  stored title shown as a secondary line; an ordinary decision just
+ *  shows its title. */
+function rowTitle(item: SearchItem): string {
+  if (item.record_kind !== "erratum") {
+    return item.title;
+  }
+  return item.erratum_for_title
+    ? `Erratum for ${item.erratum_for_title}`
+    : "Erratum for an unknown decision";
 }
 </script>
 
@@ -328,19 +351,15 @@ function recordHref(item: SearchItem): string {
           <li v-for="item in results.items" :key="item.id" class="result-row">
             <router-link :to="recordHref(item)" class="result-link">
               <div class="result-text">
-                <span class="text-subtitle-1">{{ item.title }}</span>
-                <span class="text-body-2 text-medium-emphasis">
-                  {{ item.source_id }} / {{ item.project }}
-                </span>
+                <span class="text-subtitle-1">{{ rowTitle(item) }}</span>
                 <span
                   v-if="item.record_kind === 'erratum'"
                   class="text-body-2 text-medium-emphasis"
                 >
-                  {{
-                    item.erratum_for_title
-                      ? `Erratum for ${item.erratum_for_title}`
-                      : "Erratum for an unknown decision"
-                  }}
+                  {{ item.title }}
+                </span>
+                <span class="text-body-2 text-medium-emphasis">
+                  {{ item.source_id }} / {{ item.project }}
                 </span>
               </div>
               <div class="result-chips">
@@ -350,6 +369,11 @@ function recordHref(item: SearchItem): string {
                   v-bind="recordKindTypeLabel(item.record_kind)"
                 />
                 <StatusChip
+                  v-if="item.record_kind === 'erratum'"
+                  v-bind="erratumStatusLabel(item.approval_state, item.kind, item.ref)"
+                />
+                <StatusChip
+                  v-else
                   v-bind="approvalStateLabel(item.approval_state, item.kind)"
                 />
                 <StatusChip

@@ -380,9 +380,10 @@ describe("RecordView status banners and layout", () => {
     expect(anchorTarget.text()).toContain("Section: Consequences");
   });
 
-  it("shows the erratum-for banner on an erratum page, resolved to its target", async () => {
+  it("shows the erratum-for banner on an erratum page, resolved to its target, with the erratum's own status", async () => {
     const detail = baseDetail();
     detail.metadata.record_kind = "erratum";
+    detail.approval.state = "accepted";
     detail.erratum_for = {
       uuid: "55555555-5555-5555-5555-555555555555",
       id: "66666666-6666-6666-6666-666666666666",
@@ -396,6 +397,43 @@ describe("RecordView status banners and layout", () => {
     expect(wrapper.text()).toContain("This is an erratum for");
     expect(wrapper.text()).toContain("Use PostgreSQL");
     expect(wrapper.text()).toContain("Erratum");
+    // The erratum's own status (accepted = "Verified"), not the
+    // target's -- and not the plain decision wording.
+    expect(wrapper.text()).toContain("Verified");
+  });
+
+  it("titles the page 'Erratum for <target>' (h1) once the erratum's target resolves", async () => {
+    const detail = baseDetail();
+    detail.metadata.record_kind = "erratum";
+    detail.metadata.title = "Erratum: Consequences";
+    detail.erratum_for = {
+      uuid: "55555555-5555-5555-5555-555555555555",
+      id: "66666666-6666-6666-6666-666666666666",
+      title: "Use PostgreSQL",
+      resolved: true,
+    };
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.find("h1").text()).toBe("Erratum for Use PostgreSQL");
+  });
+
+  it("keeps the erratum's own stored title as the h1 when the target is unresolved", async () => {
+    const detail = baseDetail();
+    detail.metadata.record_kind = "erratum";
+    detail.metadata.title = "Erratum: orphaned";
+    detail.erratum_for = {
+      uuid: "55555555-5555-5555-5555-555555555555",
+      id: null,
+      title: null,
+      resolved: false,
+    };
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.find("h1").text()).toBe("Erratum: orphaned");
   });
 
   it("puts the sidebar's metadata after the main column in document order", async () => {

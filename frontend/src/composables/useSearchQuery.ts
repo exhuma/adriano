@@ -23,7 +23,7 @@ export type StateFilter = RecordState | "";
 
 /** Decisions only (the default, omitted from the URL), to avoid
  *  cluttering shared links with the common case. */
-const DEFAULT_RECORD_TYPE: RecordTypeFilter = "decision";
+export const DEFAULT_RECORD_TYPE: RecordTypeFilter = "decision";
 
 const DEFAULT_DEBOUNCE_MS = 300;
 const FILTER_KEYS = [
@@ -49,7 +49,17 @@ function readPage(value: unknown): number {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
 }
 
-function readRecordType(value: unknown): RecordTypeFilter {
+/**
+ * Normalise a raw `record_type` query value: an invalid or missing
+ * value falls back to the default (decisions only), exactly like
+ * {@link useSearchQuery} itself, so every reader of the URL agrees on
+ * what counts as "the default" (SearchView's `committedParams` reads
+ * this too, rather than re-validating the raw string itself).
+ *
+ * :param value: Raw `route.query.record_type` value.
+ * :returns: A valid `RecordTypeFilter`, defaulting to `"decision"`.
+ */
+export function readRecordType(value: unknown): RecordTypeFilter {
   return value === "erratum" || value === "all" ? value : DEFAULT_RECORD_TYPE;
 }
 

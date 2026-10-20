@@ -123,7 +123,7 @@ watch([fromDigest, toDigest], load);
 
 <template>
   <v-card variant="outlined" class="mb-4">
-    <v-card-title class="text-subtitle-1">Diff</v-card-title>
+    <v-card-title tag="h2" class="text-subtitle-1">Diff</v-card-title>
     <v-card-subtitle class="diff-source">
       {{ sourceId }} / {{ project }} @ {{ refName }} — last indexed
       {{ lastIndexedAt ? formatDateTime(lastIndexedAt) : "never" }}

@@ -30,6 +30,11 @@ const isRejected = computed(() => props.erratum.approval_state === "rejected");
 /** Rejected errata start collapsed; everything else starts expanded. */
 const expanded = ref(!isRejected.value);
 
+/** Unique id for the collapsible region, so the toggle button's
+ *  `aria-controls` can reference it (module-ux-principles
+ *  accessibility: semantic structure for assistive tech). */
+const bodyId = `erratum-entry-body-${props.erratum.id}`;
+
 function toggle(): void {
   expanded.value = !expanded.value;
 }
@@ -67,13 +72,14 @@ const reportedLine = computed(() => {
         size="small"
         variant="text"
         :aria-expanded="expanded"
+        :aria-controls="bodyId"
         @click="toggle"
       >
         {{ expanded ? "Hide details" : "Show details" }}
       </v-btn>
     </div>
 
-    <div v-if="expanded" class="erratum-entry-body">
+    <div v-show="expanded" :id="bodyId" class="erratum-entry-body">
       <p v-if="!erratum.has_content" class="text-body-2 text-medium-emphasis">
         Content not indexed yet —
         <router-link :to="`/records/${erratum.id}`">open the erratum</router-link>.

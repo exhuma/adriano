@@ -112,7 +112,7 @@ describe("SearchView", () => {
     );
   });
 
-  it("shows an erratum row with its chip and 'Erratum for <title>' line", async () => {
+  it("shows an erratum row leading with 'Erratum for <title>', the stored title as secondary, and the erratum status chip", async () => {
     const page: SearchPage = {
       items: [
         {
@@ -140,6 +140,12 @@ describe("SearchView", () => {
     expect(wrapper.text()).toContain("Erratum: Consequences");
     expect(wrapper.text()).toContain("Erratum for Use PostgreSQL");
     expect(wrapper.text()).toContain("Erratum");
+    // The erratum vocabulary ("Reported"), not the decision wording
+    // ("Pending approval"), for the row's own approval chip.
+    expect(wrapper.text()).toContain("Reported");
+    expect(wrapper.text()).not.toContain("Pending approval");
+    const titleSpan = wrapper.find(".result-text span.text-subtitle-1");
+    expect(titleSpan.text()).toBe("Erratum for Use PostgreSQL");
     expect(searchRecords).toHaveBeenCalledWith(
       expect.objectContaining({ record_type: "erratum" }),
     );
@@ -171,6 +177,20 @@ describe("SearchView", () => {
     const { wrapper } = await mountSearchView("/?record_type=erratum");
 
     expect(wrapper.text()).toContain("Erratum for an unknown decision");
+  });
+
+  it("normalises an invalid record_type in the URL to the default, as a non-active filter", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/?record_type=bogus");
+
+    expect(searchRecords).toHaveBeenCalledWith(
+      expect.objectContaining({ record_type: undefined }),
+    );
+    // Not treated as an active filter: the empty state is the
+    // honest "catalog empty" one, not "no matches for your filters".
+    expect(wrapper.text()).toContain("No indexed records yet");
   });
 
   it("shows an error state and retries the same request on demand", async () => {

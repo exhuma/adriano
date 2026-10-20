@@ -5,12 +5,12 @@
  * module-ux-principles "Technical identifiers"), decision date, and
  * record kind.
  */
-import { computed, ref } from "vue";
+import { computed } from "vue";
 
 import StatusChip from "@/components/StatusChip.vue";
+import ShortIdCopy from "@/components/record/ShortIdCopy.vue";
 import type { RecordKind } from "@/types/records";
 import { formatDate } from "@/utils/dates";
-import { shortUuid } from "@/utils/digest";
 
 const props = defineProps<{
   /** Canonical ADR UUID, or `null`/absent when the file has none. */
@@ -23,26 +23,7 @@ const props = defineProps<{
   recordKind: RecordKind;
 }>();
 
-const copied = ref(false);
-
 const decisionDateText = computed(() => formatDate(props.decisionDate));
-
-/** Copy the ADR UUID to the clipboard, with a brief "Copied!" note. */
-async function copyUuid(): Promise<void> {
-  if (!props.adrUuid) {
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(props.adrUuid);
-    copied.value = true;
-    setTimeout(() => {
-      copied.value = false;
-    }, 2000);
-  } catch {
-    // Clipboard API unavailable (e.g. insecure context); the UUID is
-    // already visible as selectable text, so this is a soft failure.
-  }
-}
 </script>
 
 <template>
@@ -52,23 +33,14 @@ async function copyUuid(): Promise<void> {
       <v-list-item>
         <v-list-item-title>UUID</v-list-item-title>
         <v-list-item-subtitle>
-          <span v-if="adrUuid">
-            <code :title="adrUuid">{{ shortUuid(adrUuid) }}</code>
-            <v-btn
-              icon="mdi-content-copy"
-              size="x-small"
-              variant="text"
-              :title="adrUuid"
-              :aria-label="copied ? 'Copied full UUID to clipboard' : 'Copy full UUID to clipboard'"
-              @click="copyUuid"
-            />
-            <span v-if="copied" class="text-success">Copied!</span>
-          </span>
+          <ShortIdCopy v-if="adrUuid" :value="adrUuid" label="UUID" />
           <span v-else>Not available (no valid UUID in this file)</span>
         </v-list-item-subtitle>
       </v-list-item>
       <v-list-item>
-        <v-list-item-title>Decision date</v-list-item-title>
+        <v-list-item-title>
+          {{ recordKind === "erratum" ? "Report date" : "Decision date" }}
+        </v-list-item-title>
         <v-list-item-subtitle>
           <span v-if="decisionDateText">
             {{ decisionDateText }}

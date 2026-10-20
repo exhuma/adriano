@@ -15,7 +15,7 @@ defineProps<{
 
 <template>
   <v-card class="mb-4" variant="outlined">
-    <v-card-title class="text-subtitle-1">Decision record</v-card-title>
+    <v-card-title tag="h2" class="text-subtitle-1">Decision record</v-card-title>
     <v-card-text>
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="rendered-markdown" v-html="renderedHtml" />

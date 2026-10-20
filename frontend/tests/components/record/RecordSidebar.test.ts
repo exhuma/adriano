@@ -132,6 +132,47 @@ describe("RecordSidebar", () => {
     expect(link.text()).toBe("View approval");
   });
 
+  it("uses the erratum vocabulary for the approval summary chip on an erratum", async () => {
+    const router: Router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/", component: { template: "<div />" } }],
+    });
+    await router.push("/");
+    const wrapper = mount(RecordSidebar, {
+      props: {
+        recordKind: "erratum",
+        kind: "published",
+        approvalState: "not_required",
+        adrUuid: null,
+        decisionDate: null,
+        decisionDateInferred: false,
+        provenance: {
+          source_id: "central",
+          project: "platform",
+          path: "x",
+          ref: "main",
+          source_url: null,
+          updated_at: "2026-02-03T10:00:00Z",
+        },
+        freshness: {
+          last_attempt_at: null,
+          last_success_at: null,
+          last_status: "never",
+          stale: false,
+          intake: ["poll"],
+        },
+        outboundLinks: [],
+        inboundLinks: [],
+        siblings: [],
+        legacySignoffEntries: [],
+      },
+      global: { plugins: [router, vuetify] },
+    });
+
+    expect(wrapper.text()).toContain("Published (no review required)");
+    expect(wrapper.text()).not.toContain("Approval not required");
+  });
+
   it("never renders the document body", async () => {
     const wrapper = await mountSidebar();
 

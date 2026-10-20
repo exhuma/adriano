@@ -7,14 +7,22 @@
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { CompetingCandidateOut, DivergenceOut } from "@/types/approval";
+import type { RecordKind } from "@/types/records";
 import { shortDigest } from "@/utils/digest";
-import { approvalStateLabel, divergenceLabel } from "@/utils/labels";
+import {
+  approvalStateLabel,
+  divergenceLabel,
+  erratumStatusLabel,
+} from "@/utils/labels";
 
 defineProps<{
   /** Content divergence within the record's identity, if any. */
   divergence: DivergenceOut | null;
   /** Other candidates of the identity holding different content. */
   competingCandidates: CompetingCandidateOut[];
+  /** Whether the viewed record is a normal decision or an erratum;
+   *  picks the right chip vocabulary for each competing candidate. */
+  recordKind: RecordKind;
 }>();
 </script>
 
@@ -42,7 +50,7 @@ defineProps<{
       Competing candidates
     </v-card-title>
     <v-card-text class="text-body-2 text-medium-emphasis">
-      Other candidates of this same decision hold different content. A
+      Other candidates of this same record hold different content. A
       decision on one never affects another.
     </v-card-text>
     <v-list density="compact">
@@ -54,7 +62,14 @@ defineProps<{
           <code class="mr-2" :title="candidate.digest">
             {{ shortDigest(candidate.digest) }}
           </code>
-          <StatusChip v-bind="approvalStateLabel(candidate.approval_state, 'candidate')" />
+          <StatusChip
+            v-if="recordKind === 'erratum'"
+            v-bind="erratumStatusLabel(candidate.approval_state, 'candidate', candidate.ref)"
+          />
+          <StatusChip
+            v-else
+            v-bind="approvalStateLabel(candidate.approval_state, 'candidate')"
+          />
         </template>
       </v-list-item>
     </v-list>

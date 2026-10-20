@@ -18,11 +18,22 @@ const props = defineProps<{
 
 const published = computed(() => props.errata.filter((e) => e.kind === "published"));
 const proposed = computed(() => props.errata.filter((e) => e.kind === "candidate"));
+
+/** "Errata (N)" counts only published errata -- matching
+ *  `RecordStatusBanners`' top-notice semantics (`errataSummary.total`
+ *  is published-only too) -- with a separate "· M proposed" suffix,
+ *  so the two counts never contradict each other. */
+const heading = computed(() => {
+  const base = `Errata (${published.value.length})`;
+  return proposed.value.length > 0
+    ? `${base} · ${proposed.value.length} proposed`
+    : base;
+});
 </script>
 
 <template>
   <section v-if="errata.length > 0" id="errata" class="mb-4">
-    <h2 class="text-subtitle-1 mb-2">Errata ({{ errata.length }})</h2>
+    <h2 class="text-subtitle-1 mb-2">{{ heading }}</h2>
 
     <ul v-if="published.length > 0" class="erratum-list">
       <ErratumEntry v-for="erratum in published" :key="erratum.id" :erratum="erratum" />

@@ -7,7 +7,7 @@
  */
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import vuetify from "@/plugins/vuetify";
 import ErrataSection from "@/components/record/ErrataSection.vue";
@@ -46,21 +46,29 @@ async function mountSection(errata: ErratumOut[]) {
     ],
   });
   await router.push("/");
+  // `attachTo: document.body` is required for `isVisible()` (used by
+  // the toggle-region test below) to read real computed styles --
+  // jsdom only computes style for attached elements.
   const wrapper = mount(ErrataSection, {
     props: { errata },
     global: { plugins: [router, vuetify] },
+    attachTo: document.body,
   });
   return wrapper;
 }
 
 describe("ErrataSection", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
   it("hides the whole section when there are no errata", async () => {
     const wrapper = await mountSection([]);
 
     expect(wrapper.find("#errata").exists()).toBe(false);
   });
 
-  it("shows the total count and groups published before proposed errata", async () => {
+  it("counts only published errata in the heading, with proposed shown separately", async () => {
     const published = erratum({ id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", kind: "published" });
     const candidate = erratum({
       id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
@@ -69,7 +77,10 @@ describe("ErrataSection", () => {
     });
     const wrapper = await mountSection([published, candidate]);
 
-    expect(wrapper.find("h2").text()).toBe("Errata (2)");
+    // Matches `RecordStatusBanners`' "has N errata" notice, which also
+    // counts published errata only -- the two headline counts must
+    // never contradict each other.
+    expect(wrapper.find("h2").text()).toBe("Errata (1) · 1 proposed");
     const html = wrapper.html();
     expect(html.indexOf("aaaaaaaa")).toBeLessThan(html.indexOf("Proposed errata"));
     expect(html.indexOf("Proposed errata")).toBeLessThan(html.indexOf("bbbbbbbb"));
@@ -90,17 +101,25 @@ describe("ErrataSection", () => {
     expect(wrapper.text()).toContain("Reported — Proposed (branch feature-x)");
   });
 
-  it("collapses a rejected erratum by default, expanding it on toggle", async () => {
+  it("collapses a rejected erratum by default behind a toggle wired with aria-controls, expanding on click", async () => {
     const wrapper = await mountSection([erratum({ approval_state: "rejected" })]);
 
-    expect(wrapper.text()).not.toContain("Corrected text — should say:");
     const toggle = wrapper.find("button[aria-expanded='false']");
     expect(toggle.exists()).toBe(true);
+    const controlsId = toggle.attributes("aria-controls");
+    expect(controlsId).toBeTruthy();
+    // The controlled region exists in the DOM (not `v-if`-removed) so
+    // `aria-controls` always points at a real element, merely hidden
+    // while collapsed -- the WAI-ARIA disclosure pattern.
+    const region = wrapper.find(`#${controlsId}`);
+    expect(region.exists()).toBe(true);
+    expect(region.isVisible()).toBe(false);
 
     await toggle.trigger("click");
 
     expect(wrapper.text()).toContain("Corrected text — should say:");
     expect(wrapper.find("button[aria-expanded='true']").exists()).toBe(true);
+    expect(region.isVisible()).toBe(true);
   });
 
   it("expands a non-rejected erratum by default, with no toggle button", async () => {

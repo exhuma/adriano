@@ -13,8 +13,16 @@
  */
 import { computed } from "vue";
 
-import type { ErrataSummaryOut, ErratumForOut, InboundLinkOut } from "@/types/records";
-import { shortUuid } from "@/utils/digest";
+import StatusChip from "@/components/StatusChip.vue";
+import ShortIdCopy from "@/components/record/ShortIdCopy.vue";
+import type {
+  ApprovalStateCode,
+  ErrataSummaryOut,
+  ErratumForOut,
+  InboundLinkOut,
+  RecordState,
+} from "@/types/records";
+import { erratumStatusLabel } from "@/utils/labels";
 
 const props = defineProps<{
   /** Inbound `obsoleted_by` links, or an empty array when this
@@ -29,6 +37,16 @@ const props = defineProps<{
   /** The decision this record corrects, when it is itself an
    *  erratum; `null` for an ordinary decision. */
   erratumFor: ErratumForOut | null;
+  /** Approval state of the *viewed* erratum's own content -- shown
+   *  as a status chip on the erratum-for notice, ignored when
+   *  `erratumFor` is `null`. */
+  erratumApprovalState: ApprovalStateCode;
+  /** Whether the viewed erratum is published or a candidate, for the
+   *  same chip. */
+  erratumKind: RecordState;
+  /** Branch/ref of the viewed erratum's content, for the candidate
+   *  "Proposed (branch …)" suffix. */
+  erratumRef?: string;
 }>();
 
 /** Whether to show the "has N errata" notice: at least one published
@@ -46,8 +64,15 @@ function pluralizeErrata(count: number): string {
  *  "N proposed errata (not yet published)" sentence when nothing is
  *  published yet, otherwise the total plus only the nonzero
  *  verified/reported/changed/rejected parts, and a trailing
- *  "N proposed" sentence only when there are proposed (candidate)
- *  errata on top of the published ones. */
+ *  "; N more is/are proposed" clause only when there are proposed
+ *  (candidate) errata on top of the published ones.
+ *
+ *  The "verified" count is spelled "verified or not requiring
+ *  review" because it bundles two different per-erratum chip labels
+ *  (`accepted` -> "Verified", `not_required` -> "Published (no
+ *  review required)"; see `services/errata_view.py`'s `_BUCKET`) --
+ *  without the qualifier, a `not_required` erratum's own chip would
+ *  contradict this banner's count. */
 const errataNoticeText = computed(() => {
   const s = props.errataSummary;
   if (s.total === 0) {
@@ -58,31 +83,26 @@ const errataNoticeText = computed(() => {
   }
   const parts: string[] = [];
   if (s.verified > 0) {
-    parts.push(`${s.verified} verified`);
+    parts.push(`${s.verified} verified or not requiring review`);
   }
   if (s.reported > 0) {
     parts.push(`${s.reported} reported`);
   }
   if (s.changed > 0) {
-    parts.push(`${s.changed} changed`);
+    parts.push(`${s.changed} changed since verification`);
   }
   if (s.rejected > 0) {
     parts.push(`${s.rejected} rejected`);
   }
   let text =
     `This decision has ${s.total} ${pluralizeErrata(s.total)} ` +
-    `(${parts.join(", ")}).`;
-  if (s.proposed > 0) {
-    text += ` ${s.proposed} proposed.`;
-  }
+    `(${parts.join(", ")})`;
+  text +=
+    s.proposed > 0
+      ? `; ${s.proposed} more ${s.proposed === 1 ? "is" : "are"} proposed.`
+      : ".";
   return text;
 });
-
-/** Short form of the erratum's target UUID, shown when the target
- *  cannot be resolved to a known record. */
-const erratumForShortUuid = computed(() =>
-  props.erratumFor ? shortUuid(props.erratumFor.uuid) : "",
-);
 </script>
 
 <template>
@@ -125,8 +145,13 @@ const erratumForShortUuid = computed(() =>
     </template>
     <template v-else>
       This is an erratum for an unknown decision
-      <code>{{ erratumForShortUuid }}</code>.
+      <ShortIdCopy :value="erratumFor.uuid" label="target UUID" />.
     </template>
+    <div class="mt-1">
+      <StatusChip
+        v-bind="erratumStatusLabel(erratumApprovalState, erratumKind, erratumRef)"
+      />
+    </div>
   </v-alert>
 
   <v-alert

@@ -10,7 +10,9 @@ import type { InboundLinkOut, OutboundLinkOut } from "@/types/records";
 import { linkTypeLabel } from "@/utils/labels";
 
 defineProps<{
-  /** Outbound `updates`/`obsoletes`/`corrects` links. */
+  /** Outbound `updates`/`obsoletes` links. An erratum's own
+   *  `corrects` link is replaced by `erratum_for` and never appears
+   *  here. */
   outboundLinks: OutboundLinkOut[];
   /** Other records linking to this one. */
   inboundLinks: InboundLinkOut[];

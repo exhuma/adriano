@@ -5,14 +5,15 @@
  * column, and identity/provenance/relationships/legacy sign-off in a
  * sidebar (rfc-editor.org/info layout: status prominent at the top,
  * metadata to the side, no tabs). Loads the record and handles its
- * loading/not-found/forbidden/error states; everything else is
- * composed from `components/record/*`.
+ * loading/not-found/forbidden/error states; the view-model computeds
+ * (titles, chips, banners) live in `useRecordDetailView`, and
+ * everything else is composed from `components/record/*`.
  */
 import { computed, ref, watch } from "vue";
 
 import { ApiError } from "@/api";
 import { getRecord } from "@/api/records";
-import { forbiddenText, isForbidden } from "@/utils/apiErrors";
+import { isForbidden } from "@/utils/apiErrors";
 import ApprovalCard from "@/components/ApprovalCard.vue";
 import DiffPanel from "@/components/DiffPanel.vue";
 import DivergenceBanner from "@/components/DivergenceBanner.vue";
@@ -26,15 +27,14 @@ import RecordHeader from "@/components/record/RecordHeader.vue";
 import RecordIssuesList from "@/components/record/RecordIssuesList.vue";
 import RecordSidebar from "@/components/record/RecordSidebar.vue";
 import RecordStatusBanners from "@/components/record/RecordStatusBanners.vue";
+import {
+  decidedSnackbarText,
+  describeRecordLoadError,
+  useRecordDetailView,
+} from "@/composables/useRecordDetailView";
 import { withLoading } from "@/composables/useLoading";
 import type { DecisionSummaryOut } from "@/types/approval";
 import type { RecordDetail } from "@/types/records";
-import { freshnessBannerText, provenanceText } from "@/utils/freshness";
-import {
-  issueIndicatorLabel,
-  recordKindTypeLabel,
-  recordStateLabel,
-} from "@/utils/labels";
 
 const props = defineProps<{
   /** Record id from the route (`/records/:id`). */
@@ -50,6 +50,19 @@ const detail = ref<RecordDetail | null>(null);
 const snackbarText = ref<string | null>(null);
 const digestChangedBanner = ref(false);
 
+const {
+  issueIndicator,
+  recordKindLabel,
+  recordTypeLabel,
+  provenanceSentence,
+  freshnessBanner,
+  showAcceptedCandidateNote,
+  pageTitle,
+  pageSubtitle,
+  obsoletedByLinks,
+  updatedByLinks,
+} = useRecordDetailView(detail);
+
 /** `v-snackbar`'s `v-model` is a boolean; this adapts the single
  *  `snackbarText` message into that shape. */
 const snackbarVisible = computed({
@@ -60,17 +73,6 @@ const snackbarVisible = computed({
     }
   },
 });
-
-function describeError(error: unknown): string {
-  if (isForbidden(error)) {
-    return forbiddenText(error);
-  }
-  if (error instanceof ApiError) {
-    return `The record could not be loaded (status ${error.status}). ` +
-      "Check your connection and try again.";
-  }
-  return "The record could not be loaded. Check your connection and try again.";
-}
 
 async function load(): Promise<void> {
   loadState.value = "loading";
@@ -84,7 +86,7 @@ async function load(): Promise<void> {
       return;
     }
     errorTitle.value = isForbidden(error) ? "No access" : "Couldn't load this record";
-    errorText.value = describeError(error);
+    errorText.value = describeRecordLoadError(error);
     loadState.value = "error";
   }
 }
@@ -99,65 +101,9 @@ watch(
   { immediate: true },
 );
 
-const issueCounts = computed(() =>
-  detail.value
-    ? {
-        error: detail.value.issues.filter((i) => i.severity === "error").length,
-        warning: detail.value.issues.filter((i) => i.severity === "warning").length,
-      }
-    : { error: 0, warning: 0 },
-);
-
-const issueIndicator = computed(() =>
-  detail.value ? issueIndicatorLabel(issueCounts.value) : null,
-);
-
-const recordKindLabel = computed(() =>
-  detail.value ? recordStateLabel(detail.value.metadata.kind, detail.value.provenance.ref) : null,
-);
-
-/** Decision/erratum chip, distinct from `recordKindLabel` above
- *  (published/candidate). */
-const recordTypeLabel = computed(() =>
-  detail.value ? recordKindTypeLabel(detail.value.metadata.record_kind) : null,
-);
-
-/** A clear sentence distinguishing a candidate (and its branch) from
- *  a published record (SPEC.md "UI requirements": distinguish
- *  candidate from published everywhere). */
-const provenanceSentence = computed(() =>
-  detail.value
-    ? provenanceText(detail.value.metadata.kind, detail.value.provenance)
-    : "",
-);
-
-/** The stale/failed freshness banner's text, or `null` when no
- *  banner should show (candidate, push-only registration, or fresh
- *  content -- see `utils/freshness.ts`). */
-const freshnessBanner = computed(() =>
-  detail.value
-    ? freshnessBannerText(
-        detail.value.metadata.kind,
-        detail.value.provenance,
-        detail.value.freshness,
-      )
-    : null,
-);
-
-/** Shown only for an accepted candidate: acceptance already guides
- *  implementation before publication (SPEC.md "Independent approval
- *  and sign-off workflow"). */
-const showAcceptedCandidateNote = computed(
-  () =>
-    detail.value?.metadata.kind === "candidate" &&
-    detail.value?.approval.state === "accepted",
-);
-
 async function onDecided(event: DecisionSummaryOut): Promise<void> {
-  snackbarText.value =
-    event.action === "accepted"
-      ? "Decision recorded: accepted."
-      : "Decision recorded: rejected.";
+  const isErratum = detail.value?.metadata.record_kind === "erratum";
+  snackbarText.value = decidedSnackbarText(event.action, isErratum);
   await load();
 }
 
@@ -165,20 +111,6 @@ async function onDigestChanged(): Promise<void> {
   digestChangedBanner.value = true;
   await load();
 }
-
-/** Inbound `obsoleted_by` links, for the obsolete-decision banner. */
-const obsoletedByLinks = computed(() =>
-  detail.value
-    ? detail.value.inbound_links.filter((link) => link.link_type === "obsoleted_by")
-    : [],
-);
-
-/** Inbound `updated_by` links, for the updated-decision banner. */
-const updatedByLinks = computed(() =>
-  detail.value
-    ? detail.value.inbound_links.filter((link) => link.link_type === "updated_by")
-    : [],
-);
 </script>
 
 <template>
@@ -205,7 +137,9 @@ const updatedByLinks = computed(() =>
 
     <template v-else-if="detail">
       <RecordHeader
-        :title="detail.metadata.title"
+        :title="pageTitle"
+        :subtitle="pageSubtitle"
+        :record-kind="detail.metadata.record_kind"
         :record-kind-label="recordKindLabel"
         :record-type-label="recordTypeLabel"
         :issue-indicator="issueIndicator"
@@ -222,6 +156,9 @@ const updatedByLinks = computed(() =>
         :updated-by="updatedByLinks"
         :errata-summary="detail.errata_summary"
         :erratum-for="detail.erratum_for"
+        :erratum-approval-state="detail.approval.state"
+        :erratum-kind="detail.metadata.kind"
+        :erratum-ref="detail.provenance.ref"
       />
 
       <RecordFreshnessBanner
@@ -233,17 +170,23 @@ const updatedByLinks = computed(() =>
       <v-row>
         <v-col cols="12" md="8">
           <RecordIssuesList :issues="detail.issues" />
+
           <RecordDecisionCard
             v-if="detail.metadata.record_kind === 'decision'"
             :rendered-html="detail.rendered_html"
           />
-          <ErratumBody v-else :erratum="detail.erratum" :erratum-for="detail.erratum_for" />
+          <ErratumBody
+            v-else
+            :erratum="detail.erratum"
+            :erratum-for="detail.erratum_for"
+          />
 
           <ErrataSection :errata="detail.errata" />
 
           <DivergenceBanner
             :divergence="detail.approval.divergence"
             :competing-candidates="detail.approval.competing_candidates"
+            :record-kind="detail.metadata.record_kind"
           />
 
           <ApprovalCard
@@ -252,7 +195,9 @@ const updatedByLinks = computed(() =>
             :kind="detail.metadata.kind"
             :record-kind="detail.metadata.record_kind"
             :record-id="props.id"
-            @decided="onDecided" @digest-changed="onDigestChanged"
+            :record-ref="detail.provenance.ref"
+            @decided="onDecided"
+            @digest-changed="onDigestChanged"
           />
 
           <DiffPanel
@@ -271,7 +216,8 @@ const updatedByLinks = computed(() =>
 
         <v-col cols="12" md="4">
           <RecordSidebar
-            :record-kind="detail.metadata.record_kind" :kind="detail.metadata.kind"
+            :record-kind="detail.metadata.record_kind"
+            :kind="detail.metadata.kind"
             :approval-state="detail.approval.state"
             :adr-uuid="detail.metadata.adr_uuid"
             :decision-date="detail.metadata.decision_date"

@@ -18,7 +18,11 @@ import StatusChip from "@/components/StatusChip.vue";
 import type { ApprovalOut, DecisionAction, DecisionSummaryOut } from "@/types/approval";
 import type { RecordKind, RecordState } from "@/types/records";
 import { shortDigest } from "@/utils/digest";
-import { approvalStateExplanation, approvalStateLabel } from "@/utils/labels";
+import {
+  approvalStateExplanation,
+  approvalStateLabel,
+  erratumStatusLabel,
+} from "@/utils/labels";
 
 const props = defineProps<{
   /** Approval state of the record's current content. */
@@ -28,10 +32,15 @@ const props = defineProps<{
   kind: RecordState;
   /** Whether the viewed record is a normal decision or an erratum;
    *  picks the "Accept/Reject" vs "Verify erratum/Reject erratum"
-   *  wording. */
+   *  wording, and the erratum ("Reported"/"Verified"/…) status chip
+   *  vocabulary. */
   recordKind: RecordKind;
   /** Record id, for the decision dialog's submission. */
   recordId: string;
+  /** Branch/ref of the record's content, shown in the candidate
+   *  erratum chip's "Proposed (branch …)" suffix; omitted falls back
+   *  to a plain "Proposed". */
+  recordRef?: string;
 }>();
 
 const emit = defineEmits<{
@@ -95,9 +104,18 @@ function policySummaryText(approval: ApprovalOut): string {
 
 <template>
   <v-card class="mb-4" variant="outlined">
-    <v-card-title class="text-subtitle-1">Approval</v-card-title>
+    <v-card-title tag="h2" class="text-subtitle-1">Approval</v-card-title>
     <v-card-text>
-      <StatusChip v-bind="approvalStateLabel(approval.state, kind)" class="mb-2" />
+      <StatusChip
+        v-if="recordKind === 'erratum'"
+        v-bind="erratumStatusLabel(approval.state, kind, recordRef)"
+        class="mb-2"
+      />
+      <StatusChip
+        v-else
+        v-bind="approvalStateLabel(approval.state, kind)"
+        class="mb-2"
+      />
       <p class="text-body-2">
         {{ approvalStateExplanation(approval.state, approval.policy.status, recordKind) }}
       </p>

@@ -48,16 +48,17 @@ function mountCard(recordKind: "decision" | "erratum") {
 }
 
 describe("ApprovalCard", () => {
-  it("shows plain Accept/Reject buttons for a decision", () => {
+  it("shows plain Accept/Reject buttons and the plain state chip for a decision", () => {
     const wrapper = mountCard("decision");
 
     const buttons = wrapper.findAll("button").map((b) => b.text());
     expect(buttons).toContain("Accept");
     expect(buttons).toContain("Reject");
     expect(wrapper.text()).toContain("Awaiting review.");
+    expect(wrapper.text()).toContain("Pending approval");
   });
 
-  it("shows 'Verify erratum' / 'Reject erratum' buttons for an erratum", () => {
+  it("shows 'Verify erratum' / 'Reject erratum' buttons and the erratum status chip for an erratum", () => {
     const wrapper = mountCard("erratum");
 
     const buttons = wrapper.findAll("button").map((b) => b.text());
@@ -66,5 +67,9 @@ describe("ApprovalCard", () => {
     expect(wrapper.text()).toContain(
       "This erratum is reported and awaits verification.",
     );
+    // The erratum vocabulary chip ("Reported"), not the decision
+    // wording ("Pending approval"), for the erratum's own status.
+    expect(wrapper.text()).toContain("Reported");
+    expect(wrapper.text()).not.toContain("Pending approval");
   });
 });

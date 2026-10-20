@@ -68,4 +68,22 @@ describe("RecordMetadataCard UUID display", () => {
     expect(wrapper.find("code").exists()).toBe(false);
     expect(wrapper.text()).toContain("Not available (no valid UUID in this file)");
   });
+
+  it("labels the date field 'Decision date' for a decision and 'Report date' for an erratum", () => {
+    const decisionWrapper = mountCard();
+    expect(decisionWrapper.text()).toContain("Decision date");
+    expect(decisionWrapper.text()).not.toContain("Report date");
+
+    const erratumWrapper = mount(RecordMetadataCard, {
+      props: {
+        adrUuid: fullUuid,
+        decisionDate: "2025-05-01",
+        decisionDateInferred: false,
+        recordKind: "erratum",
+      },
+      global: { plugins: [vuetify] },
+    });
+    expect(erratumWrapper.text()).toContain("Report date");
+    expect(erratumWrapper.text()).not.toContain("Decision date");
+  });
 });

@@ -159,6 +159,15 @@ The record detail page's errata section and top notice count only
 yet on the published ref -- is counted separately as `proposed` and
 is never mixed into the published counts.
 
+The `verified` bucket itself bundles two different per-erratum
+states -- `accepted` and `not_required` (no review required by
+policy) -- because both stand as published without further action.
+Their own status chip still distinguishes them ("Verified" vs.
+"Published (no review required)"), so the top notice spells this
+bucket "N verified or not requiring review" rather than plain
+"N verified"; otherwise a `not_required` erratum's own chip would
+contradict the notice's count for the same erratum.
+
 An eligible reviewer sees "Verify erratum" / "Reject erratum" buttons
 instead of "Accept" / "Reject" on an erratum's own page; eligibility,
 the decide logic, and the append-only history are identical to a
