@@ -11,7 +11,7 @@ Public API:
   :data:`JsonObject`
 - values :class:`RegistrationConfig`, :class:`Registration`,
   :class:`Revision`, :class:`RecordWrite`, :class:`StoredRecord`,
-  :class:`UpsertResult`, :class:`ChangeTokenEntry`,
+  :class:`ErratumRow`, :class:`UpsertResult`, :class:`ChangeTokenEntry`,
   :class:`SearchFilters`, :class:`SearchItem`, :class:`SearchPage`,
   :class:`FacetEntry`, :class:`NewDecision`, :class:`DecisionEvent`,
   :class:`IntakeRun`
@@ -31,6 +31,7 @@ from app.domain.approval import (
 from app.domain.frontmatter import JsonValue
 from app.domain.issues import Issue
 from app.domain.values import Identity, Links, RecordKind, TitleSource
+from app.storage.errata_values import StoredErratum
 
 #: Upper bound for ``page_size`` in
 #: :meth:`app.storage.port.CatalogStore.search`.
@@ -161,6 +162,7 @@ class RecordWrite:
     :param issues: Validation issues.
     :param source_url: Link to the content at the source, if any.
     :param author: Push or commit author, if known.
+    :param erratum: Rendered erratum content; ``None`` for decisions.
     """
 
     source_id: str
@@ -182,6 +184,7 @@ class RecordWrite:
     issues: tuple[Issue, ...]
     source_url: str | None = None
     author: str | None = None
+    erratum: StoredErratum | None = None
 
     @property
     def identity(self) -> Identity:
@@ -212,6 +215,51 @@ class StoredRecord(RecordWrite):
     first_seen_at: datetime.datetime
     updated_at: datetime.datetime
     last_seen_at: datetime.datetime
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ErratumRow:
+    """
+    One erratum row (published or candidate) correcting a decision.
+
+    :param id: Record id.
+    :param kind: Published or candidate.
+    :param source_id: Registration id.
+    :param project: Project path.
+    :param path: File path inside the project.
+    :param ref: Branch/ref of the content.
+    :param adr_uuid: The erratum's own UUID, if valid.
+    :param record_key: Identity key of the erratum.
+    :param digest: Current digest.
+    :param title: Display title.
+    :param erratum: Stored content; ``None`` only for a row ingested
+        before content was stored (the next ingest fills it).
+    :param updated_at: When the content digest last changed.
+    :param issues: Validation issues.
+    """
+
+    id: uuid.UUID
+    kind: RecordState
+    source_id: str
+    project: str
+    path: str
+    ref: str
+    adr_uuid: uuid.UUID | None
+    record_key: str
+    digest: str
+    title: str
+    erratum: StoredErratum | None
+    updated_at: datetime.datetime
+    issues: tuple[Issue, ...]
+
+    @property
+    def identity(self) -> Identity:
+        """
+        Logical identity of the erratum (approval is keyed by it).
+
+        :returns: ``(source_id, project, record_key)``.
+        """
+        return Identity(self.source_id, self.project, self.record_key)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

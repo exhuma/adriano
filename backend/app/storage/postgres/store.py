@@ -7,6 +7,7 @@ of work and yields a :class:`PostgresCatalogStore` bound to it. The
 store delegates each operation to a concern module
 (:mod:`~app.storage.postgres.registrations`,
 :mod:`~app.storage.postgres.records`,
+:mod:`~app.storage.postgres.errata`,
 :mod:`~app.storage.postgres.search`,
 :mod:`~app.storage.postgres.events`). All SQL uses bound parameters.
 
@@ -34,6 +35,7 @@ from app.domain.values import Identity
 from app.storage.port import (
     ChangeTokenEntry,
     DecisionEvent,
+    ErratumRow,
     FacetEntry,
     IntakeKind,
     IntakeRun,
@@ -50,7 +52,7 @@ from app.storage.port import (
     StoredRecord,
     UpsertResult,
 )
-from app.storage.postgres import events, records, search
+from app.storage.postgres import errata, events, records, search
 from app.storage.postgres import registrations as registration_sql
 
 #: First key of the two-key advisory lock; keeps registration locks
@@ -167,6 +169,10 @@ class PostgresCatalogStore:
         return records.list_relationship_candidates(
             self._session, self_uuid, link_targets
         )
+
+    def list_errata_for(self, target_uuid: uuid.UUID) -> list[ErratumRow]:
+        """See :meth:`app.storage.port.CatalogStore.list_errata_for`."""
+        return errata.list_errata_for(self._session, target_uuid)
 
     def list_facets(self) -> list[FacetEntry]:
         """See :meth:`app.storage.port.CatalogStore.list_facets`."""

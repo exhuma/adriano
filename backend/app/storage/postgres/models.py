@@ -121,6 +121,11 @@ class RecordRow(Base):
         ),
         Index("ix_record_identity", "source_id", "project", "record_key"),
         Index("ix_record_search", "search", postgresql_using="gin"),
+        Index(
+            "ix_record_links_corrects",
+            text("(links ->> 'corrects')"),
+            postgresql_where=text("(links ->> 'corrects') IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -152,6 +157,9 @@ class RecordRow(Base):
     record_kind: Mapped[str] = mapped_column(Text, nullable=False)
     links: Mapped[Any] = mapped_column(JSONB, nullable=False)
     rendered_html: Mapped[str] = mapped_column(Text, nullable=False)
+    erratum: Mapped[Any] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     issues: Mapped[Any] = mapped_column(JSONB, nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text)
     author: Mapped[str | None] = mapped_column(Text)

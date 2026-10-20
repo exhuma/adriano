@@ -5,20 +5,25 @@ Rows are read with Core ``select()`` over the mapped tables, so every
 function here takes a :class:`~sqlalchemy.engine.RowMapping` keyed by
 column name and returns a port value type.
 
-Public API: :func:`record_values`, :func:`stored_record`,
+Public API: :func:`record_values`, :func:`erratum_json`,
+:func:`stored_erratum`, :func:`stored_record`, :func:`erratum_row`,
 :func:`search_item`, :func:`registration`, :func:`revision`,
 :func:`decision_event`, :func:`intake_run`.
 """
 
+import datetime
+from collections.abc import Mapping
 from typing import Any
 
 from sqlalchemy.engine import RowMapping
 
 from app.domain.approval import ApprovalStateCode, DecisionAction
+from app.domain.errata import ErratumType
 from app.domain.issues import Issue
 from app.domain.values import Identity, Links, RecordKind, TitleSource
 from app.storage.port import (
     DecisionEvent,
+    ErratumRow,
     IntakeKind,
     IntakeRun,
     IntakeStatus,
@@ -28,6 +33,7 @@ from app.storage.port import (
     Registration,
     Revision,
     SearchItem,
+    StoredErratum,
     StoredRecord,
 )
 
@@ -61,7 +67,54 @@ def record_values(record: RecordWrite, kind: RecordState) -> dict[str, Any]:
         "issues": [issue.to_dict() for issue in record.issues],
         "source_url": record.source_url,
         "author": record.author,
+        "erratum": erratum_json(record.erratum),
     }
+
+
+def erratum_json(erratum: StoredErratum | None) -> dict[str, Any] | None:
+    """
+    Build the ``record.erratum`` JSON value.
+
+    :param erratum: Stored content, or ``None`` for a decision.
+    :returns: The JSON object (type as its value, date as
+        ``YYYY-MM-DD``), or ``None`` (SQL ``NULL``).
+    """
+    if erratum is None:
+        return None
+    date = erratum.reported_date
+    return {
+        "type": None if erratum.type is None else erratum.type.value,
+        "section": erratum.section,
+        "reported_by": erratum.reported_by,
+        "reported_date": None if date is None else date.isoformat(),
+        "original_html": erratum.original_html,
+        "corrected_html": erratum.corrected_html,
+        "notes_html": erratum.notes_html,
+    }
+
+
+def stored_erratum(raw: Mapping[str, Any] | None) -> StoredErratum | None:
+    """
+    Rebuild erratum content from ``record.erratum``.
+
+    :param raw: Stored JSON object, or ``None``.
+    :returns: The content, or ``None``.
+    """
+    if raw is None:
+        return None
+    kind = raw.get("type")
+    date = raw.get("reported_date")
+    return StoredErratum(
+        type=None if kind is None else ErratumType(kind),
+        section=raw.get("section"),
+        reported_by=raw.get("reported_by"),
+        reported_date=(
+            None if date is None else datetime.date.fromisoformat(date)
+        ),
+        original_html=raw.get("original_html"),
+        corrected_html=raw.get("corrected_html") or "",
+        notes_html=raw.get("notes_html"),
+    )
 
 
 def _issues(raw: list[dict[str, str]]) -> tuple[Issue, ...]:
@@ -104,9 +157,34 @@ def stored_record(row: RowMapping) -> StoredRecord:
         issues=_issues(row["issues"]),
         source_url=row["source_url"],
         author=row["author"],
+        erratum=stored_erratum(row["erratum"]),
         first_seen_at=row["first_seen_at"],
         updated_at=row["updated_at"],
         last_seen_at=row["last_seen_at"],
+    )
+
+
+def erratum_row(row: RowMapping) -> ErratumRow:
+    """
+    Convert a reverse-lookup erratum row.
+
+    :param row: Row with the :class:`ErratumRow` columns.
+    :returns: The erratum row.
+    """
+    return ErratumRow(
+        id=row["id"],
+        kind=RecordState(row["kind"]),
+        source_id=row["source_id"],
+        project=row["project"],
+        path=row["path"],
+        ref=row["ref"],
+        adr_uuid=row["adr_uuid"],
+        record_key=row["record_key"],
+        digest=row["digest"],
+        title=row["title"],
+        erratum=stored_erratum(row["erratum"]),
+        updated_at=row["updated_at"],
+        issues=_issues(row["issues"]),
     )
 
 

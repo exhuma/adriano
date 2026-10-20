@@ -23,7 +23,8 @@ Unit-of-work rules:
 
 Public API:
 
-- every value type of :mod:`app.storage.values` (re-exported here)
+- every value type of :mod:`app.storage.values` and
+  :mod:`app.storage.errata_values` (re-exported here)
 - protocols :class:`CatalogStore`, :class:`CatalogStoreProvider`
 """
 
@@ -37,10 +38,12 @@ from app.domain.approval import Policy
 from app.domain.frontmatter import JsonValue
 from app.domain.relationships import RecordSummary
 from app.domain.values import Identity
+from app.storage.errata_values import StoredErratum
 from app.storage.values import (
     MAX_PAGE_SIZE,
     ChangeTokenEntry,
     DecisionEvent,
+    ErratumRow,
     FacetEntry,
     IntakeKind,
     IntakeRun,
@@ -65,6 +68,7 @@ __all__ = [
     "CatalogStoreProvider",
     "ChangeTokenEntry",
     "DecisionEvent",
+    "ErratumRow",
     "FacetEntry",
     "IntakeKind",
     "IntakeRun",
@@ -81,6 +85,7 @@ __all__ = [
     "SearchFilters",
     "SearchItem",
     "SearchPage",
+    "StoredErratum",
     "StoredRecord",
     "UpsertResult",
 ]
@@ -260,6 +265,22 @@ class CatalogStore(Protocol):
         :param link_targets: UUIDs the viewed record's own ``updates``,
             ``obsoletes`` and ``corrects`` links target.
         :returns: The matching published rows.
+        """
+        ...
+
+    def list_errata_for(self, target_uuid: uuid.UUID) -> list[ErratumRow]:
+        """
+        List the erratum rows whose ``corrects`` link is *target_uuid*.
+
+        Includes published rows and candidates (proposed errata), from
+        every registration and project; resolving which decision an
+        erratum applies to when the UUID is shared is up to the caller
+        (:mod:`app.domain.relationships` rules). Decisions are never
+        returned.
+
+        :param target_uuid: UUID of the corrected decision.
+        :returns: Published rows first, then by source, project, path,
+            ref and id.
         """
         ...
 

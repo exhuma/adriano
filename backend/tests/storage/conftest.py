@@ -72,6 +72,18 @@ def make_engine() -> Engine:
     return create_engine(_make_engine_url(database_url_for_tests()))
 
 
+def alembic_config() -> Config:
+    """
+    Build an Alembic config bound to the test database.
+
+    :returns: The config (logging left untouched).
+    """
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.attributes["database_url"] = database_url_for_tests()
+    config.attributes["configure_logger"] = False
+    return config
+
+
 @pytest.fixture(scope="session")
 def migrated_engine() -> Iterator[Engine]:
     """
@@ -79,9 +91,7 @@ def migrated_engine() -> Iterator[Engine]:
 
     :returns: An engine bound to the migrated test database.
     """
-    config = Config(str(BACKEND_DIR / "alembic.ini"))
-    config.attributes["database_url"] = database_url_for_tests()
-    config.attributes["configure_logger"] = False
+    config = alembic_config()
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     engine = make_engine()

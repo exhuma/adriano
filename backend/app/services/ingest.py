@@ -7,8 +7,9 @@ One document goes through exactly these steps, whoever delivered it:
 2. compute the canonical digest (:func:`app.domain.hashing.content_digest`)
    -- any client-supplied digest is ignored;
 3. store the immutable snapshot (``put_revision``) of the canonical text;
-4. render the Markdown body with markdown-it-py and sanitize the HTML
-   with nh3;
+4. render the Markdown body (and, for an erratum, its original,
+   corrected and notes sections) with markdown-it-py and sanitize the
+   HTML with nh3;
 5. upsert the published row, or the candidate row (replace or
    create-only), with its per-record validation issues.
 
@@ -31,7 +32,7 @@ findings of :func:`~app.domain.records.parse_record`.
 
 Public API: :class:`IncomingDocument`, :class:`PreparedDocument`,
 :class:`IngestResult`, :func:`render_markdown`,
-:func:`prepare_document`, :func:`ingest_document`.
+:func:`render_erratum`, :func:`prepare_document`, :func:`ingest_document`.
 """
 
 import uuid
@@ -40,10 +41,16 @@ from dataclasses import dataclass
 import nh3
 from markdown_it import MarkdownIt
 
+from app.domain.errata import ErratumContent
 from app.domain.hashing import canonicalize, canonicalize_text, content_digest
 from app.domain.issues import Issue
 from app.domain.records import ParsedRecord, parse_record, record_key
-from app.storage.port import CatalogStore, RecordState, RecordWrite
+from app.storage.port import (
+    CatalogStore,
+    RecordState,
+    RecordWrite,
+    StoredErratum,
+)
 
 _MARKDOWN = MarkdownIt("commonmark").enable(["table", "strikethrough"])
 
@@ -126,6 +133,28 @@ def render_markdown(body: str) -> str:
     return nh3.clean(_MARKDOWN.render(body))
 
 
+def render_erratum(content: ErratumContent | None) -> StoredErratum | None:
+    """
+    Render the sections of an erratum to sanitized HTML.
+
+    :param content: Parsed erratum content, ``None`` for a decision.
+    :returns: The content to store (missing optional sections stay
+        ``None``), or ``None`` for a decision.
+    """
+    if content is None:
+        return None
+    original, notes = content.original, content.notes
+    return StoredErratum(
+        type=content.type,
+        section=content.section,
+        reported_by=content.reported_by,
+        reported_date=content.reported_date,
+        original_html=None if original is None else render_markdown(original),
+        corrected_html=render_markdown(content.corrected),
+        notes_html=None if notes is None else render_markdown(notes),
+    )
+
+
 def _canonical_text(raw: bytes) -> str:
     """
     Decode bytes to the canonical snapshot text.
@@ -174,6 +203,7 @@ def prepare_document(document: IncomingDocument) -> PreparedDocument:
         issues=parsed.issues,
         source_url=document.source_url,
         author=document.author,
+        erratum=render_erratum(parsed.erratum),
     )
     return PreparedDocument(
         parsed=parsed,

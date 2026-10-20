@@ -1,10 +1,12 @@
 """Tests for the shared ingest path."""
 
+import datetime
 import uuid
 
 import pytest
 from sqlalchemy import Engine, text
 
+from app.domain.errata import ErratumType
 from app.domain.hashing import content_digest
 from app.domain.issues import IssueCode
 from app.errors import CandidateExistsError
@@ -152,3 +154,59 @@ def test_ingest_candidate_create_only_conflicts(
 
     assert first.created and first.kind is RecordState.CANDIDATE
     assert again.record_id == first.record_id
+
+
+ERRATUM_UUID = uuid.UUID("7c1e0000-1a2b-4c3d-8e9f-001122334455")
+
+
+def erratum(corrected: str) -> bytes:
+    """
+    Build a valid erratum of :data:`ADR_UUID`.
+
+    :param corrected: Markdown of the "Corrected text" section.
+    :returns: The bytes.
+    """
+    return (
+        f"---\nuuid: {ERRATUM_UUID}\nerratum-for: {ADR_UUID}\n"
+        "type: editorial\nsection: Decision\nreported-by: alice\n"
+        "date: 2025-05-01\n---\n## Original text\n\nUse *MySQL*.\n\n"
+        f"## Corrected text\n\n{corrected}\n"
+    ).encode()
+
+
+def test_prepare_document_renders_sanitized_erratum_sections() -> None:
+    """Ensure erratum sections are rendered and sanitized at ingest."""
+    prepared = prepare_document(
+        incoming(erratum("Use **PostgreSQL**.\n\n<script>alert(1)</script>"))
+    )
+
+    content = prepared.record.erratum
+    assert content is not None
+    assert content.type is ErratumType.EDITORIAL
+    assert content.section == "Decision"
+    assert content.reported_by == "alice"
+    assert content.reported_date == datetime.date(2025, 5, 1)
+    assert content.original_html == "<p>Use <em>MySQL</em>.</p>\n"
+    assert "<strong>PostgreSQL</strong>" in content.corrected_html
+    assert "<script" not in content.corrected_html
+    assert "alert(1)" not in content.corrected_html
+    assert content.notes_html is None
+
+
+def test_prepare_document_has_no_erratum_for_decisions() -> None:
+    """Ensure decisions carry no erratum content."""
+    assert prepare_document(incoming(adr())).record.erratum is None
+
+
+def test_ingest_stores_erratum_content(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure the ingested erratum is found by the reverse lookup."""
+    prepared = prepare_document(incoming(erratum("Fixed."), ref="fix"))
+
+    with provider.lock_registration("central") as store:
+        result = ingest_document(store, prepared, RecordState.CANDIDATE)
+        rows = store.list_errata_for(ADR_UUID)
+
+    assert [row.id for row in rows] == [result.record_id]
+    assert rows[0].erratum == prepared.record.erratum
