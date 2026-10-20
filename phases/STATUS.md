@@ -352,3 +352,16 @@ open issues, anything the next phase must know.
 - Open issues: none blocking. See `docs/phase1-report.md` "Known
   limitations" and "Deferred backlog" for everything deliberately not
   done. **Stop for product-owner review; no Phase 2 work started.**
+
+### Phase 10 (in progress — paused 2026-10-20)
+
+- Done and committed: T0 (plan, db781ea), T1 domain (997a57d), test
+  isolation fix (573e777), T2 storage + migration 0003 (d3c8617), T3
+  services/API (5d18803), T4 seeds/samples (efd02a5), T5 types
+  (13c0cc8), T6 layout (99f7a40), `kind: decision` warning fix
+  (ff0d11f), T7 errata UI (2c96eed). Tests: 533 backend, 209 frontend.
+- Next: T8 docs (stopped before any edits; restart from scratch), then
+  T9 Playwright screenshots — the user APPROVED using the scratchpad
+  Playwright package with its bundled Chromium (the MCP browser lacks
+  Chrome); then T10 review, T11 fixes, T12 bookkeeping.
+- The user runs their own servers on 8100/5180; agents use 8102/5182.
