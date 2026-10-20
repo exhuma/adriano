@@ -15,6 +15,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 08 | Samples, deploy, demo | done | see git log | see notes |
 | 09 | Benchmark & report | done | 3db7e88 d0ee735 c0e831c 22386ae f154ddf | see notes |
 | 10 | UI sidebar + erratum format | done | db781ea..21b01cb | see notes |
+| 11 | UI/UX updates from desktop review | todo | | planned; findings in docs/ui-review/README.md; open questions in 11-ui-ux-updates.md |
 
 ## Handoff notes
 
