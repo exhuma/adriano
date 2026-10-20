@@ -117,7 +117,7 @@ async function submit(): Promise<void> {
     <v-card>
       <v-card-title>{{ actionLabel }} this {{ subjectNoun }}?</v-card-title>
       <v-card-text>
-        <p class="text-body-2 mb-2">
+        <p class="text-body-medium mb-2">
           You are about to <strong>{{ actionLabel.toLowerCase() }}</strong>
           the exact content at digest:
         </p>
@@ -133,7 +133,7 @@ async function submit(): Promise<void> {
           role="alert"
         >
           {{ errorMessage }}
-          <div v-if="errorHintText" class="text-body-2 mt-1">
+          <div v-if="errorHintText" class="text-body-medium mt-1">
             {{ errorHintText }}
           </div>
         </v-alert>

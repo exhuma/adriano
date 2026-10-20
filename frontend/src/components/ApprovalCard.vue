@@ -104,7 +104,7 @@ function policySummaryText(approval: ApprovalOut): string {
 
 <template>
   <v-card class="mb-4">
-    <v-card-title tag="h2" class="text-subtitle-1">Approval</v-card-title>
+    <v-card-title tag="h2" class="text-title-large">Approval</v-card-title>
     <v-card-text>
       <StatusChip
         v-if="recordKind === 'erratum'"
@@ -116,12 +116,12 @@ function policySummaryText(approval: ApprovalOut): string {
         v-bind="approvalStateLabel(approval.state, kind)"
         class="mb-2"
       />
-      <p class="text-body-2">
+      <p class="text-body-medium">
         {{ approvalStateExplanation(approval.state, approval.policy.status, recordKind) }}
       </p>
-      <p class="text-body-2">{{ policySummaryText(approval) }}</p>
+      <p class="text-body-medium">{{ policySummaryText(approval) }}</p>
 
-      <p class="text-body-2 mt-2">
+      <p class="text-body-medium mt-2">
         Indexed content digest:
         <code :title="approval.digest">{{ shortDigest(approval.digest) }}</code>
         <v-btn
@@ -153,14 +153,14 @@ function policySummaryText(approval: ApprovalOut): string {
           {{ recordKind === "erratum" ? "Reject erratum" : "Reject" }}
         </v-btn>
       </div>
-      <p v-else class="text-body-2 mt-3 decide-blocked">
+      <p v-else class="text-body-medium mt-3 decide-blocked">
         <v-icon icon="mdi-information-outline" size="small" aria-hidden="true" />
         {{ approval.decide_blocked_reason }}
       </p>
     </v-card-text>
 
     <v-divider />
-    <v-card-title class="text-subtitle-2">Decision history</v-card-title>
+    <v-card-title class="text-title-small">Decision history</v-card-title>
     <v-card-text>
       <DecisionHistoryTable :history="approval.history" :record-kind="recordKind" />
     </v-card-text>

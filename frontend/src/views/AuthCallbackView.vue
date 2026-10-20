@@ -34,15 +34,25 @@ onMounted(async () => {
   <section aria-labelledby="callback-heading" class="callback">
     <template v-if="errorText">
       <v-icon icon="mdi-alert-circle-outline" size="48" color="error" />
-      <h1 id="callback-heading" class="text-h5 mt-2">Sign-in failed</h1>
-      <p class="text-body-2 text-medium-emphasis">{{ errorText }}</p>
+      <h1
+        id="callback-heading"
+        class="text-headline-medium font-weight-medium mt-2"
+      >
+        Sign-in failed
+      </h1>
+      <p class="text-body-medium text-medium-emphasis">{{ errorText }}</p>
       <v-btn class="mt-4" color="primary" variant="tonal" to="/">
         Back to the catalog
       </v-btn>
     </template>
     <template v-else>
       <v-progress-circular indeterminate color="primary" size="32" role="status" />
-      <h1 id="callback-heading" class="text-h5 mt-2">Signing you in…</h1>
+      <h1
+        id="callback-heading"
+        class="text-headline-medium font-weight-medium mt-2"
+      >
+        Signing you in…
+      </h1>
     </template>
   </section>
 </template>

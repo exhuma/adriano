@@ -25,21 +25,21 @@ defineProps<{
 </script>
 
 <template>
-  <div class="erratum-text-blocks d-flex flex-column ga-3 text-body-1">
+  <div class="erratum-text-blocks d-flex flex-column ga-3 text-body-large">
     <div v-if="originalHtml" class="erratum-block">
-      <p class="text-overline mb-1">Original text — says:</p>
+      <p class="text-label-large mb-1">Original text — says:</p>
       <!-- eslint-disable-next-line vue/no-v-html -->
       <blockquote class="erratum-block-body ma-0 pl-3" v-html="originalHtml" />
     </div>
 
     <div class="erratum-block">
-      <p class="text-overline mb-1">Corrected text — should say:</p>
+      <p class="text-label-large mb-1">Corrected text — should say:</p>
       <!-- eslint-disable-next-line vue/no-v-html -->
       <blockquote class="erratum-block-body ma-0 pl-3" v-html="correctedHtml" />
     </div>
 
     <div v-if="notesHtml" class="erratum-block">
-      <p class="text-overline mb-1">Notes</p>
+      <p class="text-label-large mb-1">Notes</p>
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="erratum-block-body ma-0 pl-3" v-html="notesHtml" />
     </div>
@@ -62,5 +62,51 @@ defineProps<{
   /* No Vuetify utility wraps long unbroken tokens (URLs,
      identifiers) inside quoted HTML at arbitrary widths. */
   overflow-wrap: break-word;
+}
+
+/* Same last-resort heading rule as `RecordDecisionCard.vue`'s
+   `.rendered-markdown` (see its comment for the full justification):
+   this block's sanitized HTML can in principle carry markdown
+   headings too, so they get the same MD3-token sizing instead of the
+   browser default. */
+.erratum-block-body :deep(h1),
+.erratum-block-body :deep(h2) {
+  font-size: 1.375rem; /* MD3 title-large */
+  font-weight: 400;
+  line-height: 1.2727272727;
+  letter-spacing: normal;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.erratum-block-body :deep(h3) {
+  font-size: 1rem; /* MD3 title-medium */
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.009375em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.erratum-block-body :deep(h4),
+.erratum-block-body :deep(h5),
+.erratum-block-body :deep(h6) {
+  font-size: 0.875rem; /* MD3 title-small */
+  font-weight: 500;
+  line-height: 1.4285714286;
+  letter-spacing: 0.0071428571em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.erratum-block-body :deep(p),
+.erratum-block-body :deep(ul),
+.erratum-block-body :deep(ol) {
+  margin-top: 0;
+  margin-bottom: 1em;
+}
+
+.erratum-block-body :deep(:first-child) {
+  margin-top: 0;
 }
 </style>

@@ -45,11 +45,11 @@ defineProps<{
   </v-alert>
 
   <v-card v-if="competingCandidates.length > 0" class="mb-4">
-    <v-card-title class="text-subtitle-1">
+    <v-card-title class="text-title-large">
       <v-icon icon="mdi-source-branch" size="small" aria-hidden="true" class="mr-1" />
       Competing candidates
     </v-card-title>
-    <v-card-text class="text-body-2 text-medium-emphasis">
+    <v-card-text class="text-body-medium text-medium-emphasis">
       Other candidates of this same record hold different content. A
       decision on one never affects another.
     </v-card-text>

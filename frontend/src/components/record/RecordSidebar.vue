@@ -61,7 +61,7 @@ defineProps<{
 
 <template>
   <aside aria-labelledby="sidebar-heading">
-    <h2 id="sidebar-heading" class="text-subtitle-1 mb-2">
+    <h2 id="sidebar-heading" class="text-title-large mb-2">
       {{ recordKind === "erratum" ? "About this erratum" : "About this decision" }}
     </h2>
 
@@ -72,7 +72,7 @@ defineProps<{
           v-bind="erratumStatusLabel(approvalState, kind, provenance.ref)"
         />
         <StatusChip v-else v-bind="approvalStateLabel(approvalState, kind)" />
-        <a href="#approval" class="text-body-2">View approval</a>
+        <a href="#approval" class="text-body-medium">View approval</a>
       </v-card-text>
     </v-card>
 

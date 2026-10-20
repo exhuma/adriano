@@ -39,7 +39,7 @@ const reportedLine = computed(() => {
 
 <template>
   <v-card class="mb-4">
-    <v-card-title tag="h2" class="text-subtitle-1">Erratum</v-card-title>
+    <v-card-title tag="h2" class="text-title-large">Erratum</v-card-title>
     <v-card-text>
       <!--
         The resolved case is shown once, as the page's own h1
@@ -47,7 +47,10 @@ const reportedLine = computed(() => {
         not repeated here. The unresolved case has no other home on
         the page, so it stays.
       -->
-      <p v-if="erratumFor && !erratumFor.resolved" class="text-body-2 mb-3">
+      <p
+        v-if="erratumFor && !erratumFor.resolved"
+        class="text-body-medium mb-3"
+      >
         Erratum for an unknown decision
         <ShortIdCopy :value="erratumFor.uuid" label="target UUID" />.
       </p>
@@ -62,10 +65,13 @@ const reportedLine = computed(() => {
             `useRecordDetailView`'s `pageSubtitle`, which uses the same
             `erratumFor.resolved` condition.
           -->
-          <span v-if="erratum.section && !erratumFor?.resolved" class="text-body-2">
+          <span v-if="erratum.section && !erratumFor?.resolved" class="text-body-medium">
             Section: {{ erratum.section }}
           </span>
-          <span v-if="reportedLine" class="text-body-2 text-medium-emphasis">
+          <span
+            v-if="reportedLine"
+            class="text-body-medium text-medium-emphasis"
+          >
             {{ reportedLine }}
           </span>
         </div>
@@ -76,7 +82,7 @@ const reportedLine = computed(() => {
           :notes-html="erratum.notes_html"
         />
       </template>
-      <p v-else class="text-body-2 text-medium-emphasis">
+      <p v-else class="text-body-medium text-medium-emphasis">
         Content not indexed yet.
       </p>
     </v-card-text>

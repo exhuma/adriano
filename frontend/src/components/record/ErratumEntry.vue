@@ -58,13 +58,13 @@ const reportedLine = computed(() => {
     <div class="erratum-entry-header">
       <StatusChip v-bind="statusLabel" />
       <StatusChip v-bind="typeLabel" />
-      <span v-if="erratum.section" class="text-body-2">
+      <span v-if="erratum.section" class="text-body-medium">
         Section: {{ erratum.section }}
       </span>
-      <span v-if="reportedLine" class="text-body-2 text-medium-emphasis">
+      <span v-if="reportedLine" class="text-body-medium text-medium-emphasis">
         {{ reportedLine }}
       </span>
-      <router-link :to="`/records/${erratum.id}`" class="text-body-2">
+      <router-link :to="`/records/${erratum.id}`" class="text-body-medium">
         Open erratum
       </router-link>
       <v-btn
@@ -80,7 +80,10 @@ const reportedLine = computed(() => {
     </div>
 
     <div v-show="expanded" :id="bodyId" class="erratum-entry-body">
-      <p v-if="!erratum.has_content" class="text-body-2 text-medium-emphasis">
+      <p
+        v-if="!erratum.has_content"
+        class="text-body-medium text-medium-emphasis"
+      >
         Content not indexed yet —
         <router-link :to="`/records/${erratum.id}`">open the erratum</router-link>.
       </p>

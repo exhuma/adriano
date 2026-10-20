@@ -18,8 +18,8 @@ defineProps<{
 <template>
   <div class="auth-blocking" role="alert">
     <v-icon icon="mdi-shield-alert-outline" size="48" color="error" />
-    <h1 class="text-h5 mt-2">{{ title }}</h1>
-    <p class="text-body-2 mt-2">{{ text }}</p>
+    <h1 class="text-headline-medium font-weight-medium mt-2">{{ title }}</h1>
+    <p class="text-body-medium mt-2">{{ text }}</p>
     <div v-if="$slots.actions" class="mt-4">
       <slot name="actions" />
     </div>

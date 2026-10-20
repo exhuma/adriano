@@ -14,7 +14,7 @@ defineProps<{
 
 <template>
   <v-card v-if="issues.length > 0" class="mb-4">
-    <v-card-title class="text-subtitle-1">Validation issues</v-card-title>
+    <v-card-title class="text-title-large">Validation issues</v-card-title>
     <v-list density="compact">
       <v-list-item v-for="(issue, index) in issues" :key="index">
         <template #prepend>

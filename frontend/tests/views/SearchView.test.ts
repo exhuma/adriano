@@ -278,7 +278,7 @@ describe("SearchView", () => {
     // ("Pending approval"), for the row's own approval chip.
     expect(wrapper.text()).toContain("Reported");
     expect(wrapper.text()).not.toContain("Pending approval");
-    const titleSpan = wrapper.find(".result-link span.text-subtitle-1");
+    const titleSpan = wrapper.find(".result-link span.text-title-medium");
     expect(titleSpan.text()).toBe("Erratum for Use PostgreSQL");
     expect(searchRecords).toHaveBeenCalledWith(
       expect.objectContaining({ record_type: "erratum" }),

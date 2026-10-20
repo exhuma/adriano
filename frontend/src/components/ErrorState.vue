@@ -20,8 +20,8 @@ defineEmits<{
 <template>
   <div class="error-state" role="alert">
     <v-icon icon="mdi-alert-circle-outline" size="48" color="error" />
-    <p class="text-subtitle-1 mt-2">{{ title }}</p>
-    <p v-if="text" class="text-body-2 text-medium-emphasis">{{ text }}</p>
+    <p class="text-title-large mt-2">{{ title }}</p>
+    <p v-if="text" class="text-body-medium text-medium-emphasis">{{ text }}</p>
     <v-btn
       class="mt-4"
       color="primary"

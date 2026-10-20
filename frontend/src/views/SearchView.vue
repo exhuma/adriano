@@ -339,7 +339,12 @@ function rowTitle(item: SearchItem): string {
 
 <template>
   <section aria-labelledby="search-heading">
-    <h1 id="search-heading" class="text-h5 mb-4">Search the ADR catalog</h1>
+    <h1
+      id="search-heading"
+      class="text-headline-medium font-weight-medium mb-4"
+    >
+      Search the ADR catalog
+    </h1>
 
     <!--
       No `autofocus` here: it would steal initial keyboard focus from
@@ -571,7 +576,10 @@ function rowTitle(item: SearchItem): string {
       </EmptyState>
 
       <template v-else>
-        <p class="text-body-2 text-medium-emphasis mt-4" aria-hidden="true">
+        <p
+          class="text-body-medium text-medium-emphasis mt-4"
+          aria-hidden="true"
+        >
           {{ resultSummary }}
         </p>
 
@@ -591,15 +599,15 @@ function rowTitle(item: SearchItem): string {
               class="result-link d-flex flex-column py-3 px-1
                 text-decoration-none"
             >
-              <span class="text-subtitle-1">{{ rowTitle(item) }}</span>
+              <span class="text-title-medium">{{ rowTitle(item) }}</span>
               <span
                 v-if="item.record_kind === 'erratum'"
-                class="text-body-2 text-medium-emphasis"
+                class="text-body-medium text-medium-emphasis"
               >
                 {{ item.title }}
               </span>
               <div class="d-flex flex-wrap align-center ga-2 mt-1">
-                <span class="text-body-2 text-medium-emphasis">
+                <span class="text-body-medium text-medium-emphasis">
                   {{ item.source_id }} / {{ item.project }}
                   <template v-if="candidateBranchText(item.kind, item.ref)">
                     · {{ candidateBranchText(item.kind, item.ref) }}

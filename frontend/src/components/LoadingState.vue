@@ -13,7 +13,7 @@ defineProps<{
 <template>
   <div class="loading-state" role="status">
     <v-progress-circular indeterminate color="primary" size="32" />
-    <p class="text-body-2 text-medium-emphasis">
+    <p class="text-body-medium text-medium-emphasis">
       {{ text ?? "Loading…" }}
     </p>
   </div>

@@ -16,6 +16,7 @@
     "gen:types": "node scripts/gen-types.mjs"
   },
   "dependencies": {
+    "@fontsource/roboto": "^5.3.0",
     "@mdi/font": "^7.4.47",
     "oidc-client-ts": "^3.5.0",
     "vue": "^3.5.44",

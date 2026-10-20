@@ -21,8 +21,8 @@ defineProps<{
       color="medium-emphasis"
       aria-hidden="true"
     />
-    <h2 class="text-subtitle-1 font-weight-regular mt-2 mb-0">{{ title }}</h2>
-    <p v-if="text" class="text-body-2 text-medium-emphasis">{{ text }}</p>
+    <h2 class="text-title-large font-weight-regular mt-2 mb-0">{{ title }}</h2>
+    <p v-if="text" class="text-body-medium text-medium-emphasis">{{ text }}</p>
     <div v-if="$slots.actions" class="mt-4">
       <slot name="actions" />
     </div>

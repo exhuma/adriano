@@ -17,18 +17,18 @@ defineProps<{
 
 <template>
   <template v-if="problem.kind !== 'none' || hint">
-    <p v-if="problem.kind === 'text'" class="text-body-2">
+    <p v-if="problem.kind === 'text'" class="text-body-medium">
       {{ problem.text }}
     </p>
     <ul v-else-if="problem.kind === 'list'" class="problem-list">
-      <li v-for="(item, index) in problem.items" :key="index" class="text-body-2">
+      <li v-for="(item, index) in problem.items" :key="index" class="text-body-medium">
         {{ item.message }}
-        <span v-if="item.code" class="text-caption text-medium-emphasis">
+        <span v-if="item.code" class="text-body-small text-medium-emphasis">
           ({{ item.code }})
         </span>
       </li>
     </ul>
-    <p v-if="hint" class="text-body-2 text-medium-emphasis">
+    <p v-if="hint" class="text-body-medium text-medium-emphasis">
       {{ hint }}
     </p>
   </template>

@@ -4,6 +4,12 @@
  * All colours used across the app must be theme tokens referenced by
  * semantic name, never hex/rgb/named CSS colours in components.
  */
+// Vuetify's theme names Roboto but does not ship it; without these the
+// type scale's medium (500) weights fall back to regular on hosts
+// without a local Roboto. Self-hosted latin subset, no external CDN.
+import "@fontsource/roboto/latin-400.css";
+import "@fontsource/roboto/latin-500.css";
+import "@fontsource/roboto/latin-700.css";
 import "@mdi/font/css/materialdesignicons.css";
 import "vuetify/styles";
 

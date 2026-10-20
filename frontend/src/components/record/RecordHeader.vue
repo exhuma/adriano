@@ -51,7 +51,12 @@ defineProps<{
 
 <template>
   <header class="record-header d-flex flex-wrap align-center ga-3 mb-2">
-    <h1 id="record-heading" class="text-h5 mb-0">{{ title }}</h1>
+    <h1
+      id="record-heading"
+      class="text-headline-medium font-weight-medium mb-0"
+    >
+      {{ title }}
+    </h1>
     <div class="d-flex flex-wrap align-center ga-2">
       <StatusChip v-if="recordKindLabel" v-bind="recordKindLabel" />
       <StatusChip v-if="recordTypeLabel" v-bind="recordTypeLabel" />
@@ -59,18 +64,18 @@ defineProps<{
     </div>
   </header>
 
-  <p v-if="subtitle" class="text-body-2 text-medium-emphasis mt-0 mb-1">
+  <p v-if="subtitle" class="text-body-medium text-medium-emphasis mt-0 mb-1">
     {{ subtitle }}
   </p>
 
-  <p class="text-body-2 text-medium-emphasis mt-0 mb-2">
+  <p class="text-body-medium text-medium-emphasis mt-0 mb-2">
     {{ provenanceSentence }}
     <template v-if="errataLinkText">
       · {{ errataLinkText }} · <a href="#errata">View errata</a>
     </template>
   </p>
 
-  <p v-if="showAcceptedCandidateNote" class="text-body-2 mt-0 mb-4">
+  <p v-if="showAcceptedCandidateNote" class="text-body-medium mt-0 mb-4">
     <v-icon icon="mdi-check-decagram" color="success" size="small" aria-hidden="true" />
     <template v-if="recordKind === 'erratum'">
       Verified — this correction applies once published.

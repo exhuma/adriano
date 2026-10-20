@@ -120,8 +120,13 @@ async function onDigestChanged(): Promise<void> {
 
     <div v-else-if="loadState === 'not-found'" class="not-found">
       <v-icon icon="mdi-file-question-outline" size="48" color="medium-emphasis" />
-      <h1 id="record-heading" class="text-h5 mt-2">Record not found</h1>
-      <p class="text-body-2 text-medium-emphasis">
+      <h1
+        id="record-heading"
+        class="text-headline-medium font-weight-medium mt-2"
+      >
+        Record not found
+      </h1>
+      <p class="text-body-medium text-medium-emphasis">
         This record does not exist, or has been removed from the catalog.
       </p>
       <v-btn class="mt-4" color="primary" variant="tonal" to="/">

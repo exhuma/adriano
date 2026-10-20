@@ -215,7 +215,9 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
 <template>
   <section aria-labelledby="sources-heading">
     <div class="sources-header mb-4">
-      <h1 id="sources-heading" class="text-h5">Sources</h1>
+      <h1 id="sources-heading" class="text-headline-medium font-weight-medium">
+        Sources
+      </h1>
       <v-btn
         v-if="canOperate"
         color="primary"
@@ -229,7 +231,7 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
       </v-btn>
     </div>
 
-    <p v-if="!canOperate" class="text-body-2 text-medium-emphasis mb-4">
+    <p v-if="!canOperate" class="text-body-medium text-medium-emphasis mb-4">
       Only operators can trigger polling. Ask an administrator for a role
       that grants the "operate" permission.
     </p>
@@ -275,7 +277,7 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
                 <span v-if="row.lastAttempt">
                   {{ row.lastAttempt.relative }}
                   <br>
-                  <span class="text-caption text-medium-emphasis">
+                  <span class="text-body-small text-medium-emphasis">
                     {{ row.lastAttempt.absolute }}
                   </span>
                 </span>
@@ -285,7 +287,7 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
                 <span v-if="row.lastSuccess">
                   {{ row.lastSuccess.relative }}
                   <br>
-                  <span class="text-caption text-medium-emphasis">
+                  <span class="text-body-small text-medium-emphasis">
                     {{ row.lastSuccess.absolute }}
                   </span>
                 </span>
@@ -306,7 +308,7 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
                 >
                   Poll now
                 </v-btn>
-                <span v-else class="text-caption text-medium-emphasis">
+                <span v-else class="text-body-small text-medium-emphasis">
                   Not pollable
                 </span>
               </td>
@@ -315,7 +317,7 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
         </v-table>
       </div>
 
-      <p v-else class="text-body-2 text-medium-emphasis">
+      <p v-else class="text-body-medium text-medium-emphasis">
         No source registrations are configured yet.
       </p>
     </template>

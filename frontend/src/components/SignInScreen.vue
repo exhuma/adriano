@@ -26,10 +26,13 @@ defineEmits<{
     class="sign-in d-flex flex-column align-center text-center py-14 px-4"
   >
     <v-icon icon="mdi-shield-lock-outline" size="48" color="medium-emphasis" />
-    <h1 id="sign-in-heading" class="text-h5 mt-2">
+    <h1
+      id="sign-in-heading"
+      class="text-headline-medium font-weight-medium mt-2"
+    >
       Sign in to browse the decision catalog
     </h1>
-    <p class="text-body-2 text-medium-emphasis">
+    <p class="text-body-medium text-medium-emphasis">
       This catalog requires an authenticated identity to view decision
       records, trigger polling, or record approvals.
     </p>
@@ -55,7 +58,7 @@ defineEmits<{
       </v-btn>
     </div>
 
-    <p v-if="!oidcAvailable && !devAuthAvailable" class="text-body-2 mt-4">
+    <p v-if="!oidcAvailable && !devAuthAvailable" class="text-body-medium mt-4">
       No sign-in method is available in this build. Contact an
       administrator to configure an identity provider.
     </p>

@@ -68,10 +68,10 @@ function provenanceText(event: DecisionSummaryOut): string {
         <td>{{ event.comment ?? "—" }}</td>
         <td>
           <code :title="event.digest">{{ shortDigest(event.digest) }}</code>
-          <span v-if="event.current_digest" class="text-caption text-medium-emphasis ml-1">
+          <span v-if="event.current_digest" class="text-body-small text-medium-emphasis ml-1">
             (current content)
           </span>
-          <span v-else class="text-caption text-medium-emphasis ml-1">
+          <span v-else class="text-body-small text-medium-emphasis ml-1">
             (earlier revision)
           </span>
         </td>
@@ -79,7 +79,7 @@ function provenanceText(event: DecisionSummaryOut): string {
       </tr>
     </tbody>
   </v-table>
-  <p v-else class="text-body-2 text-medium-emphasis">
+  <p v-else class="text-body-medium text-medium-emphasis">
     No formal decisions recorded yet.
   </p>
 </template>

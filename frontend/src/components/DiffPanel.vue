@@ -123,7 +123,7 @@ watch([fromDigest, toDigest], load);
 
 <template>
   <v-card class="mb-4">
-    <v-card-title tag="h2" class="text-subtitle-1">Diff</v-card-title>
+    <v-card-title tag="h2" class="text-title-large">Diff</v-card-title>
     <v-card-subtitle class="diff-source">
       {{ sourceId }} / {{ project }} @ {{ refName }} — last indexed
       {{ lastIndexedAt ? formatDateTime(lastIndexedAt) : "never" }}
@@ -161,7 +161,7 @@ watch([fromDigest, toDigest], load);
     </v-card-text>
 
     <template v-else-if="diff">
-      <v-card-text class="text-body-2">
+      <v-card-text class="text-body-medium">
         <span v-if="diff.base">
           <strong>{{ diff.base.label }}</strong>
           (<code :title="diff.base.digest">{{ shortDigest(diff.base.digest) }}</code>
@@ -175,16 +175,16 @@ watch([fromDigest, toDigest], load);
           , {{ formatDateTime(diff.target.decided_at) }}</span>)
       </v-card-text>
 
-      <v-card-text v-if="diff.reason === 'no_prior_revision'" class="text-body-2 text-medium-emphasis">
+      <v-card-text v-if="diff.reason === 'no_prior_revision'" class="text-body-medium text-medium-emphasis">
         No prior revision exists to compare against.
       </v-card-text>
-      <v-card-text v-else-if="diff.identical" class="text-body-2">
+      <v-card-text v-else-if="diff.identical" class="text-body-medium">
         <v-icon icon="mdi-equal" size="small" aria-hidden="true" class="mr-1" />
         These two revisions are identical.
       </v-card-text>
       <v-card-text v-else>
         <p class="sr-only" role="status">{{ summaryText }}</p>
-        <p class="text-caption text-medium-emphasis mb-1">
+        <p class="text-body-small text-medium-emphasis mb-1">
           Legend: lines starting with
           <code>+</code> were added, lines starting with <code>-</code> were
           removed (also {{ summaryText }}).

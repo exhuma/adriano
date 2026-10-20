@@ -431,6 +431,65 @@ The old shape is rejected with `legacy_erratum_format`.
   error) reserved for issues and rejection only. "Pending approval"
   stays visible as neutral text or icon.
 
+**Font:** Roboto (the theme's font) is self-hosted through
+`@fontsource/roboto` (latin 400/500/700, imported in
+`plugins/vuetify.ts`). Vuetify does not ship it, and without it every
+500-weight role fell back to regular weight. No external font CDN.
+
+**Type scale (G-05, R-07; coordinator-inserted fix between Tasks 5 and
+6):** Vuetify 4's stylesheet only defines the MD3 typography classes
+(`text-display-*`, `text-headline-*`, `text-title-*`, `text-body-*`,
+`text-label-*`); the MD2 classes the components were still written
+against (`text-h5`, `text-subtitle-1`, `text-subtitle-2`,
+`text-body-1`, `text-body-2`, `text-caption`, `text-overline`) are
+undefined and rendered at the browser default. Every use across
+`frontend/src` was replaced with an MD3 class. A first pass used one
+fixed MD2->MD3 class mapping everywhere; a coordinator visual check at
+1920px on search and a record page found that too coarse -- dense
+list titles read as oversized, sidebar card titles sat below their own
+field labels, and the page `h1` (400 weight) read lighter than the
+rendered-markdown `h2`s in the document body (browser default,
+700 weight). The mapping below is role-specific instead, picked so
+the full hierarchy (page title > section heading > card title > field
+label > body > caption) is visibly ordered wherever it appears
+together:
+
+| Role | Old MD2 class | New MD3 class | Size/weight |
+|---|---|---|---|
+| Page title (`h1`) | `text-h5` | `text-headline-medium font-weight-medium` | 28px / 500 |
+| Main-column section heading (`h2`: "Context"/"Approval"/"Diff"/"Errata -- N", sidebar `h2` "About this decision") | `text-subtitle-1` (some uses) | `text-title-large` | 22px / 400 |
+| Sidebar card title ("Metadata", "Provenance", "Related decisions", "Referenced by", "Other revisions", "Legacy sign-off"), dense list-row title (search results) | `text-subtitle-1` (most uses) | `text-title-medium` | 16px / 500 |
+| Sidebar field label (`VListItemTitle` inside a card, e.g. "UUID", "Source"), erratum block label ("Original text -- says:") | `text-subtitle-2`/new | `text-label-large` | 14px / 500 |
+| Sub-section sub-heading not paired with a field label (e.g. "Decision history") | `text-subtitle-2` | `text-title-small` | 14px / 500 |
+| Record/erratum prose | `text-body-1` | `text-body-large` | 16px / 400 |
+| Secondary text, sidebar field value (`VListItemSubtitle`) | `text-body-2` | `text-body-medium` | 14px / 400 |
+| Caption | `text-caption` | `text-body-small` | 12px / 400 |
+| Overline label | `text-overline` | `text-label-small` | 11px / 500 |
+
+This gives a clear scale (28 > 22 > 16 (titles/body tie by weight, not
+role) > 14 > 12). The two 16px roles (main-column section headings'
+sibling "card title" role and record prose) never sit next to each
+other, and where a card title (16px/500) sits above its own field
+labels (14px/500) and values (14px/400), the title is strictly larger.
+`RecordDecisionCard.vue`'s `.rendered-markdown` and
+`ErratumTextBlocks.vue`'s `.erratum-block-body` gained a scoped `:deep()`
+rule (ladder step 6, no Vuetify class hook reaches server-rendered
+markdown headings, and `main.css` defines no `--v-*-font-size` custom
+properties to reference) that restates the `text-title-large`/
+`-medium`/`-small` tokens for markdown `h1`/`h2`, `h3`, and `h4`-`h6`
+respectively, plus paragraph/list margins, so document body headings
+read below the page and section headings instead of at the browser's
+bold default. Sidebar field label/value pairs use a scoped
+`<v-defaults-provider>` (ladder step 3) around each card's `v-list`,
+not a global `VListItemTitle`/`VListItemSubtitle` default, because
+other uses of those components (e.g. `RecordIssuesList.vue`'s
+validation messages) are plain sentences, not field labels.
+`frontend/tests/typography-scale.test.ts` scans `src/` for the retired
+MD2 class names and fails the suite if any return. This task only
+changed typography (classes, the one `:deep()` heading rule per file,
+and the `font-weight-medium` h1 addition); it did not add heading tags
+to `v-card-title` elements that lack one (Task 6) or change layout.
+
 **Vuetify-first implementation ladder:**
 Expressed in `plugins/vuetify.ts`, `createVuetify({ defaults })`,
 `<v-defaults-provider>`, component props with utility classes, then

@@ -31,14 +31,14 @@ const heading = computed(() =>
 
 <template>
   <section v-if="errata.length > 0" id="errata" class="mb-4">
-    <h2 class="text-subtitle-1 mb-2">{{ heading }}</h2>
+    <h2 class="text-title-large mb-2">{{ heading }}</h2>
 
     <ul v-if="published.length > 0" class="erratum-list ma-0 pa-0 d-flex flex-column ga-3">
       <ErratumEntry v-for="erratum in published" :key="erratum.id" :erratum="erratum" />
     </ul>
 
     <template v-if="proposed.length > 0">
-      <h3 class="text-subtitle-2 mt-3 mb-2">Proposed errata</h3>
+      <h3 class="text-title-small mt-3 mb-2">Proposed errata</h3>
       <ul class="erratum-list ma-0 pa-0 d-flex flex-column ga-3">
         <ErratumEntry v-for="erratum in proposed" :key="erratum.id" :erratum="erratum" />
       </ul>
