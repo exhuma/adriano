@@ -24,7 +24,11 @@ erratum hits of the page are read with **one** query
 (:meth:`~app.storage.port.CatalogStore.list_published_by_uuid`) and
 resolved with the same rules as the detail page's ``erratum_for``
 (:class:`~app.domain.relationships.RelationshipIndex`: published rows,
-same project first, ambiguous -> no title).
+same project first, ambiguous -> no title). The lookup is total: the
+``corrects`` link is selected by type, an unresolved or self-targeting
+link simply yields no title. Targets are not restricted to decisions,
+so an erratum of an erratum shows the corrected erratum's title, as
+its detail page does (where ``erratum_target_is_erratum`` flags it).
 
 Public API: :class:`RecordTypeFilter`, :class:`IssueCounts`,
 :class:`CatalogSearchItem`, :class:`CatalogSearchPage`,
@@ -39,7 +43,7 @@ from enum import StrEnum
 from app.domain.approval import ApprovalStateCode, Policy
 from app.domain.issues import Issue, Severity
 from app.domain.relationships import RecordSummary, RelationshipIndex
-from app.domain.values import Identity, Links, RecordKind
+from app.domain.values import Identity, Links, LinkType, RecordKind
 from app.storage.port import (
     CatalogStore,
     RecordState,
@@ -170,13 +174,17 @@ def _target_titles(
     titles = {target.summary.key: target.title for target in targets}
     summaries = {target.summary.key: target.summary for target in targets}
     for item in errata:
-        summaries.setdefault(str(item.id), _hit_summary(item))
+        # The hit's own summary carries only its ``corrects`` link, even
+        # when the hit is also a target row (an erratum of an erratum,
+        # or one whose ``erratum-for`` is its own UUID).
+        summaries[str(item.id)] = _hit_summary(item)
     index = RelationshipIndex(summaries.values())
     result: dict[uuid.UUID, str] = {}
     for item in errata:
-        [link] = index.view(str(item.id)).outbound
-        if link.target_key in titles:
-            result[item.id] = titles[link.target_key]
+        link = index.view(str(item.id)).first_link(LinkType.CORRECTS)
+        key = None if link is None else link.target_key
+        if key is not None and key in titles:
+            result[item.id] = titles[key]
     return result
 
 

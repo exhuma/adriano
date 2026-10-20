@@ -14,7 +14,20 @@ Headings match case-insensitively and tolerate trailing whitespace or a
 trailing colon. Headings inside fenced code blocks are content. Text
 before the first heading and sections under any other H2 heading are
 kept as notes and reported as ``erratum_unknown_section_heading``
-warnings. A repeated section heading appends to that section.
+warnings. A repeated section heading appends to that section and is
+reported as an ``erratum_duplicate_section`` warning naming the
+heading. Line endings are normalised (CRLF and lone CR become LF)
+before splitting, so no section text keeps a trailing carriage
+return.
+
+Known limits (by design, documented for authors):
+
+- Only ATX H2 headings (``## Notes``) split sections; a setext H2 (a
+  ``Notes`` line underlined with ``---``) is **not** recognised and
+  stays content of the current section.
+- An unclosed code fence runs to the end of the body: every heading
+  after it is content, so later sections are swallowed (typically
+  reported as a missing ``Corrected text``).
 
 The frontmatter part (:class:`ErratumHeader`) is validated by
 :mod:`app.domain.validation`; :func:`build_erratum` joins it with the
@@ -206,7 +219,8 @@ def _split_blocks(body: str) -> list[_Block]:
     """
     blocks = [_Block(None, None)]
     fence: str | None = None
-    for line in body.split("\n"):
+    normalised = body.replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalised.split("\n"):
         in_fence = fence is not None
         fence = _next_fence(line, fence)
         match = None if in_fence else _H2_RE.match(line)
@@ -255,6 +269,20 @@ def _unrecognised(block: _Block, text: str) -> tuple[str, Issue]:
     )
 
 
+def _duplicate(block: _Block) -> Issue:
+    """
+    Warn about a repeated recognised section heading.
+
+    :param block: The block of the repeated heading.
+    :returns: The warning.
+    """
+    return warning(
+        IssueCode.ERRATUM_DUPLICATE_SECTION,
+        f"section heading '{block.heading}' appears more than once; the "
+        "sections are joined in order. Use each heading only once",
+    )
+
+
 def parse_erratum_body(
     body: str,
 ) -> tuple[str | None, str, str | None, tuple[Issue, ...]]:
@@ -267,9 +295,13 @@ def parse_erratum_body(
     """
     parts: dict[str, list[str]] = {_ORIGINAL: [], _CORRECTED: [], _NOTES: []}
     issues: list[Issue] = []
+    seen: set[str] = set()
     for block in _split_blocks(body):
         text = _trim(block.lines)
         if block.section is not None:
+            if block.section in seen:
+                issues.append(_duplicate(block))
+            seen.add(block.section)
             if text:
                 parts[block.section].append(text)
         elif text or block.heading is not None:

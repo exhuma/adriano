@@ -12,7 +12,13 @@ The title lookup for erratum search hits
 (:func:`list_published_by_uuid`) returns only published rows: a link
 resolves against published rows (plus the linking record's own
 identity, which never applies to a decision an erratum corrects), see
-:mod:`app.services.record_relationships`.
+:mod:`app.services.record_relationships`. It deliberately does **not**
+filter on ``record_kind``: the detail page resolves ``erratum-for``
+against rows of every kind (so a decision and an erratum sharing a
+UUID are ambiguous there), and the search titles must resolve the
+same way. Callers must therefore expect erratum rows (an erratum of
+an erratum, or the hit itself when its ``erratum-for`` is its own
+UUID) and full ``links`` on every returned summary.
 
 Public API: :data:`CORRECTS_TARGET`, :func:`list_errata_for`,
 :func:`list_published_by_uuid`.
@@ -101,7 +107,8 @@ def list_published_by_uuid(
 
     :param session: Unit-of-work session.
     :param uuids: Authored UUIDs; empty means no query.
-    :returns: One entry per matching published row, ordered by id.
+    :returns: One entry per matching published row of any record kind,
+        with its full links, ordered by id.
     """
     if not uuids:
         return []

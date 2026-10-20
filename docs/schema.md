@@ -148,7 +148,13 @@ tolerating a trailing colon:
 Content before the first heading, or under any other H2 heading, is
 kept (never discarded) but filed under notes, with an
 `erratum_unknown_section_heading` warning so a misplaced heading is
-easy to find and fix.
+easy to find and fix. Repeating a heading joins the parts in order,
+with an `erratum_duplicate_section` warning.
+
+Only `##` (ATX) headings start a section: a setext heading (`Notes`
+underlined with `---`) is ordinary text. A code fence that is never
+closed runs to the end of the file, so any heading after it is part of
+the code block.
 
 ### Example
 
@@ -206,6 +212,10 @@ never authored.
 | `bad_erratum_type` | error | `type` is missing or not `technical`/`editorial`. | Set `type: technical` or `type: editorial`. |
 | `erratum_missing_corrected_text` | error | No (non-empty) `## Corrected text` section. | Add one with the replacement wording. |
 | `erratum_unknown_section_heading` | warning | Text before the first heading, or under any heading other than `Original text`/`Corrected text`/`Notes`. | Move the text under one of the three recognised headings. |
+| `erratum_duplicate_section` | warning | A recognised heading (`Original text`/`Corrected text`/`Notes`) appears more than once; the parts are joined in order. | Use each heading once. |
+| `erratum_relationship_ignored` | warning | `updates`/`obsoletes` (or `deprecates`) on an erratum; they are decision relationships and are dropped. | Remove them; record lifecycle changes in a decision. |
+| `erratum_target_is_erratum` | warning | `erratum-for` resolves to another erratum (checked when the page is read). The link is shown, but an erratum never lists errata of its own. | Point `erratum-for` at the decision being corrected. |
+| `erratum_targets_itself` | error | `erratum-for` is the erratum's own `uuid`. | Set it to the corrected decision's UUID; until then the erratum is not linked. |
 | `erratum_without_target` | error | `erratum-for` is missing or not a valid UUID. | Add a valid `erratum-for` UUID; until then the erratum is not linked to any decision. |
 | `legacy_erratum_format` | error | `kind: erratum` (any case), or any `corrects` key -- the retired erratum shape. | Convert to this format: `erratum-for` instead of `corrects`, add `type`, and split the body into "Corrected text" (required), plus "Original text"/"Notes" if useful. |
 
@@ -248,7 +258,9 @@ the record. A problem in one record never affects any other record.
 | `bad_encoding` | error | File bytes are not valid UTF-8. | Re-save the file as UTF-8. The record is stored under the raw-bytes digest (`sha256-raw-v1:...`) and cannot be approved until fixed. |
 
 Erratum-only codes (`bad_erratum_type`, `erratum_missing_corrected_text`,
-`erratum_unknown_section_heading`, `erratum_without_target`) are listed
+`erratum_unknown_section_heading`, `erratum_without_target`,
+`erratum_duplicate_section`, `erratum_relationship_ignored`,
+`erratum_target_is_erratum`, `erratum_targets_itself`) are listed
 in "Errata" above.
 
 See `docs/examples/README.md` for a worked example of each issue code

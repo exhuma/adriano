@@ -31,6 +31,10 @@ are counted in ``proposed``):
 
 ``total`` is ``verified + reported + rejected + changed``.
 
+An erratum's own page gets no rows (errata correct decisions, see
+:mod:`app.services.record_relationships`), so its summary is all
+zeros.
+
 Public API: :class:`ErratumContentInfo`, :class:`ErratumInfo`,
 :class:`ErrataSummary`, :class:`ErrataView`, :func:`erratum_content`,
 :func:`build_errata`.

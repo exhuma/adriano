@@ -294,7 +294,8 @@ class CatalogStore(Protocol):
         One query for a whole search page (erratum hits' targets).
 
         :param uuids: Authored UUIDs.
-        :returns: One entry per matching published row.
+        :returns: One entry per matching published row of any record
+            kind (decisions and errata), with its full links.
         """
         ...
 

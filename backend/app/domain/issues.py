@@ -45,6 +45,12 @@ class IssueCode(StrEnum):
     BAD_ERRATUM_TYPE = "bad_erratum_type"
     ERRATUM_MISSING_CORRECTED_TEXT = "erratum_missing_corrected_text"
     ERRATUM_UNKNOWN_SECTION_HEADING = "erratum_unknown_section_heading"
+    ERRATUM_DUPLICATE_SECTION = "erratum_duplicate_section"
+    ERRATUM_TARGETS_ITSELF = "erratum_targets_itself"
+    ERRATUM_RELATIONSHIP_IGNORED = "erratum_relationship_ignored"
+    #: Read-time only: an erratum's ``erratum-for`` resolved to another
+    #: erratum (see :mod:`app.services.record_relationships`).
+    ERRATUM_TARGET_IS_ERRATUM = "erratum_target_is_erratum"
     LEGACY_ERRATUM_FORMAT = "legacy_erratum_format"
     OBSOLETE_KIND_FIELD = "obsolete_kind_field"
 

@@ -202,6 +202,18 @@ class RelationshipView:
             if link.link_type is link_type
         )
 
+    def first_link(self, link_type: LinkType) -> ResolvedLink | None:
+        """
+        Find the first outbound link of one type (e.g. ``corrects``).
+
+        :param link_type: The relationship to select.
+        :returns: The link, or ``None`` if the record has none.
+        """
+        return next(
+            (link for link in self.outbound if link.link_type is link_type),
+            None,
+        )
+
 
 def _tier(source: Identity, target: Identity) -> Resolution:
     """

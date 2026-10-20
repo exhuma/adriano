@@ -14,6 +14,14 @@ and creates no link. ``kind`` is obsolete: ``kind: decision`` is
 reported with the ``obsolete_kind_field`` warning and the record
 stays a normal decision; any other value yields ``bad_field_type``.
 
+An erratum whose ``erratum-for`` is its own ``uuid`` yields the
+``erratum_targets_itself`` error and has no ``corrects`` link (it is
+still stored and browseable). ``updates``/``obsoletes`` are decision
+relationships: on an erratum they are validated, then dropped with the
+``erratum_relationship_ignored`` warning. Whether ``erratum-for``
+names another erratum needs the target's kind and is checked at read
+time (``erratum_target_is_erratum``).
+
 Public API: :data:`KNOWN_FIELDS`, :data:`DECISION_FIELDS`,
 :data:`ERRATUM_FIELDS`, :data:`LEGACY_ERRATUM_FIELDS`,
 :class:`FieldValues`, :func:`parse_fields`.
@@ -258,6 +266,61 @@ def _erratum_target(
     return target
 
 
+def _not_self(
+    adr_uuid: uuid.UUID | None,
+    target: uuid.UUID | None,
+    issues: list[Issue],
+) -> uuid.UUID | None:
+    """
+    Reject an ``erratum-for`` that names the erratum's own ``uuid``.
+
+    :param adr_uuid: The erratum's own UUID.
+    :param target: Its validated ``erratum-for``.
+    :param issues: Issue list to append to.
+    :returns: *target*, or ``None`` when it is the erratum itself.
+    """
+    if target is None or target != adr_uuid:
+        return target
+    issues.append(
+        error(
+            IssueCode.ERRATUM_TARGETS_ITSELF,
+            "`erratum-for` is this erratum's own `uuid`; set it to the "
+            "UUID of the decision being corrected. The erratum is not "
+            "linked until it is",
+        )
+    )
+    return None
+
+
+def _erratum_links(links: Links, issues: list[Issue]) -> Links:
+    """
+    Drop decision relationships (``updates``/``obsoletes``) of an erratum.
+
+    :param links: The links as authored.
+    :param issues: Issue list to append to.
+    :returns: Only the ``corrects`` link.
+    """
+    names = [
+        name
+        for name, targets in (
+            ("updates", links.updates),
+            ("obsoletes", links.obsoletes),
+        )
+        if targets
+    ]
+    if names:
+        shown = " and ".join(f"`{name}`" for name in names)
+        issues.append(
+            warning(
+                IssueCode.ERRATUM_RELATIONSHIP_IGNORED,
+                f"{shown} on an erratum is ignored: errata only correct "
+                "the decision named in `erratum-for`; remove it, or "
+                "record the change in a new decision",
+            )
+        )
+    return Links(corrects=links.corrects)
+
+
 def _legacy_erratum(data: Mapping[str, object], issues: list[Issue]) -> None:
     """
     Reject the retired ``kind: erratum`` / ``corrects:`` shape.
@@ -371,7 +434,7 @@ def parse_fields(
     if is_erratum:
         erratum = _erratum_header(data, issues)
         decision_date = erratum.reported_date
-        corrects = _erratum_target(data, issues)
+        corrects = _not_self(adr_uuid, _erratum_target(data, issues), issues)
     else:
         erratum = None
         decision_date = _date_field(data, inferred, issues)
@@ -382,6 +445,8 @@ def parse_fields(
         obsoletes=_obsoletes(data, issues),
         corrects=corrects,
     )
+    if is_erratum:
+        links = _erratum_links(links, issues)
     signoff = _signoff(data, issues)
     issues.extend(_unknown_fields(data, is_erratum))
     return FieldValues(

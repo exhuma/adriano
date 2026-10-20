@@ -57,6 +57,11 @@ Design decisions worth recording for later phases:
 - **The erratum's own target.** On an erratum's page the ``corrects``
   link is reported as :class:`ErratumForInfo` and dropped from the
   outbound links.
+- **Errata of errata.** An erratum never lists errata of its own (its
+  page has no Errata section and a zero summary): errata correct
+  decisions. An erratum whose ``erratum-for`` resolves to another
+  erratum keeps ``erratum_for.resolved`` but gets the read-time
+  warning ``erratum_target_is_erratum``.
 
 Public API: :class:`OutboundLinkInfo`, :class:`InboundLinkInfo`,
 :class:`ErratumForInfo`, :class:`RecordRelationships`,
@@ -67,7 +72,7 @@ import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from app.domain.issues import Issue
+from app.domain.issues import Issue, IssueCode, warning
 from app.domain.relationships import (
     DisplayStatus,
     InboundLink,
@@ -165,7 +170,8 @@ class RecordRelationships:
     :param erratum_for: For an erratum, the decision it corrects.
     :param status: Derived display status.
     :param issues: Read-time relationship issues (``missing_target``,
-        ``ambiguous_target``, ``duplicate_uuid``).
+        ``ambiguous_target``, ``duplicate_uuid``,
+        ``erratum_target_is_erratum``).
     """
 
     outbound_links: tuple[OutboundLinkInfo, ...]
@@ -267,7 +273,7 @@ def _resolved_errata(
     :param summaries: The record's relationship summaries.
     :returns: The matching erratum rows, in store order.
     """
-    if record.adr_uuid is None:
+    if record.adr_uuid is None or record.record_kind is RecordKind.ERRATUM:
         return ()
     rows = store.list_errata_for(record.adr_uuid)
     if not rows:
@@ -288,10 +294,37 @@ def _corrects_key(index: RelationshipIndex, row: ErratumRow) -> str | None:
     :param row: The erratum row.
     :returns: The resolved key, or ``None``.
     """
-    for link in index.view(str(row.id)).outbound:
-        if link.link_type is LinkType.CORRECTS:
-            return link.target_key
-    return None
+    link = index.view(str(row.id)).first_link(LinkType.CORRECTS)
+    return None if link is None else link.target_key
+
+
+def _erratum_target_issues(
+    erratum_for: ErratumForInfo | None,
+    summaries: dict[str, RecordSummary],
+) -> tuple[Issue, ...]:
+    """
+    Flag an erratum whose ``erratum-for`` resolved to another erratum.
+
+    The domain cannot see this at validation time (it needs the
+    target's kind), so it is a read-time issue like ``missing_target``.
+
+    :param erratum_for: The viewed erratum's target, if any.
+    :param summaries: The record's relationship summaries.
+    :returns: One warning, or nothing.
+    """
+    if erratum_for is None or erratum_for.id is None:
+        return ()
+    target = summaries.get(str(erratum_for.id))
+    if target is None or target.record_kind is not RecordKind.ERRATUM:
+        return ()
+    return (
+        warning(
+            IssueCode.ERRATUM_TARGET_IS_ERRATUM,
+            f"`erratum-for` {erratum_for.uuid} is another erratum; an "
+            "erratum should correct a decision, so point it at the "
+            "decision the corrected erratum is for",
+        ),
+    )
 
 
 def _related_titles(
@@ -402,5 +435,5 @@ def build_relationships(
         errata=_resolved_errata(store, record, siblings, summaries),
         erratum_for=erratum_for,
         status=view.status,
-        issues=view.issues,
+        issues=view.issues + _erratum_target_issues(erratum_for, summaries),
     )
