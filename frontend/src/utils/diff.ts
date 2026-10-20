@@ -52,3 +52,35 @@ function classifyLine(text: string): DiffLineKind {
   }
   return "context";
 }
+
+/** The digests a record page knows about, for `hasComparableRevision`. */
+export interface KnownDigests {
+  /** The record's current digest. */
+  current: string;
+  /** The record's previous stored digest, if any. */
+  previous: string | null;
+  /** Digests from the identity's decision history. */
+  history: readonly string[];
+  /** Digests of identity siblings and competing candidates. */
+  others: readonly string[];
+}
+
+/**
+ * Whether the page knows any revision other than the current one, so
+ * a diff has something to compare against (docs/ui-review R-08: the
+ * Diff card is hidden otherwise). Mirrors the server's default base
+ * (last decided digest other than the current one, else the previous
+ * digest) and also counts siblings and competing candidates, which
+ * the Diff card offers as alternative bases.
+ *
+ * :param digests: The digests known to the page.
+ * :returns: `true` when at least one digest differs from `current`.
+ */
+export function hasComparableRevision(digests: KnownDigests): boolean {
+  const all = [
+    digests.previous,
+    ...digests.history,
+    ...digests.others,
+  ];
+  return all.some((digest) => digest !== null && digest !== digests.current);
+}

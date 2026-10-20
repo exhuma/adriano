@@ -2,7 +2,9 @@
 /**
  * Record detail page's validation-issues card: lists stored issues
  * by severity, with the severity announced to assistive tech even
- * though it is also conveyed by icon colour.
+ * though it is also conveyed by icon colour. Messages wrap in full
+ * instead of being cut at one line (docs/ui-review R-09), and the
+ * static list is not a tab stop (G-10).
  */
 import type { IssueOut } from "@/types/records";
 
@@ -14,8 +16,10 @@ defineProps<{
 
 <template>
   <v-card v-if="issues.length > 0" class="mb-4">
-    <v-card-title class="text-title-large">Validation issues</v-card-title>
-    <v-list density="compact">
+    <v-card-title tag="h2" class="text-title-large">
+      Validation issues
+    </v-card-title>
+    <v-list density="compact" :lines="false" tabindex="-1">
       <v-list-item v-for="(issue, index) in issues" :key="index">
         <template #prepend>
           <v-icon
@@ -24,21 +28,11 @@ defineProps<{
             aria-hidden="true"
           />
         </template>
-        <v-list-item-title>
-          <span class="sr-only">{{ issue.severity }}: </span>{{ issue.message }}
+        <v-list-item-title class="text-wrap text-break">
+          <span class="d-sr-only">{{ issue.severity }}: </span>
+          {{ issue.message }}
         </v-list-item-title>
       </v-list-item>
     </v-list>
   </v-card>
 </template>
-
-<style scoped>
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
-</style>

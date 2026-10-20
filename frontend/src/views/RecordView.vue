@@ -62,6 +62,7 @@ const {
   pageSubtitle,
   obsoletedByLinks,
   updatedByLinks,
+  showDiff,
 } = useRecordDetailView(detail);
 
 /** `v-snackbar`'s `v-model` is a boolean; this adapts the single
@@ -118,7 +119,10 @@ async function onDigestChanged(): Promise<void> {
   <section aria-labelledby="record-heading">
     <LoadingState v-if="loadState === 'loading'" text="Loading record…" />
 
-    <div v-else-if="loadState === 'not-found'" class="not-found">
+    <div
+      v-else-if="loadState === 'not-found'"
+      class="d-flex flex-column align-center text-center py-12 px-4"
+    >
       <v-icon icon="mdi-file-question-outline" size="48" color="medium-emphasis" />
       <h1
         id="record-heading"
@@ -206,6 +210,7 @@ async function onDigestChanged(): Promise<void> {
           />
 
           <DiffPanel
+            v-if="showDiff"
             :record-id="props.id"
             :current-digest="detail.metadata.digest"
             :previous-digest="detail.metadata.previous_digest"
@@ -223,7 +228,8 @@ async function onDigestChanged(): Promise<void> {
           <RecordSidebar
             :record-kind="detail.metadata.record_kind"
             :kind="detail.metadata.kind"
-            :approval-state="detail.approval.state"
+            :record-id="props.id"
+            :approval="detail.approval"
             :adr-uuid="detail.metadata.adr_uuid"
             :decision-date="detail.metadata.decision_date"
             :decision-date-inferred="detail.metadata.decision_date_inferred"
@@ -233,6 +239,8 @@ async function onDigestChanged(): Promise<void> {
             :inbound-links="detail.inbound_links"
             :siblings="detail.siblings"
             :legacy-signoff-entries="detail.legacy_signoff_unverified"
+            @decided="onDecided"
+            @digest-changed="onDigestChanged"
           />
         </v-col>
       </v-row>
@@ -240,12 +248,3 @@ async function onDigestChanged(): Promise<void> {
   </section>
 </template>
 
-<style scoped>
-.not-found {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 3rem 1rem;
-  text-align: center;
-}
-</style>

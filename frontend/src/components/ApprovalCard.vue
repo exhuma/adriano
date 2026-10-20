@@ -3,19 +3,18 @@
  * Approval card on the record detail page: state + explanation,
  * policy summary, indexed digest (short, with copy), decide
  * controls (or the visible reason decisions are blocked), and the
- * decision history. `DecisionDialog.vue` is the adapter that turns
- * an Accept/Reject click into a submitted decision. Wording switches
- * to the RFC "report → verify/reject" vocabulary when the viewed
- * record is itself an erratum; the underlying decide logic
+ * decision history. `DecideButtons.vue` (shared with the sidebar's
+ * summary card) holds the Accept/Reject buttons and their dialog.
+ * Wording switches to the RFC "report → verify/reject" vocabulary
+ * when the viewed record is itself an erratum; the decide logic
  * (`useDecision`) is unchanged -- actions stay accepted/rejected
  * either way.
  */
-import { ref } from "vue";
-
-import DecisionDialog from "@/components/DecisionDialog.vue";
+import CopyValueButton from "@/components/CopyValueButton.vue";
+import DecideButtons from "@/components/DecideButtons.vue";
 import DecisionHistoryTable from "@/components/DecisionHistoryTable.vue";
 import StatusChip from "@/components/StatusChip.vue";
-import type { ApprovalOut, DecisionAction, DecisionSummaryOut } from "@/types/approval";
+import type { ApprovalOut, DecisionSummaryOut } from "@/types/approval";
 import type { RecordKind, RecordState } from "@/types/records";
 import { shortDigest } from "@/utils/digest";
 import {
@@ -24,7 +23,7 @@ import {
   erratumStatusLabel,
 } from "@/utils/labels";
 
-const props = defineProps<{
+defineProps<{
   /** Approval state of the record's current content. */
   approval: ApprovalOut;
   /** Whether the viewed row is published or a candidate (only used
@@ -49,40 +48,6 @@ const emit = defineEmits<{
   /** The content changed while a decision was pending. */
   "digest-changed": [];
 }>();
-
-const dialogOpen = ref(false);
-const dialogAction = ref<DecisionAction>("accepted");
-const triggerButton = ref<HTMLElement | null>(null);
-const copied = ref(false);
-
-function openDialog(action: DecisionAction, event: MouseEvent): void {
-  dialogAction.value = action;
-  triggerButton.value = event.currentTarget as HTMLElement;
-  dialogOpen.value = true;
-}
-
-function onDialogClosed(open: boolean): void {
-  dialogOpen.value = open;
-  if (!open) {
-    // Focus returns to whichever button opened the dialog, so
-    // keyboard users land back where they were, not at the top of
-    // the page (module-ux-principles accessibility: visible focus).
-    triggerButton.value?.focus();
-  }
-}
-
-async function copyDigest(): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(props.approval.digest);
-    copied.value = true;
-    setTimeout(() => {
-      copied.value = false;
-    }, 2000);
-  } catch {
-    // Clipboard API unavailable; the digest is already visible and
-    // selectable as text, so this is a soft failure.
-  }
-}
 
 function policySummaryText(approval: ApprovalOut): string {
   const policy = approval.policy;
@@ -124,78 +89,33 @@ function policySummaryText(approval: ApprovalOut): string {
       <p class="text-body-medium mt-2">
         Indexed content digest:
         <code :title="approval.digest">{{ shortDigest(approval.digest) }}</code>
-        <v-btn
-          icon="mdi-content-copy"
-          size="x-small"
-          variant="text"
-          class="digest-copy-btn"
-          :aria-label="copied ? 'Copied digest to clipboard' : 'Copy digest to clipboard'"
-          @click="copyDigest"
-        />
-        <span v-if="copied" class="text-success">Copied!</span>
+        <CopyValueButton :value="approval.digest" label="digest" />
       </p>
 
-      <div v-if="approval.can_decide" class="mt-3 decide-actions">
-        <v-btn
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-check"
-          @click="openDialog('accepted', $event)"
-        >
-          {{ recordKind === "erratum" ? "Verify erratum" : "Accept" }}
-        </v-btn>
-        <v-btn
-          color="error"
-          variant="outlined"
-          prepend-icon="mdi-close"
-          @click="openDialog('rejected', $event)"
-        >
-          {{ recordKind === "erratum" ? "Reject erratum" : "Reject" }}
-        </v-btn>
-      </div>
-      <p v-else class="text-body-medium mt-3 decide-blocked">
+      <DecideButtons
+        v-if="approval.can_decide"
+        class="mt-3"
+        :record-id="recordId"
+        :record-kind="recordKind"
+        :digest="approval.digest"
+        @decided="(event) => emit('decided', event)"
+        @digest-changed="emit('digest-changed')"
+      />
+      <p
+        v-else
+        class="text-body-medium mt-3 d-flex align-center ga-1"
+      >
         <v-icon icon="mdi-information-outline" size="small" aria-hidden="true" />
         {{ approval.decide_blocked_reason }}
       </p>
     </v-card-text>
 
     <v-divider />
-    <v-card-title class="text-title-small">Decision history</v-card-title>
+    <v-card-title tag="h3" class="text-title-small">
+      Decision history
+    </v-card-title>
     <v-card-text>
       <DecisionHistoryTable :history="approval.history" :record-kind="recordKind" />
     </v-card-text>
-
-    <DecisionDialog
-      :model-value="dialogOpen"
-      :record-id="recordId"
-      :action="dialogAction"
-      :record-kind="recordKind"
-      :digest="approval.digest"
-      @update:model-value="onDialogClosed"
-      @decided="(event) => emit('decided', event)"
-      @digest-changed="emit('digest-changed')"
-    />
   </v-card>
 </template>
-
-<style scoped>
-.decide-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.decide-blocked {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-/* docs/ui-review G-08: see the identical rule and justification in
-   ShortIdCopy.vue -- same x-small, colourless `variant="text"` icon
-   button, same too-faint default focus ring. */
-.digest-copy-btn:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
-}
-</style>

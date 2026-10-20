@@ -441,6 +441,75 @@ describe("RecordView status banners and layout", () => {
     expect(wrapper.find("h1").text()).toBe("Erratum: orphaned");
   });
 
+  it("hides the Diff card when there is no prior revision (R-08)", async () => {
+    getRecord.mockResolvedValue(baseDetail());
+
+    const wrapper = await mountRecordView();
+
+    const headings = wrapper.findAll("h2").map((h) => h.text());
+    expect(headings).not.toContain("Diff");
+    expect(getRecordDiff).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain("No prior revision");
+  });
+
+  it("shows the Diff card when a prior revision exists", async () => {
+    const detail = baseDetail();
+    detail.metadata.previous_digest = "sha256-v1:old";
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    const headings = wrapper.findAll("h2").map((h) => h.text());
+    expect(headings).toContain("Diff");
+    expect(getRecordDiff).toHaveBeenCalled();
+  });
+
+  it("offers Accept/Reject in the sidebar and the approval card", async () => {
+    getRecord.mockResolvedValue(baseDetail());
+
+    const wrapper = await mountRecordView();
+
+    const sidebar = wrapper.find("aside");
+    const sidebarButtons = sidebar.findAll("button").map((b) => b.text());
+    expect(sidebarButtons).toEqual(
+      expect.arrayContaining(["Accept", "Reject"]),
+    );
+    const accepts = wrapper
+      .findAll("button")
+      .filter((b) => b.text() === "Accept");
+    expect(accepts).toHaveLength(2);
+  });
+
+  it("orders headings h1 > h2 sections/sidebar > h3 cards (G-05)", async () => {
+    const detail = baseDetail();
+    detail.issues = [
+      {
+        code: "obsolete_kind_field",
+        severity: "warning",
+        message: "something",
+      },
+    ];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.findAll("h1")).toHaveLength(1);
+    const h2s = wrapper.findAll("h2").map((h) => h.text());
+    expect(h2s).toEqual(
+      expect.arrayContaining([
+        "Validation issues",
+        "Approval",
+        "About this decision",
+      ]),
+    );
+    for (const h2 of wrapper.findAll("h2")) {
+      expect(h2.classes()).toContain("text-title-large");
+    }
+    const h3s = wrapper.findAll("aside h3").map((h) => h.text());
+    expect(h3s).toContain("Metadata");
+    expect(h3s).toContain("Provenance");
+  });
+
   it("puts the sidebar's metadata after the main column in document order", async () => {
     getRecord.mockResolvedValue(baseDetail());
 

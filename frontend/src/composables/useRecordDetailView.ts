@@ -11,6 +11,7 @@ import { ApiError } from "@/api";
 import type { DecisionAction } from "@/types/approval";
 import type { RecordDetail } from "@/types/records";
 import { forbiddenText, isForbidden } from "@/utils/apiErrors";
+import { hasComparableRevision } from "@/utils/diff";
 import { freshnessBannerText, provenanceText } from "@/utils/freshness";
 import {
   errataHeaderLinkText,
@@ -95,6 +96,9 @@ export interface RecordDetailView {
   obsoletedByLinks: Readonly<Ref<RecordDetail["inbound_links"]>>;
   /** Inbound `updated_by` links, for the updated-decision banner. */
   updatedByLinks: Readonly<Ref<RecordDetail["inbound_links"]>>;
+  /** Whether the Diff card has any other revision to compare
+   *  against; it is hidden otherwise (R-08). */
+  showDiff: Readonly<Ref<boolean>>;
 }
 
 /**
@@ -212,6 +216,22 @@ export function useRecordDetailView(
       : [],
   );
 
+  const showDiff = computed(() => {
+    if (!detail.value) {
+      return false;
+    }
+    const { metadata, approval, siblings } = detail.value;
+    return hasComparableRevision({
+      current: metadata.digest,
+      previous: metadata.previous_digest,
+      history: approval.history.map((event) => event.digest),
+      others: [
+        ...siblings.map((sibling) => sibling.digest),
+        ...approval.competing_candidates.map((c) => c.digest),
+      ],
+    });
+  });
+
   return {
     issueCounts,
     issueIndicator,
@@ -225,5 +245,6 @@ export function useRecordDetailView(
     pageSubtitle,
     obsoletedByLinks,
     updatedByLinks,
+    showDiff,
   };
 }

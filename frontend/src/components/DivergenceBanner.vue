@@ -45,7 +45,7 @@ defineProps<{
   </v-alert>
 
   <v-card v-if="competingCandidates.length > 0" class="mb-4">
-    <v-card-title class="text-title-large">
+    <v-card-title tag="h2" class="text-title-large">
       <v-icon icon="mdi-source-branch" size="small" aria-hidden="true" class="mr-1" />
       Competing candidates
     </v-card-title>
@@ -53,7 +53,7 @@ defineProps<{
       Other candidates of this same record hold different content. A
       decision on one never affects another.
     </v-card-text>
-    <v-list density="compact">
+    <v-list density="compact" tabindex="-1">
       <v-list-item v-for="candidate in competingCandidates" :key="candidate.id">
         <router-link :to="`/records/${candidate.id}`">
           {{ candidate.ref }}

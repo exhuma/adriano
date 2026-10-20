@@ -480,8 +480,8 @@ properties to reference) that restates the `text-title-large`/
 respectively, plus paragraph/list margins, so document body headings
 read below the page and section headings instead of at the browser's
 bold default. Sidebar field label/value pairs use a scoped
-`<v-defaults-provider>` (ladder step 3) around each card's `v-list`,
-not a global `VListItemTitle`/`VListItemSubtitle` default, because
+`<v-defaults-provider>` (ladder step 3) in `RecordSidebar.vue`
+(card titles `h3 text-title-medium`, list labels/values), not a global `VListItemTitle`/`VListItemSubtitle` default, because
 other uses of those components (e.g. `RecordIssuesList.vue`'s
 validation messages) are plain sentences, not field labels.
 `frontend/tests/typography-scale.test.ts` scans `src/` for the retired

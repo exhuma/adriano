@@ -2,9 +2,11 @@
  * Ensure `ApprovalCard` switches to the RFC "report → verify/reject"
  * wording when the viewed record is an erratum (buttons, dialog
  * title via `DecisionDialog`, and the state explanation), while a
- * normal decision keeps the plain Accept/Reject wording.
+ * normal decision keeps the plain Accept/Reject wording; that focus
+ * returns to the button that opened the decision dialog; and that the
+ * card's titles are headings (docs/ui-review G-05).
  */
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
 import vuetify from "@/plugins/vuetify";
@@ -71,5 +73,44 @@ describe("ApprovalCard", () => {
     // wording ("Pending approval"), for the erratum's own status.
     expect(wrapper.text()).toContain("Reported");
     expect(wrapper.text()).not.toContain("Pending approval");
+  });
+});
+
+describe("ApprovalCard dialog focus", () => {
+  it("returns focus to Accept after the dialog is cancelled", async () => {
+    const wrapper = mount(ApprovalCard, {
+      props: {
+        approval: baseApproval(),
+        kind: "published",
+        recordKind: "decision",
+        recordId: "11111111-1111-1111-1111-111111111111",
+      },
+      global: { plugins: [vuetify] },
+      attachTo: document.body,
+    });
+
+    const accept = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Accept")!;
+    await accept.trigger("click");
+    await flushPromises();
+    const cancel = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Cancel",
+    );
+    expect(cancel).toBeDefined();
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    cancel!.click();
+    await flushPromises();
+
+    expect(document.activeElement).toBe(accept.element);
+    wrapper.unmount();
+  });
+
+  it("uses an h2 card title and an h3 for the decision history", () => {
+    const wrapper = mountCard("decision");
+
+    expect(wrapper.find("h2").text()).toBe("Approval");
+    expect(wrapper.find("h3").text()).toBe("Decision history");
   });
 });

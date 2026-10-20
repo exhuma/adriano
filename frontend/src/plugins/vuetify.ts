@@ -83,6 +83,15 @@ export default createVuetify({
     VProgressLinear: {
       color: "primary",
     },
+    // docs/ui-review G-05: card titles that are real headings
+    // (`tag="h2"`/`"h3"`) keep the browser's heading margins, which
+    // Vuetify's reset does not zero, adding ~16px above and below
+    // inside the card. `class` defaults merge with a call site's own
+    // classes, so every card title gets `ma-0` and its spacing comes
+    // from the card title's own padding, heading or not.
+    VCardTitle: {
+      class: "ma-0",
+    },
     // docs/ui-review G-07: one card style everywhere -- flat with a
     // low-emphasis border from the theme's default
     // `border-color`/`border-opacity` (12% black in light, 12% white

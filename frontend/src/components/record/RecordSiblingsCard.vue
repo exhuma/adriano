@@ -2,7 +2,8 @@
 /**
  * Record detail page's "Other revisions" card: other published or
  * candidate rows sharing this record's identity, each with its own
- * approval-state chip.
+ * approval-state chip. Heading level comes from `RecordSidebar`'s
+ * scoped defaults; the list is not a tab stop itself (G-10).
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { SiblingOut } from "@/types/records";
@@ -16,8 +17,8 @@ defineProps<{
 
 <template>
   <v-card v-if="siblings.length > 0" class="mb-3" density="compact">
-    <v-card-title class="text-title-medium">Other revisions</v-card-title>
-    <v-list density="compact">
+    <v-card-title>Other revisions</v-card-title>
+    <v-list tabindex="-1">
       <v-list-item v-for="sibling in siblings" :key="sibling.id">
         <router-link :to="`/records/${sibling.id}`">
           {{ sibling.title }}
