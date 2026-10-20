@@ -14,6 +14,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 07 | Approval slice | done | see git log | see notes |
 | 08 | Samples, deploy, demo | done | see git log | see notes |
 | 09 | Benchmark & report | done | 3db7e88 d0ee735 c0e831c 22386ae f154ddf | see notes |
+| 10 | UI sidebar + erratum format | in-progress | | post-Phase-1 change authorized by the product owner (2026-10-20) |
 
 ## Handoff notes
 

@@ -371,6 +371,17 @@ Common registration fields: `id`, `type`, `scope`, `path`,
 - Runtime config via `config.js` rendered by the nginx entrypoint
   (`module-runtime-config-spa`); dev auth never in runtime config.
 
+## Authorized post-Phase-1 change (2026-10-20)
+
+The product owner authorized, after reviewing Phase 1, a record-page redesign
+(status banners at the top, metadata in a sidebar, modelled on
+rfc-editor.org/info pages) and a dedicated erratum format replacing the
+`kind: erratum` + `corrects:` ADR shape. See `phases/10-ui-errata.md`. Errata
+are separate files with `erratum-for`, `type`, optional `section`/
+`reported-by`/`date`, and body sections "Original text", "Corrected text",
+"Notes"; their status reuses accept/reject (Reported / Verified / Rejected).
+The old shape is rejected with `legacy_erratum_format`.
+
 ## Deferred (do not build)
 
 Admin/config UI, webhooks, more source types, quorum/multi-stage review,
