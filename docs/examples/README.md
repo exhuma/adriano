@@ -15,8 +15,13 @@ full field reference.
   `samples/adr-root/platform/doc/decisions/2025-02-20-add-rest-gateway-for-grpc-services.md`
 - `updates` (newer record points at the earlier one it updates):
   `samples/adr-root/central/doc/decisions/2025-08-01-add-trace-id-propagation.md`
-- Erratum (`kind: erratum`, `corrects`):
-  `samples/adr-root/platform/doc/decisions/2025-05-01-erratum-for-grpc-adoption.md`
+- Erratum (`erratum-for`, `type: technical`, "Original text" /
+  "Corrected text" / "Notes"):
+  `samples/adr-root/platform/doc/decisions/errata/2025-05-01-grpc-adoption-erratum.md`
+- Editorial erratum (`type: editorial`):
+  `samples/adr-root/payments/doc/decisions/errata/2023-12-04-stripe-wording-fix.md`
+- Erratum candidate pushed against a published decision (CI push demo):
+  `samples/candidates/2026-02-01-erratum-ledger-snapshot-cadence.md`
 - Invalid YAML frontmatter (`bad_yaml`):
   `samples/adr-root/platform/doc/decisions/2025-01-05-broken-yaml-frontmatter.md`
 - Invalid UUID (`bad_uuid`, falls back to source-location identity):

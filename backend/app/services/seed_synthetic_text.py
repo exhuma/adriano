@@ -9,13 +9,16 @@ module under the project's module-size limit.
 Public API: :data:`VOCABULARY`, :data:`CONTEXT_SENTENCES`,
 :data:`DECISION_SENTENCES`, :data:`CONSEQUENCE_SENTENCES`,
 :func:`sentence`, :func:`body`, :func:`title`, :func:`slug`,
-:func:`decision_date`, :func:`signoff_emails`.
+:func:`decision_date`, :func:`signoff_emails`, :func:`reporter_email`,
+:func:`render_document`.
 """
 
 import datetime
 import random
 import re
 from collections.abc import Sequence
+
+import yaml
 
 __all__ = [
     "CONSEQUENCE_SENTENCES",
@@ -26,6 +29,8 @@ __all__ = [
     "VOCABULARY",
     "body",
     "decision_date",
+    "render_document",
+    "reporter_email",
     "signoff_emails",
     "slug",
     "sentence",
@@ -225,3 +230,29 @@ def signoff_emails(rng: random.Random) -> list[str]:
         f"reviewer{rng.randrange(1, 999)}@{rng.choice(_LEGACY_DOMAINS)}"
         for _ in range(count)
     ]
+
+
+def reporter_email(rng: random.Random) -> str:
+    """
+    Build one fake erratum ``reported-by`` address.
+
+    :param rng: Random source.
+    :returns: The address.
+    """
+    return f"reporter{rng.randrange(1, 999)}@{rng.choice(_LEGACY_DOMAINS)}"
+
+
+def render_document(fields: dict[str, object], body_text: str) -> bytes:
+    """
+    Render frontmatter and body to the raw document bytes.
+
+    Shared by decision and erratum generation
+    (:mod:`app.services.seed_synthetic_gen` and
+    :mod:`app.services.seed_synthetic_errata`).
+
+    :param fields: Frontmatter fields.
+    :param body_text: Markdown body.
+    :returns: The encoded document.
+    """
+    front = yaml.safe_dump(fields, sort_keys=False, default_flow_style=False)
+    return f"---\n{front}---\n{body_text}".encode()

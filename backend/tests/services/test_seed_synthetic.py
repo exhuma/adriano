@@ -9,7 +9,7 @@ import pytest
 from app.catalog_config import CatalogConfig, parse_catalog_config
 from app.cli import EXIT_OK, EXIT_USAGE, main
 from app.config import Settings
-from app.domain.issues import Severity
+from app.domain.issues import IssueCode, Severity
 from app.domain.records import parse_record
 from app.services.seed_synthetic import (
     SeedConfig,
@@ -104,9 +104,34 @@ def test_generated_documents_are_mostly_valid() -> None:
     # The generator deliberately injects an error-causing issue (missing
     # uuid or a bad date) for ~5% x 2/3 of records; allow generous slack.
     assert error_count / len(docs) < 0.1
-    # Body length bounds from the module docstring.
+    # Body length bounds from the module docstring (decisions only;
+    # errata are short RFC-style reports, never a full ADR body).
     for record in parsed:
-        assert 300 <= len(record.body) <= 3100
+        if record.erratum is None:
+            assert 300 <= len(record.body) <= 3100
+
+
+def test_generated_errata_parse_with_content_and_no_format_issues() -> None:
+    """Ensure synthetic errata parse as errata with no format issues."""
+    docs = generate_published(records=300, projects=15, seed=11, today=_TODAY)
+    errata = [
+        record
+        for doc in docs
+        for record in (
+            parse_record(doc.content, filename=doc.path.rsplit("/", 1)[-1]),
+        )
+        if record.erratum is not None
+    ]
+    assert errata, "the seed must generate at least one erratum"
+    bad_codes = {
+        IssueCode.LEGACY_ERRATUM_FORMAT,
+        IssueCode.ERRATUM_MISSING_CORRECTED_TEXT,
+    }
+    for record in errata:
+        assert record.erratum is not None  # narrowed by the filter above
+        assert record.erratum.corrected
+        found_codes = {issue.code for issue in record.issues}
+        assert not found_codes & bad_codes
 
 
 def test_link_targets_exist_among_earlier_records() -> None:

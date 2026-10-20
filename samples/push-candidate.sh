@@ -5,13 +5,28 @@
 #
 # Usage:
 #   samples/push-candidate.sh <file.md> <project> <ref> [source_id] \
-#     [delivery_id]
+#     [delivery_id] [path]
+#
+# `path` is the file's path inside the project (the intake `path`
+# field: used for title/date fallbacks and provenance). It defaults to
+# `<registration path>/<adr_uuid>.md`, where `adr_uuid` is the pushed
+# file's own `uuid` -- for an erratum this is the erratum's own uuid,
+# not its `erratum-for` target. Pass an explicit `errata/<file>.md`
+# path to keep an erratum candidate's push consistent with where it
+# would land once published (see "erratum candidate" example below).
 #
 # Example (the "use Redis" candidate demo, against the demo stack):
 #   export ADRIANO_PUSH_TOKEN_CENTRAL=<token from .env.demo>
 #   samples/push-candidate.sh \
 #     samples/candidates/2026-01-05-use-redis-for-caching.md \
 #     platform feature/redis-cache
+#
+# Example (erratum candidate demo, see docs/examples/README.md):
+#   export ADRIANO_PUSH_TOKEN_CENTRAL=<token from .env.demo>
+#   samples/push-candidate.sh \
+#     samples/candidates/2026-02-01-erratum-ledger-snapshot-cadence.md \
+#     payments feature/erratum-ledger-snapshot-cadence central "" \
+#     doc/decisions/errata/2026-02-01-erratum-ledger-snapshot-cadence.md
 #
 # Reads the push token from the environment variable named
 # ADRIANO_PUSH_TOKEN_<SOURCE_ID UPPERCASED> (default source id: central,
@@ -25,11 +40,13 @@
 #                         directly if you published one instead).
 set -euo pipefail
 
-file="${1:?usage: push-candidate.sh <file.md> <project> <ref> [source_id] [delivery_id]}"
-project="${2:?usage: push-candidate.sh <file.md> <project> <ref> [source_id] [delivery_id]}"
-ref="${3:?usage: push-candidate.sh <file.md> <project> <ref> [source_id] [delivery_id]}"
+usage="usage: push-candidate.sh <file.md> <project> <ref> [source_id] [delivery_id] [path]"
+file="${1:?$usage}"
+project="${2:?$usage}"
+ref="${3:?$usage}"
 source_id="${4:-central}"
 delivery_id="${5:-}"
+path="${6:-}"
 
 api_base="${ADRIANO_API_BASE_URL:-http://localhost:8180}"
 
@@ -76,11 +93,11 @@ PY
 )"
 
 body="$(python3 - "$file" "$source_id" "$project" "$adr_uuid" "$ref" \
-    "$delivery_id" <<'PY'
+    "$delivery_id" "$path" <<'PY'
 import json
 import sys
 
-file_path, source_id, project, adr_uuid, ref, delivery_id = sys.argv[1:7]
+file_path, source_id, project, adr_uuid, ref, delivery_id, path = sys.argv[1:8]
 
 with open(file_path, "r", encoding="utf-8") as fh:
     content = fh.read()
@@ -94,6 +111,8 @@ payload = {
 }
 if delivery_id:
     payload["delivery_id"] = delivery_id
+if path:
+    payload["path"] = path
 
 print(json.dumps(payload))
 PY

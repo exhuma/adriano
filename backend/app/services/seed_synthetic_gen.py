@@ -20,7 +20,10 @@ Realism, kept deliberately small:
 - a share of records link ``updates``/``obsoletes`` to an earlier
   record (by UUID, catalog-wide, matching how
   :mod:`app.services.record_relationships` resolves links); a smaller
-  share are errata (``erratum-for``) correcting an earlier one;
+  share are errata (``erratum-for``), small RFC-style reports against
+  an earlier decision -- not a full ADR body (see
+  :mod:`app.services.seed_synthetic_errata`, which owns their
+  generation);
 - a share use the legacy ``deprecates`` alias or a legacy
   ``signed-off-by`` list;
 - a share carry one deliberate validation issue (missing ``uuid``, a
@@ -35,14 +38,13 @@ Public API: :class:`GeneratedPublished`, :class:`GeneratedCandidate`,
 import datetime
 import random
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-
-import yaml
 
 from app.domain.approval import DecisionAction
 from app.domain.hashing import content_digest
 from app.services import seed_synthetic_text as text
+from app.services.seed_synthetic_errata import build_erratum_document
 
 __all__ = [
     "GeneratedCandidate",
@@ -55,7 +57,8 @@ __all__ = [
 
 #: Chance a record links to an earlier one via ``updates``/``obsoletes``.
 LINK_RATIO = 0.15
-#: Chance a record is an ``erratum`` correcting an earlier one.
+#: Chance a record is an erratum (``erratum-for``) against an earlier
+#: decision, instead of a new decision.
 ERRATUM_RATIO = 0.05
 #: Of an ``obsoletes`` link, the chance it is spelled as legacy
 #: ``deprecates`` instead.
@@ -128,22 +131,20 @@ def _link_fields(
     rng: random.Random, previous: Sequence[uuid.UUID]
 ) -> dict[str, object]:
     """
-    Decide this record's erratum/updates/obsoletes relationship, if any.
+    Decide this record's ``updates``/``obsoletes`` relationship, if any.
 
     :param rng: Random source.
     :param previous: UUIDs of earlier, linkable records.
     :returns: Extra frontmatter fields (empty when none apply).
     """
-    if previous and rng.random() < ERRATUM_RATIO:
-        return {"erratum-for": str(rng.choice(previous)), "type": "technical"}
-    if previous and rng.random() < LINK_RATIO:
-        target = str(rng.choice(previous))
-        if rng.random() < 0.5:
-            return {"updates": [target]}
-        if rng.random() < LEGACY_DEPRECATES_RATIO:
-            return {"deprecates": target}
-        return {"obsoletes": [target]}
-    return {}
+    if not previous or rng.random() >= LINK_RATIO:
+        return {}
+    target = str(rng.choice(previous))
+    if rng.random() < 0.5:
+        return {"updates": [target]}
+    if rng.random() < LEGACY_DEPRECATES_RATIO:
+        return {"deprecates": target}
+    return {"obsoletes": [target]}
 
 
 def _inject_issue(rng: random.Random, fields: dict[str, object]) -> None:
@@ -186,25 +187,11 @@ def _document_fields(
         "decision-date": decision_date.isoformat(),
     }
     fields.update(_link_fields(rng, previous))
-    if "erratum-for" in fields:
-        fields["date"] = fields.pop("decision-date")
     if rng.random() < LEGACY_SIGNOFF_RATIO:
         fields["signed-off-by"] = text.signoff_emails(rng)
     if rng.random() < ISSUE_RATIO:
         _inject_issue(rng, fields)
     return fields
-
-
-def _render(fields: dict[str, object], body: str) -> bytes:
-    """
-    Render frontmatter and body to the raw document bytes.
-
-    :param fields: Frontmatter fields.
-    :param body: Markdown body.
-    :returns: The encoded document.
-    """
-    front = yaml.safe_dump(fields, sort_keys=False, default_flow_style=False)
-    return f"---\n{front}---\n{body}".encode()
 
 
 def _published_document(
@@ -214,19 +201,41 @@ def _published_document(
     project: str,
     path_prefix: str,
     previous: list[uuid.UUID],
+    bodies: Mapping[uuid.UUID, str],
     today: datetime.date,
-) -> GeneratedPublished:
+) -> tuple[GeneratedPublished, str | None]:
     """
     Generate one published document and its filename.
+
+    A share of calls instead generate an erratum against an earlier
+    decision drawn from *bodies* (never against another erratum, since
+    those have no comparable body to quote from).
 
     :param rng: Random source.
     :param index: Global record index (guarantees a unique filename).
     :param project: Owning project path.
     :param path_prefix: ADR directory inside the project.
-    :param previous: UUIDs of earlier, linkable records.
-    :param today: Anchor date for decision dates.
-    :returns: The generated document.
+    :param previous: UUIDs of earlier, linkable records (any kind).
+    :param bodies: Rendered bodies of earlier *decisions* only, keyed by
+        UUID; erratum targets are drawn from here.
+    :param today: Anchor date for decision/report dates.
+    :returns: The generated document, and its decision body for later
+        erratum quoting (``None`` for an erratum document).
     """
+    if bodies and rng.random() < ERRATUM_RATIO:
+        target = rng.choice(tuple(bodies))
+        path, content, adr_uuid = build_erratum_document(
+            rng,
+            index=index,
+            path_prefix=path_prefix,
+            target=target,
+            target_body=bodies[target],
+            today=today,
+        )
+        doc = GeneratedPublished(
+            project=project, path=path, content=content, adr_uuid=adr_uuid
+        )
+        return doc, None
     adr_uuid = uuid.UUID(int=rng.getrandbits(128))
     decision_date = text.decision_date(rng, today)
     title = text.title(rng)
@@ -238,19 +247,17 @@ def _published_document(
         previous=previous,
     )
     body = text.body(rng)
-    if "erratum-for" in fields:
-        # Minimal erratum shape; Task 4 of phase 10 owns the real errata.
-        body = "## Corrected text\n\n" + body.replace("## ", "### ")
-    content = _render(fields, body)
+    content = text.render_document(fields, body)
     slug = text.slug(title)
     filename = f"{decision_date.isoformat()}-{slug}-{index:05d}.md"
     kept_uuid = adr_uuid if "uuid" in fields else None
-    return GeneratedPublished(
+    doc = GeneratedPublished(
         project=project,
         path=f"{path_prefix}/{filename}",
         content=content,
         adr_uuid=kept_uuid,
     )
+    return doc, body
 
 
 def generate_published(
@@ -281,19 +288,23 @@ def generate_published(
     anchor = today or datetime.date.today()
     project_names = [f"proj-{i:03d}" for i in range(max(projects, 1))]
     previous: list[uuid.UUID] = []
+    bodies: dict[uuid.UUID, str] = {}
     result: list[GeneratedPublished] = []
     for index in range(records):
         project = project_names[index % len(project_names)]
-        doc = _published_document(
+        doc, body = _published_document(
             rng,
             index=index,
             project=project,
             path_prefix=path_prefix,
             previous=previous,
+            bodies=bodies,
             today=anchor,
         )
         if doc.adr_uuid is not None:
             previous.append(doc.adr_uuid)
+            if body is not None:
+                bodies[doc.adr_uuid] = body
         result.append(doc)
     return result
 
