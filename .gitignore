@@ -29,3 +29,6 @@ frontend/dist/
 
 # `task bench` output (see docs/benchmark.md)
 /bench-results.json
+
+# Local catalog configuration (copy of catalog.example.yaml / catalog.demo.yaml)
+/catalog.yaml
