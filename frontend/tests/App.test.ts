@@ -140,11 +140,81 @@ describe("App", () => {
       permissions: ["read", "operate"],
       reviewer: { eligible: false, reason: "n/a" },
     };
-    const { wrapper } = await mountApp();
+    // The display name/Sign-out pair now lives behind the `UserMenu`
+    // activator (Task 2); attach to the document so its teleported
+    // `v-menu` content can be found and opened.
+    const { wrapper } = await mountApp(document.body);
 
     expect(wrapper.text()).toContain("Alice");
-    expect(wrapper.text()).toContain("Sign out");
     expect(wrapper.text()).not.toContain("Sign in to browse the decision catalog");
+
+    const userMenuButton = Array.from(
+      document.body.querySelectorAll("button"),
+    ).find((btn) => btn.textContent?.includes("Alice")) as HTMLButtonElement;
+    userMenuButton.click();
+    await flushPromises();
+
+    expect(document.body.textContent).toContain("Sign out");
+  });
+
+  describe("backend health chip", () => {
+    const alice: MeOut = {
+      issuer: "adriano-dev",
+      subject: "alice",
+      display: "Alice",
+      email: null,
+      roles: ["admin"],
+      permissions: ["read", "operate"],
+      reviewer: { eligible: false, reason: "n/a" },
+    };
+
+    it("hides the health chip while the backend is healthy (decision 1)", async () => {
+      meRef.value = alice;
+      healthState.value = "ok";
+      const { wrapper } = await mountApp();
+
+      expect(wrapper.text()).not.toContain("Backend online");
+      expect(wrapper.text()).not.toContain("Backend degraded");
+      expect(wrapper.text()).not.toContain("Backend unreachable");
+    });
+
+    it("shows the health chip when the backend is degraded", async () => {
+      meRef.value = alice;
+      healthState.value = "degraded";
+      const { wrapper } = await mountApp();
+
+      expect(wrapper.text()).toContain("Backend degraded");
+    });
+
+    it("shows the health chip when the backend is unreachable (offline)", async () => {
+      meRef.value = alice;
+      healthState.value = "error";
+      const { wrapper } = await mountApp();
+
+      expect(wrapper.text()).toContain("Backend unreachable");
+    });
+  });
+
+  it("puts the brand before the nav links, left-aligned after it", async () => {
+    meRef.value = {
+      issuer: "adriano-dev",
+      subject: "alice",
+      display: "Alice",
+      email: null,
+      roles: ["admin"],
+      permissions: ["read", "operate"],
+      reviewer: { eligible: false, reason: "n/a" },
+    };
+    const { wrapper } = await mountApp();
+
+    const text = wrapper.text();
+    const brandIndex = text.indexOf("adriano");
+    const catalogIndex = text.indexOf("Catalog");
+    const sourcesIndex = text.indexOf("Sources");
+
+    expect(brandIndex).toBeGreaterThanOrEqual(0);
+    expect(catalogIndex).toBeGreaterThan(brandIndex);
+    expect(sourcesIndex).toBeGreaterThan(catalogIndex);
   });
 
   it("shows a blocking dialog instead of looping when the re-auth guard fails", async () => {
@@ -173,10 +243,21 @@ describe("App", () => {
     it("does not render the 'Open menu' button at md and up (unchanged layout)", async () => {
       mdAndUpRef.value = true;
       meRef.value = alice;
-      const { wrapper } = await mountApp();
+      // The display name/Sign-out pair lives behind the `UserMenu`
+      // activator; attach to the document so its teleported content
+      // can be opened and found.
+      const { wrapper } = await mountApp(document.body);
 
       expect(wrapper.find('[aria-label="Open menu"]').exists()).toBe(false);
-      expect(wrapper.text()).toContain("Sign out");
+      expect(wrapper.text()).toContain("Alice");
+
+      const userMenuButton = Array.from(
+        document.body.querySelectorAll("button"),
+      ).find((btn) => btn.textContent?.includes("Alice")) as HTMLButtonElement;
+      userMenuButton.click();
+      await flushPromises();
+
+      expect(document.body.textContent).toContain("Sign out");
     });
 
     it("keeps the product name and a shortened DEV chip visible, collapsing the rest behind 'Open menu'", async () => {
@@ -198,9 +279,12 @@ describe("App", () => {
       ).not.toBeNull();
     });
 
-    it("opens to reveal Catalog/Sources, backend status, the configuration warning, and the signed-in user's name/Sign out", async () => {
+    it("opens to reveal Catalog/Sources, backend status, the configuration warning, the theme choice, and the signed-in user's name/Sign out", async () => {
+      // Degraded, not "ok": decision 1 hides the health row entirely
+      // while healthy, so a non-default state is needed to see it.
+      healthState.value = "degraded";
       healthPayload.value = {
-        status: "ok",
+        status: "degraded",
         database: "ok",
         auth: "dev",
         rbac: "configured",
@@ -217,10 +301,29 @@ describe("App", () => {
 
       expect(document.body.textContent).toContain("Catalog");
       expect(document.body.textContent).toContain("Sources");
-      expect(document.body.textContent).toContain("Backend online");
+      expect(document.body.textContent).toContain("Backend degraded");
       expect(document.body.textContent).toContain("Configuration issue");
       expect(document.body.textContent).toContain("Alice");
+      // The theme choice (Task 2, decision 6) merges into the
+      // collapsed menu instead of duplicating a second control.
+      expect(document.body.textContent).toContain("Theme");
+      expect(document.body.textContent).toContain("Light");
+      expect(document.body.textContent).toContain("Dark");
+      expect(document.body.textContent).toContain("System");
       expect(document.body.textContent).toContain("Sign out");
+    });
+
+    it("hides the backend-status row in the collapsed menu while healthy", async () => {
+      meRef.value = alice;
+      await mountApp(document.body);
+
+      const menuButton = document.querySelector(
+        'button[aria-label="Open menu"]',
+      ) as HTMLButtonElement;
+      menuButton.click();
+      await flushPromises();
+
+      expect(document.body.textContent).not.toContain("Backend online");
     });
 
     it("closes on Escape and returns focus to the 'Open menu' button", async () => {

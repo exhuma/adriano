@@ -106,8 +106,8 @@ export default createVuetify({
       hideDetails: "auto",
     },
     // docs/ui-review G-02/G-03: one page width for every route.
-    // Task 2 wires the app bar into the same container and drops
-    // `meta.wide`/`.container--wide`.
+    // Task 2 wires the app bar into the same container (`App.vue`)
+    // and dropped `meta.wide`/`.container--wide`.
     VContainer: {
       maxWidth: 1360,
     },

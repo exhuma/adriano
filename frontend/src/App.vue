@@ -14,6 +14,7 @@ import AppBarMenu from "@/components/AppBarMenu.vue";
 import AuthBlockingScreen from "@/components/AuthBlockingScreen.vue";
 import SignInScreen from "@/components/SignInScreen.vue";
 import StatusChip from "@/components/StatusChip.vue";
+import UserMenu from "@/components/UserMenu.vue";
 import { devAuthEnabled } from "@/config";
 import { useAuth } from "@/composables/useAuth";
 import { useHealth } from "@/composables/useHealth";
@@ -68,13 +69,6 @@ const devDialogOpen = ref(false);
  *  regardless of auth state -- it is how sign-in completes. */
 const isCallbackRoute = computed(() => route.name === "auth-callback");
 
-/** Routes that opt into a wider container (currently only the record
- *  detail page, whose two-column layout needs more width than the
- *  rest of the app -- see `router/index.ts` `meta.wide`). Scoped to
- *  this one route by a class on the shared container, so every other
- *  page keeps its current width. */
-const wideContainer = computed(() => route.meta.wide === true);
-
 /** `/healthz` reports the backend cannot authenticate anyone at all
  *  (no OIDC and no dev secret configured) -- distinct from "nobody
  *  has signed in yet": nobody *can*. */
@@ -125,6 +119,17 @@ const healthChip = computed(() => {
   }
 });
 
+/** Product owner decision 1 (`DECISIONS.md` "Phase 11 updates";
+ *  docs/ui-review G-04): the backend being healthy is the default,
+ *  uninformative state, so the chip is hidden for it -- and for the
+ *  transient "checking" state on first load, which is neither
+ *  "degraded" nor "offline" and would otherwise flash before the
+ *  first `/healthz` response. It appears only once there is
+ *  something to report. */
+const showHealthChip = computed(
+  () => healthState.value === "degraded" || healthState.value === "error",
+);
+
 async function handleSignOut(): Promise<void> {
   await signOut();
 }
@@ -135,83 +140,110 @@ async function handleSignOut(): Promise<void> {
     <a class="skip-link" href="#main-content">Skip to main content</a>
 
     <v-app-bar :elevation="1">
-      <v-app-bar-title>adriano</v-app-bar-title>
-
-      <template v-if="mdAndUp && (signedIn || isCallbackRoute)">
-        <v-btn to="/" variant="text">Catalog</v-btn>
-        <v-btn to="/sources" variant="text">Sources</v-btn>
-      </template>
-
-      <v-spacer />
-
       <!--
-        Mode indicator for an active dev-login session
-        (module-ux-principles "UI modes"): always expanded, never
-        hidden behind a hover or an overflow menu, states what is in
-        effect, on every viewport -- including xs/sm, where it is the
-        only app-bar item besides the product name that stays outside
-        `AppBarMenu` below. `role="status" aria-live="polite"` on the
-        wrapper so entering/leaving the mode is announced, not just
-        shown. Below md the label shortens to "DEV" to fit; the full
-        meaning moves to `aria-label`/`title` so it is never lost.
+        docs/ui-review G-02/G-03: wrap the bar's contents in a
+        v-container with the same max-width default as `v-main`'s
+        container below, so the brand, nav, and right-hand cluster
+        align with the page content's edges instead of hugging the
+        viewport edges. `flex-0-0` ("flex: 0 0 auto") on the title
+        overrides Vuetify's `.v-toolbar-title { flex: 1 1 }` (basis
+        0%, so `flex-grow-0` alone collapses it to zero width): it
+        otherwise competes with `v-spacer` for leftover space, which
+        is what made the nav's position drift with the signed-in
+        user's display-name width -- G-02's evidence.
       -->
-      <span
-        v-if="authMode === 'dev'"
-        role="status"
-        aria-live="polite"
-        class="mr-4"
-      >
-        <StatusChip
-          icon="mdi-flask-outline"
-          :text="mdAndUp ? 'DEV LOGIN' : 'DEV'"
-          color="warning"
-          :aria-label="mdAndUp ? undefined : 'DEV LOGIN: development login mode is active'"
-        />
-      </span>
+      <v-container class="d-flex align-center h-100">
+        <v-app-bar-title class="flex-0-0 mr-2">adriano</v-app-bar-title>
 
-      <template v-if="mdAndUp">
-        <router-link
-          v-if="hasConfigProblem"
-          to="/sources"
-          class="mr-4 config-warning-link"
-          aria-label="Configuration issue detected; go to Sources for details"
+        <template v-if="mdAndUp && (signedIn || isCallbackRoute)">
+          <v-btn to="/" variant="text">Catalog</v-btn>
+          <v-btn to="/sources" variant="text">Sources</v-btn>
+        </template>
+
+        <v-spacer />
+
+        <!--
+          Mode indicator for an active dev-login session
+          (module-ux-principles "UI modes"): always expanded, never
+          hidden behind a hover or an overflow menu, states what is in
+          effect, on every viewport -- including xs/sm, where it is the
+          only app-bar item besides the product name that stays outside
+          `AppBarMenu` below. `role="status" aria-live="polite"` on the
+          wrapper so entering/leaving the mode is announced, not just
+          shown. Below md the label shortens to "DEV" to fit; the full
+          meaning moves to `aria-label`/`title` so it is never lost.
+          Colour is "info", not "warning": a dev login is a deliberate,
+          reversible mode, not a fault, so it should not read as an
+          alarm (docs/ui-review G-04; module-ux-principles "UI modes"
+          colour rule) -- "info" still reaches 4.5:1 as chip text in
+          both themes (`tests/plugins/vuetify.test.ts`).
+        -->
+        <span
+          v-if="authMode === 'dev'"
+          role="status"
+          aria-live="polite"
+          class="mr-4"
         >
           <StatusChip
-            icon="mdi-cog-outline"
-            text="Configuration issue"
-            color="warning"
+            icon="mdi-flask-outline"
+            :text="mdAndUp ? 'DEV LOGIN' : 'DEV'"
+            color="info"
+            :aria-label="mdAndUp ? undefined : 'DEV LOGIN: development login mode is active'"
           />
-        </router-link>
-
-        <StatusChip
-          :icon="healthChip.icon"
-          :text="healthChip.text"
-          :color="healthChip.color"
-          class="mr-4"
-        />
-
-        <span v-if="signedIn" class="mr-2 text-body-2 d-none d-sm-inline">
-          {{ me!.display }}
         </span>
-        <v-btn v-if="signedIn" variant="text" prepend-icon="mdi-logout" @click="handleSignOut">
-          Sign out
-        </v-btn>
-      </template>
 
-      <!--
-        xs/sm: everything above besides the product name and the mode
-        indicator collapses into one menu button, instead of shrinking
-        or clipping (Fitt's/Hick's law: one large, edge-anchored
-        target beats several cramped ones).
-      -->
-      <AppBarMenu
-        v-else
-        :show-nav="signedIn || isCallbackRoute"
-        :has-config-problem="hasConfigProblem"
-        :health="healthChip"
-        :user-display="signedIn ? me!.display : null"
-        @sign-out="handleSignOut"
-      />
+        <template v-if="mdAndUp">
+          <router-link
+            v-if="hasConfigProblem"
+            to="/sources"
+            class="mr-4 config-warning-link"
+            aria-label="Configuration issue detected; go to Sources for details"
+          >
+            <StatusChip
+              icon="mdi-cog-outline"
+              text="Configuration issue"
+              color="warning"
+            />
+          </router-link>
+
+          <!--
+            docs/ui-review G-04, decision 1: the chip only carries
+            information when the backend is not OK, so the wrapper
+            (and its `role=status` region) stays in the DOM but is
+            empty while healthy, and gains the chip -- announced via
+            `aria-live` -- once there is something to report.
+          -->
+          <span role="status" aria-live="polite" class="mr-4">
+            <StatusChip
+              v-if="showHealthChip"
+              :icon="healthChip.icon"
+              :text="healthChip.text"
+              :color="healthChip.color"
+            />
+          </span>
+
+          <UserMenu
+            v-if="signedIn"
+            :display-name="me!.display"
+            @sign-out="handleSignOut"
+          />
+        </template>
+
+        <!--
+          xs/sm: everything above besides the product name and the mode
+          indicator collapses into one menu button, instead of shrinking
+          or clipping (Fitt's/Hick's law: one large, edge-anchored
+          target beats several cramped ones).
+        -->
+        <AppBarMenu
+          v-else
+          :show-nav="signedIn || isCallbackRoute"
+          :has-config-problem="hasConfigProblem"
+          :health="showHealthChip ? healthChip : null"
+          :user-display="signedIn ? me!.display : null"
+          @sign-out="handleSignOut"
+        />
+      </v-container>
 
       <v-progress-linear
         v-if="isLoading"
@@ -223,11 +255,7 @@ async function handleSignOut(): Promise<void> {
     </v-app-bar>
 
     <v-main>
-      <v-container
-        id="main-content"
-        tabindex="-1"
-        :class="{ 'container--wide': wideContainer }"
-      >
+      <v-container id="main-content" tabindex="-1">
         <router-view v-if="isCallbackRoute" />
 
         <AuthBlockingScreen
@@ -291,12 +319,5 @@ async function handleSignOut(): Promise<void> {
 
 .config-warning-link {
   text-decoration: none;
-}
-
-/* Record detail page only (`router/index.ts` `meta.wide`): raise the
-   container's max-width ceiling so its two-column layout has more
-   room. Still 100%-wide (and so unaffected) below that breakpoint. */
-.container--wide {
-  max-width: 1280px;
 }
 </style>

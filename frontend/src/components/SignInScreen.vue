@@ -21,7 +21,10 @@ defineEmits<{
 </script>
 
 <template>
-  <section aria-labelledby="sign-in-heading" class="sign-in">
+  <section
+    aria-labelledby="sign-in-heading"
+    class="sign-in d-flex flex-column align-center text-center py-14 px-4"
+  >
     <v-icon icon="mdi-shield-lock-outline" size="48" color="medium-emphasis" />
     <h1 id="sign-in-heading" class="text-h5 mt-2">
       Sign in to browse the decision catalog
@@ -31,7 +34,7 @@ defineEmits<{
       records, trigger polling, or record approvals.
     </p>
 
-    <div class="sign-in-actions mt-4">
+    <div class="sign-in-actions mt-4 d-flex flex-wrap ga-3 justify-center">
       <v-btn
         v-if="oidcAvailable"
         color="primary"
@@ -43,6 +46,7 @@ defineEmits<{
       </v-btn>
       <v-btn
         v-if="devAuthAvailable"
+        color="primary"
         variant="tonal"
         prepend-icon="mdi-flask-outline"
         @click="$emit('open-dev-login')"
@@ -59,20 +63,14 @@ defineEmits<{
 </template>
 
 <style scoped>
+/* Vuetify has no utility class for an arbitrary max-width value.
+   Without a cap the heading stretches to the full page width and
+   wraps badly at mid-size viewports (docs/ui-review A-01); this
+   widens the previous 32rem measure just enough to fix that while
+   keeping the screen narrow and centred. Layout (flex, centering,
+   padding, gap) is expressed with utility classes above instead. */
 .sign-in {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 3.5rem 1rem;
-  text-align: center;
-  max-width: 32rem;
+  max-width: 40rem;
   margin: 0 auto;
-}
-
-.sign-in-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: center;
 }
 </style>
