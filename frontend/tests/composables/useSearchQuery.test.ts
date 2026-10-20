@@ -211,4 +211,95 @@ describe("useSearchQuery", () => {
     expect(api.q.value).toBe("second");
     expect(api.source.value).toBe("central");
   });
+
+  describe("sort", () => {
+    it("defaults to 'title' with no query, omitted from the URL", async () => {
+      const { router, api } = await mountSearchQuery("/");
+
+      expect(api.sort.value).toBe("title");
+      expect(router.currentRoute.value.query.sort).toBeUndefined();
+    });
+
+    it("defaults to 'relevance' with a query, omitted from the URL", async () => {
+      const { router, api } = await mountSearchQuery("/?q=postgres");
+
+      expect(api.sort.value).toBe("relevance");
+      expect(router.currentRoute.value.query.sort).toBeUndefined();
+    });
+
+    it("reads an explicit sort from the URL", async () => {
+      const { api } = await mountSearchQuery("/?sort=recent");
+
+      expect(api.sort.value).toBe("recent");
+    });
+
+    it("falls back to 'title' when the URL has sort=relevance but no query", async () => {
+      const { api } = await mountSearchQuery("/?sort=relevance");
+
+      expect(api.sort.value).toBe("title");
+    });
+
+    it("falls back to 'title' when a query is cleared after 'relevance' was chosen", async () => {
+      const { api } = await mountSearchQuery("/?q=postgres&sort=relevance");
+      expect(api.sort.value).toBe("relevance");
+
+      api.q.value = "";
+      await flushPromises();
+
+      expect(api.sort.value).toBe("title");
+    });
+
+    it("recovers 'relevance' once a query is typed again, without re-selecting it", async () => {
+      const { api } = await mountSearchQuery("/?q=postgres&sort=relevance");
+
+      api.q.value = "";
+      await flushPromises();
+      expect(api.sort.value).toBe("title");
+
+      api.q.value = "postgres again";
+      await flushPromises();
+      expect(api.sort.value).toBe("relevance");
+    });
+
+    it("ignores an invalid sort value in the URL, falling back to the default", async () => {
+      const { api } = await mountSearchQuery("/?sort=bogus");
+
+      expect(api.sort.value).toBe("title");
+    });
+
+    it("applies an explicit sort change immediately, without debounce", async () => {
+      const { router, api } = await mountSearchQuery("/?q=postgres");
+
+      api.sort.value = "recent";
+      await flushPromises();
+
+      expect(router.currentRoute.value.query.sort).toBe("recent");
+    });
+
+    it("omits sort from the URL once it is set back to the default", async () => {
+      const { router, api } = await mountSearchQuery("/?q=postgres&sort=recent");
+
+      api.sort.value = "relevance";
+      await flushPromises();
+
+      expect(router.currentRoute.value.query.sort).toBeUndefined();
+    });
+
+    it("is not an active filter on its own", async () => {
+      const { api } = await mountSearchQuery("/?sort=recent");
+
+      expect(api.sort.value).toBe("recent");
+      expect(api.hasActiveFilters.value).toBe(false);
+    });
+
+    it("is reset to the default by clearFilters", async () => {
+      const { router, api } = await mountSearchQuery("/?q=postgres&sort=recent");
+
+      api.clearFilters();
+      await flushPromises();
+
+      expect(api.sort.value).toBe("title");
+      expect(router.currentRoute.value.query).toEqual({});
+    });
+  });
 });

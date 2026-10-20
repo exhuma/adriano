@@ -33,8 +33,11 @@ function toQueryString<T extends object>(params: T): string {
 /**
  * Search the catalog with the phase 1 filters.
  *
- * :param params: Free text, source/project/state filters, and
- *     pagination.
+ * :param params: Free text, source/project/state/record-type filters,
+ *     result order (`sort`; omitted for the server default -- see
+ *     `SearchParams.sort`), and pagination. `toQueryString` drops
+ *     `sort` from the request whenever it is `undefined`, exactly
+ *     like every other optional filter.
  * :returns: The matching page of results.
  */
 export function searchRecords(params: SearchParams): Promise<SearchPage> {

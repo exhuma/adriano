@@ -72,6 +72,8 @@ export type ApprovalOut = components["schemas"]["ApprovalOut"];
 export type RecordDetail = components["schemas"]["RecordDetailOut"];
 /** Search filter restricting results to decisions, errata, or both. */
 export type RecordTypeFilter = components["schemas"]["RecordTypeFilter"];
+/** Search result order: relevance, title A-Z, or recently changed. */
+export type SearchSort = components["schemas"]["SearchSort"];
 
 /** Query parameters accepted by `GET /api/v1/records`. */
 export interface SearchParams {
@@ -87,6 +89,8 @@ export interface SearchParams {
   needs_approval?: boolean;
   /** Restrict to decisions (default), errata, or both. */
   record_type?: RecordTypeFilter;
+  /** Result order; omitted for the server default (see `SearchSort`). */
+  sort?: SearchSort;
   /** 1-based page number. */
   page?: number;
   /** Page size, 1 to 50. */

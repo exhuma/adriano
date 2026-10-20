@@ -138,9 +138,14 @@ describe("SearchView", () => {
     expect(wrapper.text()).toContain("central / platform");
     expect(wrapper.text()).toContain("Pending approval");
     expect(wrapper.text()).toContain("1 warning");
-    expect(wrapper.find('[role="status"]').text()).toContain(
-      "Showing 1–1 of 1 record.",
+    // Two `role="status"` regions exist now: the active-filter row
+    // (empty here -- no filter is active) and the result-count live
+    // region (phases/11-ui-ux-updates.md Task 4, S-04).
+    const statusRegions = wrapper.findAll('[role="status"]');
+    const countRegion = statusRegions.find((region) =>
+      region.text().includes("Showing"),
     );
+    expect(countRegion?.text()).toContain("Showing 1–1 of 1 record.");
   });
 
   it("hides the 'Published' chip (the default state) but shows 'Candidate' (S-02)", async () => {
@@ -320,6 +325,197 @@ describe("SearchView", () => {
     // Not treated as an active filter: the empty state is the
     // honest "catalog empty" one, not "no matches for your filters".
     expect(wrapper.text()).toContain("No indexed records yet");
+  });
+
+  it("gives the needs-approval tooltip activator an accessible name (S-03)", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/");
+
+    // The hint text moved off the switch (no more two-line
+    // `persistent-hint`) and onto a focusable info button, named via
+    // `aria-label` so it stays accessible whether or not the
+    // hover/focus tooltip is open.
+    const infoButton = wrapper
+      .findAll("button")
+      .find((btn) => (btn.attributes("aria-label") ?? "").includes("Needs approval"));
+    expect(infoButton).toBeDefined();
+    expect(infoButton!.attributes("aria-label")).toContain(
+      "pending, rejected, changed since acceptance",
+    );
+    expect(wrapper.text()).not.toContain(
+      "Pending, rejected, changed since acceptance, or no approval policy",
+    );
+    // Regression check: nesting `<v-tooltip activator="parent">`
+    // inside a `<v-btn icon="...">` makes Vuetify treat the button as
+    // having custom slot content and silently skip auto-rendering the
+    // `icon` prop's glyph, leaving the button visually empty
+    // (coordinator browser check caught this at 1920px -- the button
+    // existed, at the right size and position, but painted nothing).
+    // An explicit `<v-icon>` must stay in the template.
+    expect(infoButton!.find(".mdi-information-outline").exists()).toBe(true);
+  });
+
+  it("uses a non-warning colour for the needs-approval switch (decision 2, S-04)", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/");
+
+    const switchComponent = wrapper.findComponent({ name: "VSwitch" });
+    expect(switchComponent.props("color")).toBe("primary");
+  });
+
+  it("shows one closable chip per active filter in a live region, and a chip close clears only that filter (S-04)", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+    // `project: "platform"` must stay a valid option under `source:
+    // "central"` here -- SearchView's (pre-existing, untouched by
+    // this task) `watch(source, ...)` clears `project` whenever it no
+    // longer matches the current source's project list, which would
+    // otherwise confound this test with an unrelated second filter
+    // change.
+    getFacets.mockResolvedValue({
+      sources: [
+        {
+          source_id: "central",
+          count: 1,
+          projects: [{ project: "platform", count: 1 }],
+        },
+      ],
+    });
+
+    const { router, wrapper } = await mountSearchView(
+      "/?needs_approval=true&source=central&project=platform",
+    );
+    await flushPromises();
+
+    const statusRegions = wrapper.findAll('[role="status"]');
+    const chipRegion = statusRegions.find((region) =>
+      region.text().includes("Needs approval"),
+    );
+    expect(chipRegion).toBeDefined();
+    expect(chipRegion!.attributes("aria-live")).toBe("polite");
+    expect(chipRegion!.text()).toContain("Source: central");
+    expect(chipRegion!.text()).toContain("Project: platform");
+
+    const chips = wrapper.findAllComponents({ name: "VChip" });
+    const sourceChip = chips.find((chip) => chip.text().includes("Source: central"));
+    expect(sourceChip).toBeDefined();
+    const closeButton = sourceChip!.find(".v-chip__close");
+    expect(closeButton.exists()).toBe(true);
+    await closeButton.trigger("click");
+    // `router.replace()` resolves over an unpredictable number of
+    // microtask ticks in this test environment, so the URL assertion
+    // below polls rather than assuming one or two `flushPromises()`
+    // calls are enough; the chip row itself, re-read straight from
+    // the live filter refs on every render, updates deterministically
+    // and is asserted first.
+    await flushPromises();
+
+    const remainingChips = wrapper
+      .findAllComponents({ name: "VChip" })
+      .map((chip) => chip.text());
+    expect(remainingChips.some((text) => text.includes("Source: central"))).toBe(
+      false,
+    );
+    expect(remainingChips.some((text) => text === "Needs approval")).toBe(true);
+    expect(remainingChips.some((text) => text.includes("Project: platform"))).toBe(
+      true,
+    );
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (router.currentRoute.value.query.source === undefined) {
+        break;
+      }
+      await flushPromises();
+    }
+    expect(router.currentRoute.value.query.source).toBeUndefined();
+    expect(router.currentRoute.value.query.needs_approval).toBe("true");
+    expect(router.currentRoute.value.query.project).toBe("platform");
+  });
+
+  it("shows no active-filter chip for the free-text query or the sort order", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/?q=postgres&sort=recent");
+    await flushPromises();
+
+    const chips = wrapper.findAllComponents({ name: "VChip" });
+    expect(chips.some((chip) => chip.text().includes("postgres"))).toBe(false);
+    expect(chips.some((chip) => chip.text().toLowerCase().includes("recent"))).toBe(
+      false,
+    );
+  });
+
+  it("mentions the active-filter count in the result line, with a direct sentence for needs-approval alone (S-04)", async () => {
+    searchRecords.mockResolvedValue({
+      items: [],
+      total: 14,
+      page: 1,
+      page_size: 20,
+    });
+
+    const { wrapper } = await mountSearchView("/?needs_approval=true");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("14 records need approval.");
+  });
+
+  it("mentions a plain filter count in the result line for other filter combinations", async () => {
+    searchRecords.mockResolvedValue({
+      items: [],
+      total: 3,
+      page: 1,
+      page_size: 20,
+    });
+
+    const { wrapper } = await mountSearchView("/?source=central&project=platform");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Showing 1–3 of 3 records.");
+    expect(wrapper.text()).toContain("2 filters active.");
+  });
+
+  it("offers 'Relevance' in the sort select only when a query is set (S-08)", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const withoutQuery = await mountSearchView("/");
+    const selectWithoutQuery = withoutQuery.wrapper
+      .findAllComponents({ name: "VSelect" })
+      .find((select) => select.props("label") === "Sort by");
+    const itemTitlesWithoutQuery = (
+      selectWithoutQuery!.props("items") as { title: string }[]
+    ).map((item) => item.title);
+    expect(itemTitlesWithoutQuery).toEqual(["Title A–Z", "Recently changed"]);
+
+    const withQuery = await mountSearchView("/?q=postgres");
+    const selectWithQuery = withQuery.wrapper
+      .findAllComponents({ name: "VSelect" })
+      .find((select) => select.props("label") === "Sort by");
+    const itemTitlesWithQuery = (
+      selectWithQuery!.props("items") as { title: string }[]
+    ).map((item) => item.title);
+    expect(itemTitlesWithQuery).toEqual([
+      "Relevance",
+      "Title A–Z",
+      "Recently changed",
+    ]);
+  });
+
+  it("keeps a non-default sort in the URL and sends it to the API", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    await mountSearchView("/?q=postgres&sort=recent");
+    await flushPromises();
+
+    expect(searchRecords).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "recent" }),
+    );
   });
 
   it("shows an error state and retries the same request on demand", async () => {
