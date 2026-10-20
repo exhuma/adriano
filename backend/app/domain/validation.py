@@ -8,8 +8,11 @@ sign-off) and collects issues in a stable order. It never raises.
 A document is an erratum if and only if its frontmatter has
 ``erratum-for``. Errata use ``type``, ``section``, ``reported-by`` and
 ``date`` instead of ``decision-date``; those fields on a decision are
-reported as unknown. The retired erratum shape (``kind: erratum`` with
-``corrects:``) yields ``legacy_erratum_format`` and creates no link.
+reported as unknown. The retired erratum shape (``kind: erratum``,
+any case, or any ``corrects:`` key) yields ``legacy_erratum_format``
+and creates no link. ``kind`` is obsolete: ``kind: decision`` is
+reported with the ``obsolete_kind_field`` warning and the record
+stays a normal decision; any other value yields ``bad_field_type``.
 
 Public API: :data:`KNOWN_FIELDS`, :data:`DECISION_FIELDS`,
 :data:`ERRATUM_FIELDS`, :data:`LEGACY_ERRATUM_FIELDS`,
@@ -52,6 +55,11 @@ _LEGACY_ERRATUM_MESSAGE = (
     "`kind: erratum` / `corrects:` is no longer supported; errata use "
     "`erratum-for: <uuid>` with `type`, and body sections 'Original "
     "text' / 'Corrected text' / 'Notes' (see docs/schema.md)"
+)
+
+_OBSOLETE_KIND_MESSAGE = (
+    "`kind` is no longer used: a document is an erratum when it has "
+    "`erratum-for`. Remove `kind: decision`."
 )
 
 
@@ -254,10 +262,35 @@ def _legacy_erratum(data: Mapping[str, object], issues: list[Issue]) -> None:
     """
     Reject the retired ``kind: erratum`` / ``corrects:`` shape.
 
+    Also flag the obsolete ``kind`` field.
+
+    Any ``corrects`` key, or a ``kind`` of ``erratum`` (any case), is the
+    retired erratum shape and yields one ``legacy_erratum_format`` error.
+    A ``kind`` of ``decision`` (any case) is merely obsolete and yields
+    a warning; the record stays a normal decision. Any other ``kind``
+    value yields ``bad_field_type``.
+
     :param data: Frontmatter fields.
     :param issues: Issue list to append to.
     """
-    if LEGACY_ERRATUM_FIELDS.intersection(data):
+    kind = data.get("kind")
+    kind_text = kind.strip().lower() if isinstance(kind, str) else None
+    is_legacy = "corrects" in data or kind_text == "erratum"
+    if "kind" in data and kind_text != "erratum":
+        if kind_text == "decision":
+            issues.append(
+                warning(IssueCode.OBSOLETE_KIND_FIELD, _OBSOLETE_KIND_MESSAGE)
+            )
+        else:
+            issues.append(
+                error(
+                    IssueCode.BAD_FIELD_TYPE,
+                    "`kind` is obsolete and no longer read; a document "
+                    f"is an erratum when it has `erratum-for`; got "
+                    f"{fv.shown(kind)}",
+                )
+            )
+    if is_legacy:
         issues.append(
             error(IssueCode.LEGACY_ERRATUM_FORMAT, _LEGACY_ERRATUM_MESSAGE)
         )

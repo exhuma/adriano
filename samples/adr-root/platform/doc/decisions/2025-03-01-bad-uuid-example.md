@@ -2,7 +2,6 @@
 title: Record with an invalid UUID
 uuid: not-a-valid-uuid
 decision-date: 2025-03-01
-kind: decision
 ---
 # Record with an invalid UUID
 

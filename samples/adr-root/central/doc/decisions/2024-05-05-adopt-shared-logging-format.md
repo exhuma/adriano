@@ -2,7 +2,6 @@
 title: Adopt a shared structured logging format
 uuid: c41996ae-e20a-469c-96f9-cb08901b6c7f
 decision-date: 2024-05-05
-kind: decision
 ---
 # Adopt a shared structured logging format
 

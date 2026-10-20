@@ -2,7 +2,6 @@
 title: Use a feature-flag service for staged rollouts
 uuid: a30833f1-df66-4fbc-afd8-9a10472e0ee1
 decision-date: 2024-11-01
-kind: decision
 ---
 # Use a feature-flag service for staged rollouts
 

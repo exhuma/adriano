@@ -2,7 +2,6 @@
 title: Record with a broken outbound link
 uuid: 5e2a1a0a-7a3a-4a0a-9a0a-111111111111
 decision-date: 2025-04-10
-kind: decision
 obsoletes: [2f6c1926-939e-44c1-a8f5-1c9c523fc849]
 ---
 # Record with a broken outbound link

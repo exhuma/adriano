@@ -2,7 +2,6 @@
 title: Use Redis for application-level caching
 uuid: b87a5fc5-a48f-49cb-a029-ac1f7c56c717
 decision-date: 2026-01-05
-kind: decision
 ---
 # Use Redis for application-level caching
 

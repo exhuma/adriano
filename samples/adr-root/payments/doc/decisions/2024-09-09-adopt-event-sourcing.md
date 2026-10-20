@@ -13,5 +13,9 @@ record; current balances are a derived projection.
 
 ## Consequences
 
-Replays and audits read the event log directly; this record uses the
-current schema fields (`title`, `kind`, `uuid`).
+Replays and audits read the event log directly. This record keeps an
+obsolete `kind: decision` line on purpose: `kind` is no longer part
+of the schema (a document is an erratum because it has
+`erratum-for`, not because of `kind`), so this field now yields an
+`obsolete_kind_field` warning instead of being read. The record is
+otherwise a normal, valid decision.

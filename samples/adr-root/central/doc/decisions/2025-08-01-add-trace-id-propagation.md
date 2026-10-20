@@ -2,7 +2,6 @@
 title: Require trace-id propagation across service boundaries
 uuid: 34bf60bb-23d5-4ab7-9b5a-3a7dd41cbeb3
 decision-date: 2025-08-01
-kind: decision
 updates: [c41996ae-e20a-469c-96f9-cb08901b6c7f]
 ---
 # Require trace-id propagation across service boundaries

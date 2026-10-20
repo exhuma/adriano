@@ -268,18 +268,18 @@ def test_title_fallbacks(
 LEGACY_SHAPES = [
     f"kind: erratum\ncorrects: {UUID_B}\n",
     "kind: erratum\n",
+    "kind: ERRATUM\n",
     f"corrects: {UUID_B}\n",
-    "kind: memo\n",
 ]
 
 
 @pytest.mark.parametrize(
     "legacy",
     LEGACY_SHAPES,
-    ids=["kind-and-corrects", "kind-only", "corrects-only", "other-kind"],
+    ids=["kind-and-corrects", "kind-only", "kind-any-case", "corrects-only"],
 )
 def test_legacy_erratum_shape_is_rejected(legacy: str) -> None:
-    """Ensure ``kind`` / ``corrects`` yield one legacy-format error."""
+    """Ensure ``kind: erratum`` / ``corrects`` yield one legacy error."""
     raw = doc(f"uuid: {UUID_A}\ndecision-date: 2024-12-24\n{legacy}")
 
     record = parse_record(raw, filename=NAME)
@@ -301,6 +301,46 @@ def test_legacy_erratum_is_a_decision_without_link() -> None:
     assert record.erratum is None
     assert record.links.corrects is None
     assert record.metadata["corrects"] == UUID_B
+
+
+def test_kind_decision_is_a_warning_only() -> None:
+    """Ensure ``kind: decision`` warns but stays a normal decision."""
+    raw = doc(f"uuid: {UUID_A}\ndecision-date: 2024-12-24\nkind: decision\n")
+
+    record = parse_record(raw, filename=NAME)
+
+    assert codes(record.issues) == [IssueCode.OBSOLETE_KIND_FIELD]
+    issue = record.issues[0]
+    assert issue.severity is Severity.WARNING
+    assert "kind" in issue.message
+    assert "erratum-for" in issue.message
+    assert record.record_kind is RecordKind.DECISION
+
+
+@pytest.mark.parametrize("value", ["decision", "DECISION", "Decision"])
+def test_kind_decision_any_case_is_a_warning(value: str) -> None:
+    """Ensure ``kind: decision`` is matched case-insensitively."""
+    raw = doc(f"uuid: {UUID_A}\ndecision-date: 2024-12-24\nkind: {value}\n")
+
+    record = parse_record(raw, filename=NAME)
+
+    assert codes(record.issues) == [IssueCode.OBSOLETE_KIND_FIELD]
+    assert record.issues[0].severity is Severity.WARNING
+    assert record.record_kind is RecordKind.DECISION
+
+
+def test_kind_other_value_is_bad_field_type() -> None:
+    """Ensure a ``kind`` value other than decision/erratum is rejected."""
+    raw = doc(f"uuid: {UUID_A}\ndecision-date: 2024-12-24\nkind: memo\n")
+
+    record = parse_record(raw, filename=NAME)
+
+    assert codes(record.issues) == [IssueCode.BAD_FIELD_TYPE]
+    issue = record.issues[0]
+    assert issue.severity is Severity.ERROR
+    assert "kind" in issue.message
+    assert "obsolete" in issue.message
+    assert record.record_kind is RecordKind.DECISION
 
 
 def test_bad_link_entry_is_dropped() -> None:

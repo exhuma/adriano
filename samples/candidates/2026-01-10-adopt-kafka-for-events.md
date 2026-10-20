@@ -2,7 +2,6 @@
 title: Adopt Kafka for cross-service event streaming
 uuid: 6b1b7968-e918-497b-ab90-5287af582744
 decision-date: 2026-01-10
-kind: decision
 ---
 # Adopt Kafka for cross-service event streaming
 

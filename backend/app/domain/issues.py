@@ -46,6 +46,7 @@ class IssueCode(StrEnum):
     ERRATUM_MISSING_CORRECTED_TEXT = "erratum_missing_corrected_text"
     ERRATUM_UNKNOWN_SECTION_HEADING = "erratum_unknown_section_heading"
     LEGACY_ERRATUM_FORMAT = "legacy_erratum_format"
+    OBSOLETE_KIND_FIELD = "obsolete_kind_field"
 
 
 @dataclass(frozen=True, slots=True)

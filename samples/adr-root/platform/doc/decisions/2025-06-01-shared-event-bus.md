@@ -2,7 +2,6 @@
 title: Adopt a shared event bus for cross-team notifications
 uuid: 6b08e79f-d1a4-42c4-b754-a409c67d4347
 decision-date: 2025-06-01
-kind: decision
 ---
 # Adopt a shared event bus for cross-team notifications
 
