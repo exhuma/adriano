@@ -257,7 +257,9 @@ tasks:
             "tests (frontend not scaffolded yet)."
           exit 0
         fi
-        cd frontend && npm run test
+        # A developer's .env may set VITE_DEV_AUTH=true for `task dev`;
+        # unit tests must not depend on it.
+        cd frontend && env -u VITE_DEV_AUTH npm run test
 
   build:
     desc: Build the production frontend bundle.
