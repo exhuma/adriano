@@ -771,7 +771,7 @@ export interface components {
          * @description Stable machine-readable validation issue codes.
          * @enum {string}
          */
-        IssueCode: "bad_yaml" | "missing_frontmatter" | "missing_uuid" | "bad_uuid" | "bad_date" | "missing_date" | "unknown_field" | "bad_field_type" | "duplicate_uuid" | "missing_target" | "ambiguous_target" | "legacy_alias" | "legacy_signoff" | "corrects_on_non_erratum" | "erratum_without_target" | "bad_encoding" | "bad_erratum_type" | "erratum_missing_corrected_text" | "erratum_unknown_section_heading" | "legacy_erratum_format";
+        IssueCode: "bad_yaml" | "missing_frontmatter" | "missing_uuid" | "bad_uuid" | "bad_date" | "missing_date" | "unknown_field" | "bad_field_type" | "duplicate_uuid" | "missing_target" | "ambiguous_target" | "legacy_alias" | "legacy_signoff" | "corrects_on_non_erratum" | "erratum_without_target" | "bad_encoding" | "bad_erratum_type" | "erratum_missing_corrected_text" | "erratum_unknown_section_heading" | "erratum_duplicate_section" | "erratum_targets_itself" | "erratum_relationship_ignored" | "erratum_target_is_erratum" | "legacy_erratum_format" | "obsolete_kind_field";
         /**
          * IssueCountsOut
          * @description Stored-issue counts of one record, by severity.
