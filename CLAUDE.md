@@ -25,3 +25,16 @@ composes `module-fastapi` and `module-vue-vuetify`), not the
 and sources screens need data-table-like list/filter components and
 Material Design is an acceptable look for an internal governance tool,
 so Vuetify's ready-made components outweigh hand-rolled ARIA primitives.
+
+**Vuetify first.** Before writing any custom CSS, use Vuetify's own
+mechanisms, in this order:
+
+1. theme colours and variables
+2. global `defaults` and aliases in `createVuetify`
+3. `<v-defaults-provider>`
+4. component props and utility classes
+5. Vuetify SASS settings
+
+Custom scoped CSS is the last resort. It may use only theme variables, and
+each rule needs a comment saying why Vuetify could not express it. See
+`phases/11-ui-ux-updates.md`, "Vuetify first".

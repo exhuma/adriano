@@ -9,6 +9,10 @@ This is research only. The resulting change plan is
 `phases/11-ui-ux-updates.md`. Every finding below has an ID that the plan's
 tasks refer to.
 
+Each finding's "Fix" describes the intended result, not how to build it.
+The plan's "Vuetify first" section decides the mechanism: theme and
+defaults come before any custom CSS.
+
 ## Method
 
 - **Build:** Vite dev server (5173) and FastAPI dev server (8100) against
@@ -327,8 +331,12 @@ effort M)
 
 **S-08 — No visible sort order** (severity 1, effort M)
 - **Principle:** N1.
-- **Evidence:** Results are alphabetical without saying so, and reviewers
-  cannot sort by recency. This is an open question for the product owner.
+- **Evidence:**
+  - With a query, results are ranked by relevance, then title. Without a
+    query they are sorted by title. Neither order is stated.
+  - Reviewers cannot sort by recency.
+- **Source:** `storage/postgres/search.py` (`_key_columns`, `_order`).
+- **Decision (2026-10-20):** add Relevance, Title A–Z and Recently changed.
 
 ## Record page
 
@@ -452,8 +460,7 @@ effort S)
     readers)
 - **Fix:**
   - Map each reason code to human copy in `utils/labels.ts`.
-  - For readers, a muted "Only reviewers can approve" is enough. Hide it
-    entirely if the product owner agrees (open question).
+  - For readers, a muted "Only reviewers can approve" is enough.
 
 **R-11 — Erratum page repeats its status** (severity 1, effort S)
 - **Principle:** N8.
@@ -507,9 +514,8 @@ developers, effort S)
   `catalog.yaml` maps `admin` and `adr-reader`, so the Reviewer preset gets
   "No access" (403).
 - **Source:** `DevLoginDialog.vue:28-30`.
-- **Fix:** Align the presets with `catalog.yaml` and
-  `catalog.demo.yaml`, or derive them from the loaded config (open
-  question).
+- **Decision (2026-10-20):** derive the presets from the loaded catalog
+  through a dev-only endpoint.
 
 Focus behaviour works:
 
@@ -558,8 +564,9 @@ Focus behaviour works:
   - Readers see "Only operators can trigger polling…" as the first content
     on the page.
   - They also see env-var names in the problem column.
-- **Fix:** Shrink the hint to an info line below the table. Whether readers
-  see the problem detail at all is an open question.
+- **Fix:** Shrink the hint to an info line below the table.
+- **Decision (2026-10-20):** readers see status and dates only; env-var and
+  recovery detail is for `operate` only.
 
 **O-05 — Table header weight** (severity 1, effort S)
 - **Evidence:** Header cells use the same weight as data cells.
