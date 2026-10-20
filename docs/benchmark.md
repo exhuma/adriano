@@ -395,6 +395,35 @@ covers:
 - paging in pages of 4, which must reproduce the single-page rows,
   order and states.
 
+## Search sort orders (phase 11)
+
+`GET /api/v1/records` takes `sort=relevance|title|recent`. `recent`
+orders by `record.updated_at DESC`, then `lower(title)`, then `id`.
+No index was added for it. `EXPLAIN (ANALYZE)` of the real statements
+(`app.storage.postgres.search`) on the 20,000-record synthetic corpus
+(21,967 rows, default `record_type=decision`, page size 20):
+
+| path | sort | plan for the sort | time |
+| --- | --- | --- | --- |
+| browse | `title` | Seq Scan + top-N heapsort | 30-40 ms |
+| browse | `recent` | Seq Scan + top-N heapsort | 34-37 ms |
+| needs approval | `title` | hash joins + top-N heapsort | 41-43 ms |
+| needs approval | `recent` | hash joins + top-N heapsort | 48-59 ms |
+| `q=decision` | `relevance` | GIN bitmap + top-N heapsort | 155 ms |
+| `q=decision` | `recent` | GIN bitmap + top-N heapsort | 110 ms |
+
+The top-N heapsort keeps only the page in memory (about 47 kB), so the
+cost is one scan, the same as the existing default title order.
+A trial index on `(updated_at DESC, lower(title), id)` in a throwaway
+database sped up only one path: `recent` with no text query and no
+needs-approval filter, from 35 ms to 0.6 ms (page 1) and from 48 ms to
+13 ms (offset 10,000). The text-query paths still read every GIN hit to
+filter, and the needs-approval path still joins every row before
+`LIMIT`, so the index does not help them. The gain is far below the
+P95 < 1 s budget and does not justify extra write cost on every upsert.
+Add the index in a migration if a real catalog makes `recent` browse
+slow.
+
 ## Limitations and how to reproduce
 
 - This is a synthetic dataset on a single developer machine with a

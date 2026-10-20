@@ -43,6 +43,12 @@ The ``record_kind`` filter (decisions / errata) is a plain WHERE
 condition shared by both paths, so it combines with every other filter
 including "needs approval".
 
+**Order.** :class:`~app.storage.port.SearchSort` picks a descending
+leading key (text rank for ``relevance`` with a query, ``updated_at``
+for ``recent``, none for ``title``) followed by the lower-cased title
+and the id, so equal leading keys still give stable pages. Both page
+paths (with and without "needs approval") use the same key list.
+
 Text queries use ``websearch_to_tsquery`` with the ``simple``
 configuration (exact tokens: identifiers, UUIDs, paths) OR'ed with the
 ``english`` configuration (stemmed body words), matching how the
@@ -55,6 +61,7 @@ Public API: :data:`NEEDS_APPROVAL_STATES`, :func:`approval_join`,
 from sqlalchemy import (
     ColumnElement,
     FromClause,
+    Label,
     Select,
     Table,
     and_,
@@ -72,6 +79,7 @@ from app.storage.port import (
     MAX_PAGE_SIZE,
     SearchFilters,
     SearchPage,
+    SearchSort,
 )
 from app.storage.postgres import convert
 from app.storage.postgres.models import DecisionEventRow
@@ -115,6 +123,7 @@ _SEARCH_COLUMNS = (
 
 #: Labels of the sort keys carried by the paged subquery.
 _RANK = "search_rank"
+_UPDATED_KEY = "updated_key"
 _TITLE_KEY = "title_key"
 
 
@@ -235,48 +244,67 @@ def _check_bounds(page: int, page_size: int) -> None:
         )
 
 
-def _sort_keys(tsquery: ColumnElement | None) -> list[ColumnElement]:
+def _lead_key(tsquery: ColumnElement | None, sort: SearchSort) -> Label | None:
     """
-    Build the result order over ``record``: rank, title, id.
+    Build the descending leading sort key of *sort*.
 
-    :param tsquery: Text query, if any (ranks the hits first).
-    :returns: Labelled sort expressions, in order.
+    :param tsquery: Text query, if any.
+    :param sort: Requested order.
+    :returns: The labelled key (``updated_at`` for ``recent``, the text
+        rank for ``relevance`` with a query), or ``None`` when the order
+        is title, id only (``title``, or ``relevance`` without a query).
     """
-    keys: list[ColumnElement] = []
-    if tsquery is not None:
-        keys.append(func.ts_rank(RECORD.c.search, tsquery).label(_RANK))
+    if sort is SearchSort.RECENT:
+        return RECORD.c.updated_at.label(_UPDATED_KEY)
+    if sort is SearchSort.RELEVANCE and tsquery is not None:
+        return func.ts_rank(RECORD.c.search, tsquery).label(_RANK)
+    return None
+
+
+def _sort_keys(lead: Label | None) -> list[ColumnElement]:
+    """
+    Build the result order over ``record``: lead key, title, id.
+
+    :param lead: Leading key from :func:`_lead_key`, if any.
+    :returns: Sort expressions, in order (the last one is ``id``).
+    """
+    keys: list[ColumnElement] = [] if lead is None else [lead]
     keys += [func.lower(RECORD.c.title).label(_TITLE_KEY), RECORD.c.id]
     return keys
 
 
-def _key_columns(relation: FromClause, ranked: bool) -> list[ColumnElement]:
+def _key_columns(
+    relation: FromClause, lead: Label | None
+) -> list[ColumnElement]:
     """
     Select the sort keys of :func:`_sort_keys` from a subquery.
 
     :param relation: Subquery exposing the labelled sort keys.
-    :param ranked: Whether a rank key is present.
+    :param lead: Leading key from :func:`_lead_key`, if any.
     :returns: The key columns, in order.
     """
-    names = ([_RANK] if ranked else []) + [_TITLE_KEY, "id"]
+    names = ([] if lead is None else [lead.name]) + [_TITLE_KEY, "id"]
     return [relation.c[name] for name in names]
 
 
-def _order(keys: list[ColumnElement], ranked: bool) -> list[ColumnElement]:
+def _order(
+    keys: list[ColumnElement], lead: Label | None
+) -> list[ColumnElement]:
     """
-    Turn sort keys into ORDER BY expressions (rank descending).
+    Turn sort keys into ORDER BY expressions (lead key descending).
 
     :param keys: Keys from :func:`_sort_keys` or :func:`_key_columns`.
-    :param ranked: Whether the first key is the rank.
+    :param lead: Leading key from :func:`_lead_key`, if any.
     :returns: ORDER BY expressions.
     """
-    if not ranked:
+    if lead is None:
         return keys
     return [keys[0].desc(), *keys[1:]]
 
 
 def _needs_approval_page(
     conditions: list[ColumnElement[bool]],
-    tsquery: ColumnElement | None,
+    lead: Label | None,
     policy: Policy | None,
 ) -> tuple[Select, Select]:
     """
@@ -285,7 +313,7 @@ def _needs_approval_page(
     The state join precedes ``LIMIT`` because it restricts the rows.
 
     :param conditions: State-independent WHERE conditions.
-    :param tsquery: Text query, if any.
+    :param lead: Leading sort key from :func:`_lead_key`, if any.
     :param policy: Configured policy, or ``None``.
     :returns: ``(count query, unpaginated ordered page query)``.
     """
@@ -294,8 +322,7 @@ def _needs_approval_page(
     where = [*conditions, needed]
     count = select(func.count()).select_from(source).where(*where)
     columns = [RECORD.c[name] for name in _SEARCH_COLUMNS]
-    keys = _sort_keys(tsquery)
-    ranked = tsquery is not None
+    keys = _sort_keys(lead)
     inner = (
         select(*columns, *keys[:-1], state.label("approval_state"))
         .select_from(source)
@@ -305,13 +332,13 @@ def _needs_approval_page(
     page = select(
         *(inner.c[name] for name in _SEARCH_COLUMNS),
         inner.c.approval_state,
-    ).order_by(*_order(_key_columns(inner, ranked), ranked))
+    ).order_by(*_order(_key_columns(inner, lead), lead))
     return count, page
 
 
 def _browse_page(
     conditions: list[ColumnElement[bool]],
-    tsquery: ColumnElement | None,
+    lead: Label | None,
     policy: Policy | None,
     limit: int,
     offset: int,
@@ -323,20 +350,19 @@ def _browse_page(
     decision events for their state.
 
     :param conditions: State-independent WHERE conditions.
-    :param tsquery: Text query, if any.
+    :param lead: Leading sort key from :func:`_lead_key`, if any.
     :param policy: Configured policy, or ``None``.
     :param limit: Page size.
     :param offset: Rows to skip.
     :returns: ``(count query, paginated ordered page query)``.
     """
     count = select(func.count()).select_from(RECORD).where(*conditions)
-    keys = _sort_keys(tsquery)
-    ranked = tsquery is not None
+    keys = _sort_keys(lead)
     columns = [RECORD.c[name] for name in _SEARCH_COLUMNS if name != "id"]
     paged = (
         select(*columns, *keys)
         .where(*conditions)
-        .order_by(*_order(keys, ranked))
+        .order_by(*_order(keys, lead))
         .limit(limit)
         .offset(offset)
         .subquery("paged")
@@ -348,7 +374,7 @@ def _browse_page(
             state.label("approval_state"),
         )
         .select_from(source)
-        .order_by(*_order(_key_columns(paged, ranked), ranked))
+        .order_by(*_order(_key_columns(paged, lead), lead))
     )
     return count, page
 
@@ -360,6 +386,7 @@ def search(
     page: int,
     page_size: int,
     policy: Policy | None,
+    sort: SearchSort = SearchSort.RELEVANCE,
 ) -> SearchPage:
     """
     Run a filtered, paginated full-text search.
@@ -370,20 +397,20 @@ def search(
     :param page: 1-based page number.
     :param page_size: Page size, 1 to :data:`MAX_PAGE_SIZE`.
     :param policy: Configured policy, or ``None``.
+    :param sort: Result order (see :class:`~app.storage.port.SearchSort`).
     :returns: The page.
     :raises ValueError: If *page* or *page_size* is out of bounds.
     """
     _check_bounds(page, page_size)
     tsquery = _tsquery(query)
     conditions = _conditions(filters, tsquery)
+    lead = _lead_key(tsquery, sort)
     offset = (page - 1) * page_size
     if filters.needs_approval:
-        count, stmt = _needs_approval_page(conditions, tsquery, policy)
+        count, stmt = _needs_approval_page(conditions, lead, policy)
         stmt = stmt.limit(page_size).offset(offset)
     else:
-        count, stmt = _browse_page(
-            conditions, tsquery, policy, page_size, offset
-        )
+        count, stmt = _browse_page(conditions, lead, policy, page_size, offset)
     total = session.execute(count).scalar_one()
     rows = session.execute(stmt).mappings()
     return SearchPage(

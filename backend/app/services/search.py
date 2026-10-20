@@ -18,6 +18,14 @@ for the frontend and for phase 09.
 default), errata, or both; it is pushed into SQL like every other
 filter and combines with them (including ``needs_approval``).
 
+**Sort order.** :func:`resolve_sort` owns the default: ``relevance``
+when a non-blank query is set, otherwise ``title``; an explicit
+``relevance`` without a query falls back to ``title`` (there is no
+rank to order by). ``recent`` orders by ``record.updated_at``, which
+moves only when the content digest changes (``last_seen_at`` is the
+poll heartbeat), newest first. Every order ends with title and id, so
+pages are stable.
+
 **Erratum target titles.** An erratum hit carries the title of the
 decision it corrects (``erratum_for_title``). The targets of all
 erratum hits of the page are read with **one** query
@@ -32,7 +40,7 @@ its detail page does (where ``erratum_target_is_erratum`` flags it).
 
 Public API: :class:`RecordTypeFilter`, :class:`IssueCounts`,
 :class:`CatalogSearchItem`, :class:`CatalogSearchPage`,
-:func:`search_records`.
+:func:`resolve_sort`, :func:`search_records`.
 """
 
 import uuid
@@ -49,6 +57,7 @@ from app.storage.port import (
     RecordState,
     SearchFilters,
     SearchItem,
+    SearchSort,
 )
 
 __all__ = [
@@ -56,6 +65,7 @@ __all__ = [
     "CatalogSearchPage",
     "IssueCounts",
     "RecordTypeFilter",
+    "resolve_sort",
     "search_records",
 ]
 
@@ -231,6 +241,24 @@ def _search_item(
     )
 
 
+def resolve_sort(sort: SearchSort | None, query: str | None) -> SearchSort:
+    """
+    Apply the default sort and the no-query fallback.
+
+    :param sort: Requested order, or ``None`` for the default.
+    :param query: Free text, or ``None``/blank.
+    :returns: ``relevance`` or ``title`` by default (with / without a
+        non-blank query); ``title`` for ``relevance`` without a query;
+        otherwise *sort* itself.
+    """
+    has_query = bool((query or "").strip())
+    if sort is None:
+        return SearchSort.RELEVANCE if has_query else SearchSort.TITLE
+    if sort is SearchSort.RELEVANCE and not has_query:
+        return SearchSort.TITLE
+    return sort
+
+
 def search_records(
     store: CatalogStore,
     *,
@@ -243,6 +271,7 @@ def search_records(
     policy: Policy | None,
     needs_approval: bool = False,
     record_type: RecordTypeFilter = RecordTypeFilter.DECISION,
+    sort: SearchSort | None = None,
 ) -> CatalogSearchPage:
     """
     Search the catalog with the Phase 1 filters.
@@ -259,6 +288,8 @@ def search_records(
         satisfy the policy (pending, rejected, changed since acceptance,
         policy missing); evaluated in SQL by the store.
     :param record_type: Decisions (default), errata, or both.
+    :param sort: Result order, or ``None`` for the default (see
+        :func:`resolve_sort`).
     :returns: The page.
     :raises ValueError: If *page* or *page_size* is out of bounds.
     """
@@ -269,7 +300,14 @@ def search_records(
         needs_approval=needs_approval,
         record_kind=_RECORD_KIND[record_type],
     )
-    page_result = store.search(query, filters, page, page_size, policy=policy)
+    page_result = store.search(
+        query,
+        filters,
+        page,
+        page_size,
+        policy=policy,
+        sort=resolve_sort(sort, query),
+    )
     titles = _target_titles(store, page_result.items)
     return CatalogSearchPage(
         items=tuple(

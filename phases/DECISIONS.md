@@ -326,6 +326,13 @@ Common registration fields: `id`, `type`, `scope`, `path`,
   healthcheck.
 - `GET /api/v1/records?q=&source=&project=&state=candidate|published&needs_approval=true&page=&page_size=`
   — bounded pagination (max 50).
+  Also `record_type=decision|erratum|all` (default `decision`) and
+  `sort=relevance|title|recent` (phase 11). The sort default is
+  `relevance` when `q` is non-blank, else `title`. `relevance` without
+  `q` falls back to `title`. `recent` orders by `record.updated_at` (the
+  last content-digest change, not the poll heartbeat `last_seen_at`),
+  newest first. Every order breaks ties by lower-cased title, then id,
+  so pages are stable. An unknown value gives 422.
 - `GET /api/v1/records/{id}` — detail: metadata, issues, rendered HTML,
   provenance, freshness, outbound/inbound links, errata, sibling
   revisions (published/candidates of the same identity), approval state,

@@ -30,7 +30,12 @@ from app.routers.decisions import reviewer_from
 from app.schemas.records import RecordDetailOut, RecordDiffOut, SearchPageOut
 from app.services import record_detail, search
 from app.services.diff import diff_record
-from app.storage.port import MAX_PAGE_SIZE, CatalogStoreProvider, RecordState
+from app.storage.port import (
+    MAX_PAGE_SIZE,
+    CatalogStoreProvider,
+    RecordState,
+    SearchSort,
+)
 
 router = APIRouter(
     prefix="/api/v1",
@@ -79,6 +84,16 @@ def list_records(
             "or `all`. Combines with every other filter."
         ),
     ),
+    sort: SearchSort | None = Query(
+        default=None,
+        description=(
+            "Result order: `relevance` (text rank, best first), `title` "
+            "(A-Z) or `recent` (content last changed, newest first). "
+            "Default: `relevance` when `q` is set, else `title`; "
+            "`relevance` without `q` falls back to `title`. Ties are "
+            "broken by title, then id."
+        ),
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=_DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     provider: CatalogStoreProvider = Depends(get_store_provider),
@@ -94,6 +109,7 @@ def list_records(
     :param state: Restrict to ``published`` or ``candidate``.
     :param needs_approval: Restrict to records that need approval.
     :param record_type: Decisions (default), errata, or both.
+    :param sort: Result order, or omitted for the default.
     :param page: 1-based page number.
     :param page_size: Page size, 1 to :data:`~app.storage.port.MAX_PAGE_SIZE`.
     :param provider: Storage provider (overridden by tests).
@@ -113,6 +129,7 @@ def list_records(
             policy=policy,
             needs_approval=needs_approval,
             record_type=record_type,
+            sort=sort,
         )
     return SearchPageOut.model_validate(page_result)
 

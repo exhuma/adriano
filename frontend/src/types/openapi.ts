@@ -83,6 +83,7 @@ export interface paths {
          *     :param state: Restrict to ``published`` or ``candidate``.
          *     :param needs_approval: Restrict to records that need approval.
          *     :param record_type: Decisions (default), errata, or both.
+         *     :param sort: Result order, or omitted for the default.
          *     :param page: 1-based page number.
          *     :param page_size: Page size, 1 to :data:`~app.storage.port.MAX_PAGE_SIZE`.
          *     :param provider: Storage provider (overridden by tests).
@@ -1051,6 +1052,21 @@ export interface components {
             page_size: number;
         };
         /**
+         * SearchSort
+         * @description Result order of :meth:`app.storage.port.CatalogStore.search`.
+         *
+         *     Every order ends with the lower-cased title and the record id, so
+         *     pages are stable even when the leading key ties.
+         *
+         *     - ``relevance``: text rank, best first; without a text query it
+         *       is the same as ``title``.
+         *     - ``title``: lower-cased title A-Z.
+         *     - ``recent``: ``record.updated_at`` (when the content digest last
+         *       changed), newest first.
+         * @enum {string}
+         */
+        SearchSort: "relevance" | "title" | "recent";
+        /**
          * Severity
          * @description Severity of a validation issue.
          * @enum {string}
@@ -1195,6 +1211,8 @@ export interface operations {
                 needs_approval?: boolean;
                 /** @description Which records to return: `decision` (default), `erratum`, or `all`. Combines with every other filter. */
                 record_type?: components["schemas"]["RecordTypeFilter"];
+                /** @description Result order: `relevance` (text rank, best first), `title` (A-Z) or `recent` (content last changed, newest first). Default: `relevance` when `q` is set, else `title`; `relevance` without `q` falls back to `title`. Ties are broken by title, then id. */
+                sort?: components["schemas"]["SearchSort"] | null;
                 page?: number;
                 page_size?: number;
             };

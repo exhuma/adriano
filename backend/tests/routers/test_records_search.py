@@ -126,3 +126,99 @@ def test_invalid_state_filter_is_422(client: TestClient) -> None:
     response = client.get("/api/v1/records", params={"state": "bogus"})
 
     assert response.status_code == 422
+
+
+def _titles(client: TestClient, **params: str) -> list[str]:
+    """
+    Search through the API and return the hit titles in order.
+
+    :param client: Test client.
+    :param params: Query parameters.
+    :returns: The titles.
+    """
+    response = client.get("/api/v1/records", params=params)
+    assert response.status_code == 200
+    return [item["title"] for item in response.json()["items"]]
+
+
+def _seed_in_turn(
+    provider: PostgresStoreProvider, documents: list[tuple[str, bytes]]
+) -> None:
+    """
+    Ingest documents one transaction each, oldest first.
+
+    :param provider: Provider.
+    :param documents: ``(path, content)`` pairs.
+    """
+    for path, content in documents:
+        with provider.lock_registration("central") as store:
+            seed(store, path=path, content=content)
+
+
+def test_sort_defaults_and_values(
+    client: TestClient, provider: PostgresStoreProvider
+) -> None:
+    """Ensure each sort value orders hits and the defaults apply."""
+    _seed_in_turn(
+        provider,
+        [
+            ("doc/decisions/a.md", adr(uuid.uuid4(), title="Alpha", body="x")),
+            (
+                "doc/decisions/z.md",
+                adr(uuid.uuid4(), title="Zulu caching", body="y"),
+            ),
+            ("doc/decisions/m.md", adr(uuid.uuid4(), title="Mike", body="x")),
+        ],
+    )
+    by_title = ["Alpha", "Mike", "Zulu caching"]
+    by_recent = ["Mike", "Zulu caching", "Alpha"]
+
+    assert _titles(client) == by_title
+    assert _titles(client, sort="title") == by_title
+    assert _titles(client, sort="relevance") == by_title
+    assert _titles(client, q=" ", sort="relevance") == by_title
+    assert _titles(client, sort="recent") == by_recent
+    assert _titles(client, q="x") == ["Alpha", "Mike"]
+    assert _titles(client, q="caching OR x") == [
+        "Zulu caching",
+        "Alpha",
+        "Mike",
+    ]
+    assert _titles(client, q="caching OR x", sort="title") == by_title
+    assert _titles(client, q="caching OR x", sort="recent") == by_recent
+
+
+def test_sort_combines_with_needs_approval_and_record_type(
+    client: TestClient, provider: PostgresStoreProvider
+) -> None:
+    """Ensure ``recent`` composes with ``needs_approval``/``record_type``."""
+    target = uuid.uuid4()
+    _seed_in_turn(
+        provider,
+        [
+            ("doc/decisions/t.md", adr(target, title="Target")),
+            (
+                "doc/decisions/errata/e.md",
+                (
+                    f"---\nuuid: {uuid.uuid4()}\ntitle: Erratum\n"
+                    f"erratum-for: {target}\ntype: editorial\n---\n"
+                    "## Corrected text\n\nFixed.\n"
+                ).encode(),
+            ),
+            ("doc/decisions/n.md", adr(uuid.uuid4(), title="Newest")),
+        ],
+    )
+
+    def recent(**params: str) -> list[str]:
+        return _titles(client, sort="recent", needs_approval="true", **params)
+
+    assert recent() == ["Newest", "Target"]
+    assert recent(record_type="erratum") == ["Erratum"]
+    assert recent(record_type="all") == ["Newest", "Erratum", "Target"]
+
+
+def test_invalid_sort_is_422(client: TestClient) -> None:
+    """Ensure an unknown ``sort`` value is rejected, not ignored."""
+    response = client.get("/api/v1/records", params={"sort": "newest"})
+
+    assert response.status_code == 422

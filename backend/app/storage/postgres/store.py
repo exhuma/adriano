@@ -50,6 +50,7 @@ from app.storage.port import (
     Revision,
     SearchFilters,
     SearchPage,
+    SearchSort,
     StoredRecord,
     UpsertResult,
 )
@@ -193,10 +194,11 @@ class PostgresCatalogStore:
         page_size: int,
         *,
         policy: Policy | None,
+        sort: SearchSort = SearchSort.RELEVANCE,
     ) -> SearchPage:
         """See :meth:`app.storage.port.CatalogStore.search`."""
         return search.search(
-            self._session, query, filters, page, page_size, policy
+            self._session, query, filters, page, page_size, policy, sort
         )
 
     def append_decision(self, decision: NewDecision) -> DecisionEvent:

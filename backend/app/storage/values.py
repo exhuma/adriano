@@ -7,8 +7,8 @@ through :mod:`app.storage.port`, which re-exports everything here.
 Public API:
 
 - enums :class:`RecordState`, :class:`PollStatus`, :class:`IntakeKind`,
-  :class:`IntakeStatus`; constant :data:`MAX_PAGE_SIZE`; alias
-  :data:`JsonObject`
+  :class:`IntakeStatus`, :class:`SearchSort`; constant
+  :data:`MAX_PAGE_SIZE`; alias :data:`JsonObject`
 - values :class:`RegistrationConfig`, :class:`Registration`,
   :class:`Revision`, :class:`RecordWrite`, :class:`StoredRecord`,
   :class:`ErratumRow`, :class:`UpsertResult`, :class:`ChangeTokenEntry`,
@@ -71,6 +71,25 @@ class IntakeStatus(StrEnum):
     OK = "ok"
     PARTIAL = "partial"
     FAILED = "failed"
+
+
+class SearchSort(StrEnum):
+    """
+    Result order of :meth:`app.storage.port.CatalogStore.search`.
+
+    Every order ends with the lower-cased title and the record id, so
+    pages are stable even when the leading key ties.
+
+    - ``relevance``: text rank, best first; without a text query it
+      is the same as ``title``.
+    - ``title``: lower-cased title A-Z.
+    - ``recent``: ``record.updated_at`` (when the content digest last
+      changed), newest first.
+    """
+
+    RELEVANCE = "relevance"
+    TITLE = "title"
+    RECENT = "recent"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

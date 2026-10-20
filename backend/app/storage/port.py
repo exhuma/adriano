@@ -59,6 +59,7 @@ from app.storage.values import (
     SearchFilters,
     SearchItem,
     SearchPage,
+    SearchSort,
     StoredRecord,
     UpsertResult,
 )
@@ -86,6 +87,7 @@ __all__ = [
     "SearchFilters",
     "SearchItem",
     "SearchPage",
+    "SearchSort",
     "StoredErratum",
     "StoredRecord",
     "UpsertResult",
@@ -319,11 +321,13 @@ class CatalogStore(Protocol):
         page_size: int,
         *,
         policy: Policy | None,
+        sort: SearchSort = SearchSort.RELEVANCE,
     ) -> SearchPage:
         """
         Full-text search with filters and bounded pagination.
 
-        Hits are ranked by relevance when *query* is given, else ordered
+        Hits are ordered by *sort* (see :class:`SearchSort`); the
+        default ranks by relevance when *query* is given, else orders
         by title.
 
         :param query: Free text (titles, bodies, UUIDs, paths); blank or
@@ -333,6 +337,8 @@ class CatalogStore(Protocol):
         :param page_size: Page size, 1 to :data:`MAX_PAGE_SIZE`.
         :param policy: The configured policy (``None`` when missing or
             invalid), used for approval states.
+        :param sort: Result order; ``relevance`` without a query
+            falls back to ``title``.
         :returns: The page.
         :raises ValueError: If *page* or *page_size* is out of bounds.
         """
