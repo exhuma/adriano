@@ -70,6 +70,8 @@ export type DecisionSummaryOut = components["schemas"]["DecisionSummaryOut"];
 export type ApprovalOut = components["schemas"]["ApprovalOut"];
 /** Everything the record detail page shows. */
 export type RecordDetail = components["schemas"]["RecordDetailOut"];
+/** Search filter restricting results to decisions, errata, or both. */
+export type RecordTypeFilter = components["schemas"]["RecordTypeFilter"];
 
 /** Query parameters accepted by `GET /api/v1/records`. */
 export interface SearchParams {
@@ -83,6 +85,8 @@ export interface SearchParams {
   state?: RecordState;
   /** Restrict to records whose current content needs approval. */
   needs_approval?: boolean;
+  /** Restrict to decisions (default), errata, or both. */
+  record_type?: RecordTypeFilter;
   /** 1-based page number. */
   page?: number;
   /** Page size, 1 to 50. */

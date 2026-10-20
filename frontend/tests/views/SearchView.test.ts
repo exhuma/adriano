@@ -112,6 +112,67 @@ describe("SearchView", () => {
     );
   });
 
+  it("shows an erratum row with its chip and 'Erratum for <title>' line", async () => {
+    const page: SearchPage = {
+      items: [
+        {
+          id: "44444444-4444-4444-4444-444444444444",
+          title: "Erratum: Consequences",
+          source_id: "central",
+          project: "platform",
+          path: "doc/decisions/errata/2025-05-01-fix.md",
+          ref: "main",
+          kind: "published",
+          record_kind: "erratum",
+          approval_state: "pending",
+          issue_counts: { error: 0, warning: 0 },
+          erratum_for_title: "Use PostgreSQL",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/?record_type=erratum");
+
+    expect(wrapper.text()).toContain("Erratum: Consequences");
+    expect(wrapper.text()).toContain("Erratum for Use PostgreSQL");
+    expect(wrapper.text()).toContain("Erratum");
+    expect(searchRecords).toHaveBeenCalledWith(
+      expect.objectContaining({ record_type: "erratum" }),
+    );
+  });
+
+  it("shows 'Erratum for an unknown decision' when the target is unresolved", async () => {
+    const page: SearchPage = {
+      items: [
+        {
+          id: "55555555-5555-5555-5555-555555555555",
+          title: "Erratum: orphaned",
+          source_id: "central",
+          project: "platform",
+          path: "doc/decisions/errata/2025-05-01-orphan.md",
+          ref: "main",
+          kind: "published",
+          record_kind: "erratum",
+          approval_state: "pending",
+          issue_counts: { error: 0, warning: 0 },
+          erratum_for_title: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/?record_type=erratum");
+
+    expect(wrapper.text()).toContain("Erratum for an unknown decision");
+  });
+
   it("shows an error state and retries the same request on demand", async () => {
     searchRecords.mockRejectedValueOnce(new Error("network down"));
     searchRecords.mockResolvedValueOnce({

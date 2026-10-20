@@ -4,7 +4,11 @@
  * policy summary, indexed digest (short, with copy), decide
  * controls (or the visible reason decisions are blocked), and the
  * decision history. `DecisionDialog.vue` is the adapter that turns
- * an Accept/Reject click into a submitted decision.
+ * an Accept/Reject click into a submitted decision. Wording switches
+ * to the RFC "report → verify/reject" vocabulary when the viewed
+ * record is itself an erratum; the underlying decide logic
+ * (`useDecision`) is unchanged -- actions stay accepted/rejected
+ * either way.
  */
 import { ref } from "vue";
 
@@ -12,7 +16,7 @@ import DecisionDialog from "@/components/DecisionDialog.vue";
 import DecisionHistoryTable from "@/components/DecisionHistoryTable.vue";
 import StatusChip from "@/components/StatusChip.vue";
 import type { ApprovalOut, DecisionAction, DecisionSummaryOut } from "@/types/approval";
-import type { RecordState } from "@/types/records";
+import type { RecordKind, RecordState } from "@/types/records";
 import { shortDigest } from "@/utils/digest";
 import { approvalStateExplanation, approvalStateLabel } from "@/utils/labels";
 
@@ -21,7 +25,11 @@ const props = defineProps<{
   approval: ApprovalOut;
   /** Whether the viewed row is published or a candidate (only used
    *  to pick between the two "accepted" labels). */
-  recordKind: RecordState;
+  kind: RecordState;
+  /** Whether the viewed record is a normal decision or an erratum;
+   *  picks the "Accept/Reject" vs "Verify erratum/Reject erratum"
+   *  wording. */
+  recordKind: RecordKind;
   /** Record id, for the decision dialog's submission. */
   recordId: string;
 }>();
@@ -89,9 +97,9 @@ function policySummaryText(approval: ApprovalOut): string {
   <v-card class="mb-4" variant="outlined">
     <v-card-title class="text-subtitle-1">Approval</v-card-title>
     <v-card-text>
-      <StatusChip v-bind="approvalStateLabel(approval.state, recordKind)" class="mb-2" />
+      <StatusChip v-bind="approvalStateLabel(approval.state, kind)" class="mb-2" />
       <p class="text-body-2">
-        {{ approvalStateExplanation(approval.state, approval.policy.status) }}
+        {{ approvalStateExplanation(approval.state, approval.policy.status, recordKind) }}
       </p>
       <p class="text-body-2">{{ policySummaryText(approval) }}</p>
 
@@ -115,7 +123,7 @@ function policySummaryText(approval: ApprovalOut): string {
           prepend-icon="mdi-check"
           @click="openDialog('accepted', $event)"
         >
-          Accept
+          {{ recordKind === "erratum" ? "Verify erratum" : "Accept" }}
         </v-btn>
         <v-btn
           color="error"
@@ -123,7 +131,7 @@ function policySummaryText(approval: ApprovalOut): string {
           prepend-icon="mdi-close"
           @click="openDialog('rejected', $event)"
         >
-          Reject
+          {{ recordKind === "erratum" ? "Reject erratum" : "Reject" }}
         </v-btn>
       </div>
       <p v-else class="text-body-2 mt-3 decide-blocked">
@@ -142,6 +150,7 @@ function policySummaryText(approval: ApprovalOut): string {
       :model-value="dialogOpen"
       :record-id="recordId"
       :action="dialogAction"
+      :record-kind="recordKind"
       :digest="approval.digest"
       @update:model-value="onDialogClosed"
       @decided="(event) => emit('decided', event)"

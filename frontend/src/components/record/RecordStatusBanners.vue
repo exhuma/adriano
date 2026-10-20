@@ -37,22 +37,41 @@ const hasErrataNotice = computed(
   () => props.errataSummary.total + props.errataSummary.proposed > 0,
 );
 
-/** The errata notice's sentence, built from the counts: a fixed
- *  verified/reported pair, changed/rejected only when nonzero, and a
- *  trailing "N proposed" sentence only when there are proposed
- *  (candidate) errata. */
+/** Singular/plural noun for an erratum count. */
+function pluralizeErrata(count: number): string {
+  return count === 1 ? "erratum" : "errata";
+}
+
+/** The errata notice's sentence, built from the counts: a dedicated
+ *  "N proposed errata (not yet published)" sentence when nothing is
+ *  published yet, otherwise the total plus only the nonzero
+ *  verified/reported/changed/rejected parts, and a trailing
+ *  "N proposed" sentence only when there are proposed (candidate)
+ *  errata on top of the published ones. */
 const errataNoticeText = computed(() => {
   const s = props.errataSummary;
-  let text =
-    `This decision has ${s.total} errata (${s.verified} verified, ` +
-    `${s.reported} reported`;
+  if (s.total === 0) {
+    return (
+      `This decision has ${s.proposed} proposed ` +
+      `${pluralizeErrata(s.proposed)} (not yet published).`
+    );
+  }
+  const parts: string[] = [];
+  if (s.verified > 0) {
+    parts.push(`${s.verified} verified`);
+  }
+  if (s.reported > 0) {
+    parts.push(`${s.reported} reported`);
+  }
   if (s.changed > 0) {
-    text += `, ${s.changed} changed`;
+    parts.push(`${s.changed} changed`);
   }
   if (s.rejected > 0) {
-    text += `, ${s.rejected} rejected`;
+    parts.push(`${s.rejected} rejected`);
   }
-  text += ").";
+  let text =
+    `This decision has ${s.total} ${pluralizeErrata(s.total)} ` +
+    `(${parts.join(", ")}).`;
   if (s.proposed > 0) {
     text += ` ${s.proposed} proposed.`;
   }

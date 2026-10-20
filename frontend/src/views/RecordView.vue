@@ -18,8 +18,9 @@ import DiffPanel from "@/components/DiffPanel.vue";
 import DivergenceBanner from "@/components/DivergenceBanner.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
+import ErrataSection from "@/components/record/ErrataSection.vue";
+import ErratumBody from "@/components/record/ErratumBody.vue";
 import RecordDecisionCard from "@/components/record/RecordDecisionCard.vue";
-import RecordErrataPlaceholder from "@/components/record/RecordErrataPlaceholder.vue";
 import RecordFreshnessBanner from "@/components/record/RecordFreshnessBanner.vue";
 import RecordHeader from "@/components/record/RecordHeader.vue";
 import RecordIssuesList from "@/components/record/RecordIssuesList.vue";
@@ -232,13 +233,13 @@ const updatedByLinks = computed(() =>
       <v-row>
         <v-col cols="12" md="8">
           <RecordIssuesList :issues="detail.issues" />
-
           <RecordDecisionCard
+            v-if="detail.metadata.record_kind === 'decision'"
             :rendered-html="detail.rendered_html"
-            :record-kind="detail.metadata.record_kind"
           />
+          <ErratumBody v-else :erratum="detail.erratum" :erratum-for="detail.erratum_for" />
 
-          <RecordErrataPlaceholder :errata="detail.errata" />
+          <ErrataSection :errata="detail.errata" />
 
           <DivergenceBanner
             :divergence="detail.approval.divergence"
@@ -248,10 +249,10 @@ const updatedByLinks = computed(() =>
           <ApprovalCard
             id="approval"
             :approval="detail.approval"
-            :record-kind="detail.metadata.kind"
+            :kind="detail.metadata.kind"
+            :record-kind="detail.metadata.record_kind"
             :record-id="props.id"
-            @decided="onDecided"
-            @digest-changed="onDigestChanged"
+            @decided="onDecided" @digest-changed="onDigestChanged"
           />
 
           <DiffPanel
@@ -270,8 +271,7 @@ const updatedByLinks = computed(() =>
 
         <v-col cols="12" md="4">
           <RecordSidebar
-            :record-kind="detail.metadata.record_kind"
-            :kind="detail.metadata.kind"
+            :record-kind="detail.metadata.record_kind" :kind="detail.metadata.kind"
             :approval-state="detail.approval.state"
             :adr-uuid="detail.metadata.adr_uuid"
             :decision-date="detail.metadata.decision_date"

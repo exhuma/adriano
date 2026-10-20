@@ -1,0 +1,109 @@
+<script setup lang="ts">
+/**
+ * One erratum row in `ErrataSection.vue`: a status chip (Reported /
+ * Verified / Rejected / …, icon and text), a type chip, its section
+ * (if any), who/when reported it (if known), a link to its own page,
+ * and the original/corrected/notes text. A rejected erratum is
+ * collapsed by default behind a toggle button with `aria-expanded`
+ * (module-ux-principles accessibility), since it no longer needs a
+ * reader's attention; every other state is expanded by default.
+ */
+import { computed, ref } from "vue";
+
+import StatusChip from "@/components/StatusChip.vue";
+import ErratumTextBlocks from "@/components/record/ErratumTextBlocks.vue";
+import type { ErratumOut } from "@/types/records";
+import { erratumStatusLabel, erratumTypeLabel } from "@/utils/labels";
+
+const props = defineProps<{
+  /** One published or candidate erratum correcting the viewed record. */
+  erratum: ErratumOut;
+}>();
+
+const statusLabel = computed(() =>
+  erratumStatusLabel(props.erratum.approval_state, props.erratum.kind, props.erratum.ref),
+);
+const typeLabel = computed(() => erratumTypeLabel(props.erratum.type));
+
+const isRejected = computed(() => props.erratum.approval_state === "rejected");
+
+/** Rejected errata start collapsed; everything else starts expanded. */
+const expanded = ref(!isRejected.value);
+
+function toggle(): void {
+  expanded.value = !expanded.value;
+}
+
+/** "Reported by X on Y", with either half omitted when unknown, and
+ *  the whole line omitted when neither is known. */
+const reportedLine = computed(() => {
+  const parts: string[] = [];
+  if (props.erratum.reported_by) {
+    parts.push(`Reported by ${props.erratum.reported_by}`);
+  }
+  if (props.erratum.reported_date) {
+    parts.push(parts.length > 0 ? `on ${props.erratum.reported_date}` : props.erratum.reported_date);
+  }
+  return parts.join(" ");
+});
+</script>
+
+<template>
+  <li class="erratum-entry">
+    <div class="erratum-entry-header">
+      <StatusChip v-bind="statusLabel" />
+      <StatusChip v-bind="typeLabel" />
+      <span v-if="erratum.section" class="text-body-2">
+        Section: {{ erratum.section }}
+      </span>
+      <span v-if="reportedLine" class="text-body-2 text-medium-emphasis">
+        {{ reportedLine }}
+      </span>
+      <router-link :to="`/records/${erratum.id}`" class="text-body-2">
+        Open erratum
+      </router-link>
+      <v-btn
+        v-if="isRejected"
+        size="small"
+        variant="text"
+        :aria-expanded="expanded"
+        @click="toggle"
+      >
+        {{ expanded ? "Hide details" : "Show details" }}
+      </v-btn>
+    </div>
+
+    <div v-if="expanded" class="erratum-entry-body">
+      <p v-if="!erratum.has_content" class="text-body-2 text-medium-emphasis">
+        Content not indexed yet —
+        <router-link :to="`/records/${erratum.id}`">open the erratum</router-link>.
+      </p>
+      <ErratumTextBlocks
+        v-else
+        :original-html="erratum.original_html"
+        :corrected-html="erratum.corrected_html"
+        :notes-html="erratum.notes_html"
+      />
+    </div>
+  </li>
+</template>
+
+<style scoped>
+.erratum-entry {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+}
+
+.erratum-entry-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.erratum-entry-body {
+  margin-top: 0.5rem;
+}
+</style>

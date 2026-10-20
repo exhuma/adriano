@@ -21,18 +21,25 @@ import LoadingState from "@/components/LoadingState.vue";
 import StatusChip from "@/components/StatusChip.vue";
 import { useSearchQuery } from "@/composables/useSearchQuery";
 import { withLoading } from "@/composables/useLoading";
-import type { RecordState, SearchItem, SearchPage, SearchParams } from "@/types/records";
+import type {
+  RecordState,
+  RecordTypeFilter,
+  SearchItem,
+  SearchPage,
+  SearchParams,
+} from "@/types/records";
 import type { FacetsOut } from "@/types/sources";
 import {
   approvalStateLabel,
   issueIndicatorLabel,
+  recordKindTypeLabel,
   recordStateLabel,
 } from "@/utils/labels";
 
 const PAGE_SIZE = 20;
 
 const route = useRoute();
-const { q, source, project, state, needsApproval, page, clearFilters } =
+const { q, source, project, state, needsApproval, recordType, page, clearFilters } =
   useSearchQuery();
 
 const facets = ref<FacetsOut | null>(null);
@@ -102,6 +109,7 @@ const results = ref<SearchPage | null>(null);
 const committedParams = computed<SearchParams>(() => {
   const query = route.query;
   const rawState = typeof query.state === "string" ? query.state : undefined;
+  const rawRecordType = typeof query.record_type === "string" ? query.record_type : undefined;
   const pageRaw = typeof query.page === "string" ? Number.parseInt(query.page, 10) : 1;
   return {
     q: typeof query.q === "string" ? query.q : undefined,
@@ -109,6 +117,7 @@ const committedParams = computed<SearchParams>(() => {
     project: typeof query.project === "string" ? query.project : undefined,
     state: (rawState as RecordState | undefined) ?? undefined,
     needs_approval: query.needs_approval === "true" ? true : undefined,
+    record_type: (rawRecordType as RecordTypeFilter | undefined) ?? undefined,
     page: Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1,
     page_size: PAGE_SIZE,
   };
@@ -120,7 +129,8 @@ const hasActiveFilters = computed(
     Boolean(committedParams.value.source) ||
     Boolean(committedParams.value.project) ||
     Boolean(committedParams.value.state) ||
-    Boolean(committedParams.value.needs_approval),
+    Boolean(committedParams.value.needs_approval) ||
+    Boolean(committedParams.value.record_type),
 );
 
 function describeError(error: unknown): string {
@@ -228,6 +238,19 @@ function recordHref(item: SearchItem): string {
         </v-btn>
       </v-btn-toggle>
 
+      <v-select
+        v-model="recordType"
+        :items="[
+          { title: 'Decisions', value: 'decision' },
+          { title: 'Errata', value: 'erratum' },
+          { title: 'Both', value: 'all' },
+        ]"
+        label="Show"
+        density="comfortable"
+        variant="outlined"
+        class="filter-select"
+      />
+
       <v-switch
         v-model="needsApproval"
         label="Needs approval"
@@ -309,9 +332,23 @@ function recordHref(item: SearchItem): string {
                 <span class="text-body-2 text-medium-emphasis">
                   {{ item.source_id }} / {{ item.project }}
                 </span>
+                <span
+                  v-if="item.record_kind === 'erratum'"
+                  class="text-body-2 text-medium-emphasis"
+                >
+                  {{
+                    item.erratum_for_title
+                      ? `Erratum for ${item.erratum_for_title}`
+                      : "Erratum for an unknown decision"
+                  }}
+                </span>
               </div>
               <div class="result-chips">
                 <StatusChip v-bind="recordStateLabel(item.kind, item.ref)" />
+                <StatusChip
+                  v-if="item.record_kind === 'erratum'"
+                  v-bind="recordKindTypeLabel(item.record_kind)"
+                />
                 <StatusChip
                   v-bind="approvalStateLabel(item.approval_state, item.kind)"
                 />

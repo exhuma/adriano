@@ -37,12 +37,16 @@ function click(element: HTMLButtonElement | HTMLInputElement | undefined): void 
   element!.click();
 }
 
-async function mountDialog(action: "accepted" | "rejected" = "accepted") {
+async function mountDialog(
+  action: "accepted" | "rejected" = "accepted",
+  recordKind: "decision" | "erratum" = "decision",
+) {
   const wrapper = mount(DecisionDialog, {
     props: {
       modelValue: true,
       recordId: "11111111-1111-1111-1111-111111111111",
       action,
+      recordKind,
       digest: DIGEST,
     },
     global: { plugins: [vuetify] },
@@ -125,6 +129,22 @@ describe("DecisionDialog", () => {
       "accepted",
       DIGEST,
       "",
+    );
+  });
+
+  it("uses erratum wording for the title and confirm button on an erratum", async () => {
+    await mountDialog("accepted", "erratum");
+
+    expect(document.body.textContent).toContain("Verify this erratum?");
+    expect(button("Verify")).toBeDefined();
+  });
+
+  it("uses erratum wording for a rejection on an erratum", async () => {
+    await mountDialog("rejected", "erratum");
+
+    expect(document.body.textContent).toContain("Reject this erratum?");
+    expect(document.body.textContent).toContain(
+      "I confirm I want to reject this erratum.",
     );
   });
 });

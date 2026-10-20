@@ -92,11 +92,26 @@ describe("RecordStatusBanners", () => {
     expect(wrapper.find("a[href='#errata']").exists()).toBe(true);
   });
 
-  it("includes changed and rejected counts only when nonzero, and a proposed sentence", async () => {
+  it("uses the singular 'erratum' for a single published erratum", async () => {
+    const wrapper = await mountBanners({
+      errataSummary: {
+        total: 1,
+        verified: 0,
+        reported: 1,
+        rejected: 0,
+        changed: 0,
+        proposed: 0,
+      },
+    });
+
+    expect(wrapper.text()).toContain("This decision has 1 erratum (1 reported).");
+  });
+
+  it("omits zero-count parts (verified and reported) and includes changed/rejected, plus a proposed sentence", async () => {
     const wrapper = await mountBanners({
       errataSummary: {
         total: 2,
-        verified: 1,
+        verified: 0,
         reported: 0,
         rejected: 1,
         changed: 1,
@@ -105,9 +120,45 @@ describe("RecordStatusBanners", () => {
     });
 
     expect(wrapper.text()).toContain(
-      "This decision has 2 errata (1 verified, 0 reported, 1 changed, 1 rejected).",
+      "This decision has 2 errata (1 changed, 1 rejected).",
     );
+    expect(wrapper.text()).not.toContain("0 verified");
+    expect(wrapper.text()).not.toContain("0 reported");
     expect(wrapper.text()).toContain("2 proposed.");
+  });
+
+  it("shows a dedicated proposed-only sentence when nothing is published yet", async () => {
+    const wrapper = await mountBanners({
+      errataSummary: {
+        total: 0,
+        verified: 0,
+        reported: 0,
+        rejected: 0,
+        changed: 0,
+        proposed: 3,
+      },
+    });
+
+    expect(wrapper.text()).toContain(
+      "This decision has 3 proposed errata (not yet published).",
+    );
+  });
+
+  it("pluralizes a single proposed-only erratum", async () => {
+    const wrapper = await mountBanners({
+      errataSummary: {
+        total: 0,
+        verified: 0,
+        reported: 0,
+        rejected: 0,
+        changed: 0,
+        proposed: 1,
+      },
+    });
+
+    expect(wrapper.text()).toContain(
+      "This decision has 1 proposed erratum (not yet published).",
+    );
   });
 
   it("shows no errata notice when there are neither published nor proposed errata", async () => {

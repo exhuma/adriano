@@ -9,6 +9,7 @@ import type { DecisionAction, DivergenceKind, PolicyStatus } from "@/types/appro
 import type {
   ApprovalStateCode,
   DisplayStatus,
+  ErratumType,
   IssueCountsOut,
   RecordKind,
   RecordState,
@@ -79,6 +80,7 @@ export function approvalStateLabel(
 export function approvalStateExplanation(
   state: ApprovalStateCode,
   policyStatus: PolicyStatus,
+  recordKind: RecordKind = "decision",
 ): string {
   if (state === "policy_missing" || policyStatus !== "configured") {
     return policyStatus === "invalid"
@@ -86,6 +88,23 @@ export function approvalStateExplanation(
         "must fix it."
       : "No approval policy is configured — an operator must " +
         "configure one.";
+  }
+  if (recordKind === "erratum") {
+    switch (state) {
+      case "pending":
+        return "This erratum is reported and awaits verification.";
+      case "rejected":
+        return "This erratum was rejected for this exact content.";
+      case "changed_since_acceptance":
+        return "This erratum's content changed since it was verified " +
+          "— the verified version differs from the current content.";
+      case "not_required":
+        return "This erratum does not require review.";
+      case "accepted":
+        return "This erratum was verified for this exact content.";
+      default:
+        return "";
+    }
   }
   switch (state) {
     case "pending":
@@ -159,6 +178,71 @@ export function recordKindTypeLabel(kind: RecordKind): StatusLabel {
   return kind === "erratum"
     ? { icon: "mdi-file-alert-outline", text: "Erratum" }
     : { icon: "mdi-file-document-outline", text: "Decision" };
+}
+
+/**
+ * Describe one erratum's own approval state for display (RFC-style
+ * report/verify/reject vocabulary, distinct from `approvalStateLabel`'s
+ * decision wording).
+ *
+ * :param state: Approval state of the erratum's current content.
+ * :param kind: Whether this erratum row is published or a candidate;
+ *     a candidate additionally shows a "Proposed" suffix.
+ * :param ref: Source ref (branch/label) for a candidate; shown in the
+ *     "Proposed (branch …)" suffix when known.
+ * :returns: Icon, label text, and colour.
+ */
+export function erratumStatusLabel(
+  state: ApprovalStateCode,
+  kind: RecordState,
+  ref?: string,
+): StatusLabel {
+  const base = ((): StatusLabel => {
+    switch (state) {
+      case "pending":
+      case "policy_missing":
+        return { icon: "mdi-clock-outline", text: "Reported", color: "warning" };
+      case "accepted":
+        return { icon: "mdi-check-decagram", text: "Verified", color: "success" };
+      case "rejected":
+        return { icon: "mdi-close-circle", text: "Rejected", color: "error" };
+      case "changed_since_acceptance":
+        return {
+          icon: "mdi-alert-circle",
+          text: "Changed since verification",
+          color: "warning",
+        };
+      case "not_required":
+        return {
+          icon: "mdi-information-outline",
+          text: "Published (no review required)",
+        };
+      default:
+        return { icon: "mdi-help-circle-outline", text: state };
+    }
+  })();
+  if (kind !== "candidate") {
+    return base;
+  }
+  const proposed = ref ? `Proposed (branch ${ref})` : "Proposed";
+  return { ...base, text: `${base.text} — ${proposed}` };
+}
+
+/**
+ * Describe an erratum's reported correction type for display.
+ *
+ * :param type: Technical or editorial, or `null` when unset.
+ * :returns: Icon and label text.
+ */
+export function erratumTypeLabel(type: ErratumType | null): StatusLabel {
+  switch (type) {
+    case "technical":
+      return { icon: "mdi-wrench-outline", text: "Technical" };
+    case "editorial":
+      return { icon: "mdi-pencil-outline", text: "Editorial" };
+    default:
+      return { icon: "mdi-help-circle-outline", text: "Type not set" };
+  }
 }
 
 /**

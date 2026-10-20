@@ -11,6 +11,8 @@ import {
   decisionActionLabel,
   displayStatusLabel,
   divergenceLabel,
+  erratumStatusLabel,
+  erratumTypeLabel,
   issueIndicatorLabel,
   pollStatusLabel,
   recordStateLabel,
@@ -106,6 +108,65 @@ describe("approvalStateExplanation", () => {
     for (const state of states) {
       expect(approvalStateExplanation(state, "configured").length).toBeGreaterThan(0);
     }
+  });
+
+  it("uses erratum wording when recordKind is 'erratum'", () => {
+    expect(approvalStateExplanation("pending", "configured", "erratum")).toBe(
+      "This erratum is reported and awaits verification.",
+    );
+    expect(approvalStateExplanation("accepted", "configured", "erratum")).toBe(
+      "This erratum was verified for this exact content.",
+    );
+    expect(approvalStateExplanation("rejected", "configured", "erratum")).toBe(
+      "This erratum was rejected for this exact content.",
+    );
+  });
+
+  it("still flags a missing policy the same way for an erratum", () => {
+    expect(
+      approvalStateExplanation("policy_missing", "missing", "erratum"),
+    ).toContain("No approval policy is configured");
+  });
+});
+
+describe("erratumStatusLabel", () => {
+  it.each([
+    ["pending", "Reported"],
+    ["policy_missing", "Reported"],
+    ["accepted", "Verified"],
+    ["rejected", "Rejected"],
+    ["changed_since_acceptance", "Changed since verification"],
+    ["not_required", "Published (no review required)"],
+  ] as [ApprovalStateCode, string][])(
+    "labels a published erratum's %s state as %s",
+    (state, expected) => {
+      const label = erratumStatusLabel(state, "published");
+      expect(label.text).toBe(expected);
+      expect(label.icon.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("appends a 'Proposed (branch …)' suffix for a candidate erratum", () => {
+    const label = erratumStatusLabel("pending", "candidate", "feature-x");
+    expect(label.text).toBe("Reported — Proposed (branch feature-x)");
+  });
+
+  it("falls back to a plain 'Proposed' suffix without a ref", () => {
+    const label = erratumStatusLabel("pending", "candidate");
+    expect(label.text).toBe("Reported — Proposed");
+  });
+});
+
+describe("erratumTypeLabel", () => {
+  it.each([
+    ["technical", "Technical"],
+    ["editorial", "Editorial"],
+  ] as const)("labels %s as %s", (type, expected) => {
+    expect(erratumTypeLabel(type).text).toBe(expected);
+  });
+
+  it("labels a missing type as 'Type not set'", () => {
+    expect(erratumTypeLabel(null).text).toBe("Type not set");
   });
 });
 

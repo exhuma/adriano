@@ -1,25 +1,29 @@
 /**
  * Two-way URL sync for the search landing page's filters.
  *
- * Keeps `q`, `source`, `project`, `state`, `needs_approval`, and
- * `page` in the route's query string, so a search is shareable by
- * link and browser back/forward restores it (module-ux-principles
- * "Feedback & visibility of system status": the URL is always an
- * honest reflection of what is on screen). Typing into the free-text
- * field is debounced before it reaches the URL -- and therefore
- * before it triggers a new request -- while the source/project/
- * state/needs_approval filters and pagination apply immediately.
- * Changing any filter other than `page` resets pagination back to
- * page 1.
+ * Keeps `q`, `source`, `project`, `state`, `needs_approval`,
+ * `record_type`, and `page` in the route's query string, so a search
+ * is shareable by link and browser back/forward restores it
+ * (module-ux-principles "Feedback & visibility of system status":
+ * the URL is always an honest reflection of what is on screen).
+ * Typing into the free-text field is debounced before it reaches the
+ * URL -- and therefore before it triggers a new request -- while the
+ * source/project/state/needs_approval/record_type filters and
+ * pagination apply immediately. Changing any filter other than
+ * `page` resets pagination back to page 1.
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQueryRaw } from "vue-router";
 
-import type { RecordState } from "@/types/records";
+import type { RecordState, RecordTypeFilter } from "@/types/records";
 
 /** The state filter: one of the two record states, or "all". */
 export type StateFilter = RecordState | "";
+
+/** Decisions only (the default, omitted from the URL), to avoid
+ *  cluttering shared links with the common case. */
+const DEFAULT_RECORD_TYPE: RecordTypeFilter = "decision";
 
 const DEFAULT_DEBOUNCE_MS = 300;
 const FILTER_KEYS = [
@@ -28,6 +32,7 @@ const FILTER_KEYS = [
   "project",
   "state",
   "needs_approval",
+  "record_type",
   "page",
 ] as const;
 
@@ -42,6 +47,10 @@ function readBoolean(value: unknown): boolean {
 function readPage(value: unknown): number {
   const parsed = Number.parseInt(readString(value), 10);
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+}
+
+function readRecordType(value: unknown): RecordTypeFilter {
+  return value === "erratum" || value === "all" ? value : DEFAULT_RECORD_TYPE;
 }
 
 /** Options for {@link useSearchQuery}. */
@@ -61,6 +70,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
   const project = ref(readString(route.query.project));
   const state = ref<StateFilter>(readString(route.query.state) as StateFilter);
   const needsApproval = ref(readBoolean(route.query.needs_approval));
+  const recordType = ref<RecordTypeFilter>(readRecordType(route.query.record_type));
   const page = ref(readPage(route.query.page));
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -79,6 +89,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
       project: project.value || undefined,
       state: state.value || undefined,
       needs_approval: needsApproval.value ? "true" : undefined,
+      record_type: recordType.value !== DEFAULT_RECORD_TYPE ? recordType.value : undefined,
       page: page.value > 1 ? String(page.value) : undefined,
     };
   }
@@ -116,7 +127,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
   }
 
   watch(q, () => applyFilterChange(true));
-  watch([source, project, state, needsApproval], () => applyFilterChange(false));
+  watch([source, project, state, needsApproval, recordType], () => applyFilterChange(false));
   watch(page, () => pushQuery());
 
   // Restore filters on browser back/forward (or any external
@@ -132,12 +143,14 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
       const nextProject = readString(query.project);
       const nextState = readString(query.state) as StateFilter;
       const nextNeedsApproval = readBoolean(query.needs_approval);
+      const nextRecordType = readRecordType(query.record_type);
       const nextPage = readPage(query.page);
       if (q.value !== nextQ) q.value = nextQ;
       if (source.value !== nextSource) source.value = nextSource;
       if (project.value !== nextProject) project.value = nextProject;
       if (state.value !== nextState) state.value = nextState;
       if (needsApproval.value !== nextNeedsApproval) needsApproval.value = nextNeedsApproval;
+      if (recordType.value !== nextRecordType) recordType.value = nextRecordType;
       if (page.value !== nextPage) page.value = nextPage;
     },
   );
@@ -151,7 +164,8 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
       source.value !== "" ||
       project.value !== "" ||
       state.value !== "" ||
-      needsApproval.value,
+      needsApproval.value ||
+      recordType.value !== DEFAULT_RECORD_TYPE,
   );
 
   /** Resets every filter and pagination to defaults and clears the URL. */
@@ -162,6 +176,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
     project.value = "";
     state.value = "";
     needsApproval.value = false;
+    recordType.value = DEFAULT_RECORD_TYPE;
     page.value = 1;
     void router.replace({ query: {} });
   }
@@ -172,6 +187,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
     project,
     state,
     needsApproval,
+    recordType,
     page,
     hasActiveFilters,
     clearFilters,

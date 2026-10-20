@@ -14,6 +14,7 @@ import { computed, ref, watch } from "vue";
 
 import { useDecision } from "@/composables/useDecision";
 import type { DecisionAction, DecisionSummaryOut } from "@/types/approval";
+import type { RecordKind } from "@/types/records";
 
 const MAX_COMMENT_LENGTH = 2000;
 
@@ -24,6 +25,9 @@ const props = defineProps<{
   recordId: string;
   /** The action this dialog asks the reviewer to confirm. */
   action: DecisionAction;
+  /** Whether the record being decided is a normal decision or an
+   *  erratum; switches to the "Verify/Reject erratum" wording. */
+  recordKind: RecordKind;
   /** The exact digest being decided -- shown in full so the reviewer
    *  can verify it is the content they reviewed. */
   digest: string;
@@ -46,9 +50,18 @@ const confirmReject = ref(false);
 const errorMessage = ref<string | null>(null);
 const errorHintText = ref<string | null>(null);
 
-const actionLabel = computed(() =>
-  props.action === "accepted" ? "Accept" : "Reject",
-);
+const isErratum = computed(() => props.recordKind === "erratum");
+
+const actionLabel = computed(() => {
+  if (props.action === "rejected") {
+    return "Reject";
+  }
+  return isErratum.value ? "Verify" : "Accept";
+});
+/** The noun in "Accept/Reject/Verify this <subject>?" -- an erratum
+ *  is named explicitly, since the page could otherwise be mistaken
+ *  for deciding the decision it corrects. */
+const subjectNoun = computed(() => (isErratum.value ? "erratum" : "content"));
 const canSubmit = computed(
   () => props.action === "accepted" || confirmReject.value,
 );
@@ -102,7 +115,7 @@ async function submit(): Promise<void> {
     @update:model-value="(value: boolean) => emit('update:modelValue', value)"
   >
     <v-card>
-      <v-card-title>{{ actionLabel }} this content?</v-card-title>
+      <v-card-title>{{ actionLabel }} this {{ subjectNoun }}?</v-card-title>
       <v-card-text>
         <p class="text-body-2 mb-2">
           You are about to <strong>{{ actionLabel.toLowerCase() }}</strong>
@@ -150,7 +163,8 @@ async function submit(): Promise<void> {
           hide-details
         >
           <template #label>
-            I confirm I want to reject this exact content.
+            <template v-if="isErratum">I confirm I want to reject this erratum.</template>
+            <template v-else>I confirm I want to reject this exact content.</template>
           </template>
         </v-checkbox>
       </v-card-text>

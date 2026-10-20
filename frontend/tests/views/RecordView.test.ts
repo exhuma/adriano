@@ -372,10 +372,12 @@ describe("RecordView status banners and layout", () => {
 
     const wrapper = await mountRecordView();
 
-    expect(wrapper.text()).toContain("This decision has 1 errata (0 verified, 1 reported).");
+    expect(wrapper.text()).toContain("This decision has 1 erratum (1 reported).");
     const anchorTarget = wrapper.find("#errata");
     expect(anchorTarget.exists()).toBe(true);
-    expect(anchorTarget.text()).toContain("Erratum: Consequences");
+    expect(anchorTarget.text()).toContain("Reported");
+    expect(anchorTarget.text()).toContain("Technical");
+    expect(anchorTarget.text()).toContain("Section: Consequences");
   });
 
   it("shows the erratum-for banner on an erratum page, resolved to its target", async () => {

@@ -136,10 +136,10 @@ describe("useSearchQuery", () => {
     expect(router.currentRoute.value.query.needs_approval).toBe("true");
   });
 
-  it("clearFilters resets every filter (including needs_approval) and clears the URL", async () => {
+  it("clearFilters resets every filter (including needs_approval and record_type) and clears the URL", async () => {
     const { router, api } = await mountSearchQuery(
       "/?q=postgres&source=central&project=platform&state=candidate" +
-        "&needs_approval=true&page=2",
+        "&needs_approval=true&record_type=all&page=2",
     );
 
     api.clearFilters();
@@ -150,8 +150,41 @@ describe("useSearchQuery", () => {
     expect(api.project.value).toBe("");
     expect(api.state.value).toBe("");
     expect(api.needsApproval.value).toBe(false);
+    expect(api.recordType.value).toBe("decision");
     expect(api.page.value).toBe(1);
     expect(router.currentRoute.value.query).toEqual({});
+  });
+
+  it("defaults record_type to 'decision', omitted from the URL and not an active filter", async () => {
+    const { api } = await mountSearchQuery("/");
+
+    expect(api.recordType.value).toBe("decision");
+    expect(api.hasActiveFilters.value).toBe(false);
+  });
+
+  it("reads record_type from the URL and includes a non-default value in active filters", async () => {
+    const { api } = await mountSearchQuery("/?record_type=erratum");
+
+    expect(api.recordType.value).toBe("erratum");
+    expect(api.hasActiveFilters.value).toBe(true);
+  });
+
+  it("applies record_type immediately, without debounce, and omits the default from the URL", async () => {
+    const { router, api } = await mountSearchQuery("/");
+
+    api.recordType.value = "all";
+    await flushPromises();
+    expect(router.currentRoute.value.query.record_type).toBe("all");
+
+    api.recordType.value = "decision";
+    await flushPromises();
+    expect(router.currentRoute.value.query.record_type).toBeUndefined();
+  });
+
+  it("ignores an invalid record_type in the URL, falling back to the default", async () => {
+    const { api } = await mountSearchQuery("/?record_type=bogus");
+
+    expect(api.recordType.value).toBe("decision");
   });
 
   it("clearFilters discards a pending debounced q change", async () => {
