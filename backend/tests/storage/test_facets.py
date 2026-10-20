@@ -1,5 +1,8 @@
 """Tests for ``CatalogStore.list_facets``."""
 
+import dataclasses
+
+from app.domain.values import RecordKind
 from app.storage.postgres.store import PostgresStoreProvider
 from tests.storage.conftest import put_record
 
@@ -42,3 +45,27 @@ def test_list_facets_is_empty_for_an_empty_catalog(
         entries = store.list_facets()
 
     assert entries == []
+
+
+def test_list_facets_does_not_count_errata(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure facets count decisions only, like the default search."""
+    with provider.unit_of_work() as store:
+        decision = put_record(store, path="doc/decisions/a.md")
+        store.upsert_published(decision)
+        erratum = dataclasses.replace(
+            put_record(store, path="doc/decisions/errata/b.md"),
+            record_kind=RecordKind.ERRATUM,
+        )
+        store.upsert_published(erratum)
+        only_errata = dataclasses.replace(
+            put_record(store, project="payments", path="doc/c.md"),
+            record_kind=RecordKind.ERRATUM,
+        )
+        store.upsert_published(only_errata)
+
+        entries = store.list_facets()
+
+    by_pair = {(e.source_id, e.project): e.count for e in entries}
+    assert by_pair == {("central", "platform"): 1}

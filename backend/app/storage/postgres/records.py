@@ -416,7 +416,9 @@ def list_relationship_candidates(
 
 def list_facets(session: Session) -> list[FacetEntry]:
     """
-    Count rows per ``(source_id, project)`` pair, for filter UIs.
+    Count decision rows per ``(source_id, project)``, for filter UIs.
+
+    Errata are not counted, matching the default search.
 
     :param session: Unit-of-work session.
     :returns: One entry per pair, ordered by source id then project.
@@ -427,6 +429,7 @@ def list_facets(session: Session) -> list[FacetEntry]:
             RECORD.c.project,
             func.count().label("count"),
         )
+        .where(RECORD.c.record_kind == RecordKind.DECISION.value)
         .group_by(RECORD.c.source_id, RECORD.c.project)
         .order_by(RECORD.c.source_id, RECORD.c.project)
     )

@@ -44,6 +44,7 @@ from app.domain.approval import (
     evaluate,
 )
 from app.services.decisions import (
+    Approvable,
     Reviewer,
     approval_blocker,
     decision_blocker,
@@ -226,7 +227,7 @@ class ApprovalSummary:
     competing_candidates: tuple[CompetingCandidate, ...]
 
 
-def is_approvable(record: StoredRecord) -> bool:
+def is_approvable(record: Approvable) -> bool:
     """
     Tell whether a stored row's content may be decided at all.
 

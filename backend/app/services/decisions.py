@@ -29,13 +29,14 @@ Events are append-only (database trigger); nothing here updates or
 deletes one.
 
 Public API: :class:`Reviewer`, :class:`DecisionBlocker`,
-:func:`approval_blocker`, :func:`decision_blocker`,
+:class:`Approvable`, :func:`approval_blocker`, :func:`decision_blocker`,
 :func:`record_decision`.
 """
 
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from app.auth.rbac import reviewer_eligibility
 from app.catalog_config import PolicyConfig
@@ -45,7 +46,7 @@ from app.domain.approval import (
     is_self_approval,
     principal,
 )
-from app.domain.issues import IssueCode
+from app.domain.issues import Issue, IssueCode
 from app.errors import (
     AdrianoError,
     ConflictError,
@@ -61,6 +62,7 @@ from app.storage.port import (
 )
 
 __all__ = [
+    "Approvable",
     "DecisionBlocker",
     "Reviewer",
     "approval_blocker",
@@ -115,7 +117,21 @@ class DecisionBlocker:
         return error_type(self.message, code=self.code, hint=self.hint)
 
 
-def approval_blocker(record: StoredRecord) -> str | None:
+class Approvable(Protocol):
+    """The fields of a stored row that decide whether it is approvable."""
+
+    @property
+    def issues(self) -> tuple[Issue, ...]:
+        """Stored validation issues."""
+        ...
+
+    @property
+    def adr_uuid(self) -> uuid.UUID | None:
+        """Authored UUID, if valid."""
+        ...
+
+
+def approval_blocker(record: Approvable) -> str | None:
     """
     Explain why a stored row's content cannot be decided at all.
 

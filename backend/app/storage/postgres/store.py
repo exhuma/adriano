@@ -40,6 +40,7 @@ from app.storage.port import (
     IntakeKind,
     IntakeRun,
     IntakeStatus,
+    LinkTarget,
     NewDecision,
     PollStatus,
     RecordState,
@@ -174,6 +175,12 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.list_errata_for`."""
         return errata.list_errata_for(self._session, target_uuid)
 
+    def list_published_by_uuid(
+        self, uuids: Collection[uuid.UUID]
+    ) -> list[LinkTarget]:
+        """See :meth:`.CatalogStore.list_published_by_uuid`."""
+        return errata.list_published_by_uuid(self._session, uuids)
+
     def list_facets(self) -> list[FacetEntry]:
         """See :meth:`app.storage.port.CatalogStore.list_facets`."""
         return records.list_facets(self._session)
@@ -199,6 +206,12 @@ class PostgresCatalogStore:
     def list_decisions(self, identity: Identity) -> list[DecisionEvent]:
         """See :meth:`app.storage.port.CatalogStore.list_decisions`."""
         return events.list_decisions(self._session, identity)
+
+    def list_decisions_for(
+        self, identities: Collection[Identity]
+    ) -> list[DecisionEvent]:
+        """See :meth:`.CatalogStore.list_decisions_for`."""
+        return events.list_decisions_for(self._session, identities)
 
     def start_intake_run(
         self,

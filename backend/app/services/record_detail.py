@@ -8,7 +8,8 @@ imports FastAPI or a source adapter. Routers convert it with
 ``RecordDetailOut.model_validate(value)``.
 
 The relationship part comes from
-:mod:`app.services.record_relationships`, the approval part from
+:mod:`app.services.record_relationships`, the errata part from
+:mod:`app.services.errata_view`, the approval part from
 :mod:`app.services.approval_view`; this module adds metadata,
 provenance, freshness, identity siblings and legacy sign-offs.
 
@@ -40,8 +41,15 @@ from app.services.approval_view import (
     is_approvable,
 )
 from app.services.decisions import Reviewer
-from app.services.record_relationships import (
+from app.services.errata_view import (
+    ErrataSummary,
+    ErratumContentInfo,
     ErratumInfo,
+    build_errata,
+    erratum_content,
+)
+from app.services.record_relationships import (
+    ErratumForInfo,
     InboundLinkInfo,
     OutboundLinkInfo,
     build_relationships,
@@ -189,7 +197,11 @@ class RecordDetail:
     :param freshness: Freshness of the owning registration.
     :param outbound_links: Resolved outbound links, authored order.
     :param inbound_links: Inbound ``updated_by``/``obsoleted_by`` links.
-    :param errata: Errata correcting this record.
+    :param errata: Errata correcting this record (published first,
+        then candidates), each with its own approval state.
+    :param errata_summary: Counts for the top notice.
+    :param erratum: For an erratum, its structured content.
+    :param erratum_for: For an erratum, the decision it corrects.
     :param status: Derived display status.
     :param siblings: Every row (published and candidates) of this
         record's identity, including this one.
@@ -206,6 +218,9 @@ class RecordDetail:
     outbound_links: tuple[OutboundLinkInfo, ...]
     inbound_links: tuple[InboundLinkInfo, ...]
     errata: tuple[ErratumInfo, ...]
+    errata_summary: ErrataSummary
+    erratum: ErratumContentInfo | None
+    erratum_for: ErratumForInfo | None
     status: DisplayStatus
     siblings: tuple[SiblingInfo, ...]
     legacy_signoff_unverified: tuple[str, ...]
@@ -343,6 +358,7 @@ def get_record_detail(
     decision_events = store.list_decisions(record.identity)
     event_views = [event.as_view() for event in decision_events]
     relationships = build_relationships(store, record, siblings)
+    errata = build_errata(store, relationships.errata, policy)
     registration = store.get_registration(record.source_id)
     config_source = next(
         (s for s in config_sources if s.id == record.source_id), None
@@ -357,7 +373,10 @@ def get_record_detail(
         ),
         outbound_links=relationships.outbound_links,
         inbound_links=relationships.inbound_links,
-        errata=relationships.errata,
+        errata=errata.errata,
+        errata_summary=errata.summary,
+        erratum=erratum_content(record.erratum),
+        erratum_for=relationships.erratum_for,
         status=relationships.status,
         siblings=_siblings(
             (s for s in siblings if s.id != record.id), policy, event_views

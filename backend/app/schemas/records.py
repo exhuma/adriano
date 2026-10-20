@@ -15,6 +15,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.approval import ApprovalStateCode, DecisionAction, PolicyStatus
+from app.domain.errata import ErratumType
 from app.domain.issues import IssueCode, Severity
 from app.domain.relationships import DisplayStatus, InboundType, Resolution
 from app.domain.values import LinkType, RecordKind, TitleSource
@@ -56,6 +57,7 @@ class SearchItemOut(BaseModel):
     record_kind: RecordKind
     approval_state: ApprovalStateCode
     issue_counts: IssueCountsOut
+    erratum_for_title: str | None
 
 
 class SearchPageOut(BaseModel):
@@ -136,12 +138,80 @@ class InboundLinkOut(BaseModel):
 
 
 class ErratumOut(BaseModel):
-    """One erratum record correcting the record being viewed."""
+    """
+    One erratum (published or candidate) of the record being viewed.
+
+    ``approval_state`` is the erratum's own state: ``pending`` /
+    ``policy_missing`` = reported, ``accepted`` = verified,
+    ``rejected``, ``changed_since_acceptance``; ``not_required`` means
+    no review is required. ``has_content`` is false (and the content
+    fields empty) for a row stored before erratum content was.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    kind: RecordState
+    ref: str
+    source_id: str
+    project: str
+    path: str
     title: str
+    type: ErratumType | None
+    section: str | None
+    reported_by: str | None
+    reported_date: datetime.date | None
+    original_html: str | None
+    corrected_html: str
+    notes_html: str | None
+    approval_state: ApprovalStateCode
+    digest: str
+    updated_at: datetime.datetime
+    has_content: bool
+
+
+class ErrataSummaryOut(BaseModel):
+    """
+    Counts of the record's errata for the top notice.
+
+    ``total``/``verified``/``reported``/``rejected``/``changed`` count
+    published errata only (``not_required`` counts as verified);
+    ``proposed`` counts candidate errata.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    total: int
+    verified: int
+    reported: int
+    rejected: int
+    changed: int
+    proposed: int
+
+
+class ErratumContentOut(BaseModel):
+    """The structured content of an erratum (on its own page)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    type: ErratumType | None
+    section: str | None
+    reported_by: str | None
+    reported_date: datetime.date | None
+    original_html: str | None
+    corrected_html: str
+    notes_html: str | None
+
+
+class ErratumForOut(BaseModel):
+    """The decision an erratum corrects, resolved like outbound links."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: uuid.UUID
+    id: uuid.UUID | None
+    title: str | None
+    resolved: bool
 
 
 class SiblingOut(BaseModel):
@@ -264,6 +334,9 @@ class RecordDetailOut(BaseModel):
     outbound_links: list[OutboundLinkOut]
     inbound_links: list[InboundLinkOut]
     errata: list[ErratumOut]
+    errata_summary: ErrataSummaryOut
+    erratum: ErratumContentOut | None
+    erratum_for: ErratumForOut | None
     status: DisplayStatus
     siblings: list[SiblingOut]
     legacy_signoff_unverified: list[str]

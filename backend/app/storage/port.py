@@ -38,7 +38,7 @@ from app.domain.approval import Policy
 from app.domain.frontmatter import JsonValue
 from app.domain.relationships import RecordSummary
 from app.domain.values import Identity
-from app.storage.errata_values import StoredErratum
+from app.storage.errata_values import LinkTarget, StoredErratum
 from app.storage.values import (
     MAX_PAGE_SIZE,
     ChangeTokenEntry,
@@ -74,6 +74,7 @@ __all__ = [
     "IntakeRun",
     "IntakeStatus",
     "JsonObject",
+    "LinkTarget",
     "MAX_PAGE_SIZE",
     "NewDecision",
     "PollStatus",
@@ -284,11 +285,25 @@ class CatalogStore(Protocol):
         """
         ...
 
+    def list_published_by_uuid(
+        self, uuids: Collection[uuid.UUID]
+    ) -> list[LinkTarget]:
+        """
+        List the published rows holding any of *uuids*, with titles.
+
+        One query for a whole search page (erratum hits' targets).
+
+        :param uuids: Authored UUIDs.
+        :returns: One entry per matching published row.
+        """
+        ...
+
     def list_facets(self) -> list[FacetEntry]:
         """
-        Count rows per ``(source_id, project)`` pair, for filter UIs.
+        Count decision rows per ``(source_id, project)``, for filter UIs.
 
-        Counts include both published and candidate rows.
+        Counts include both published and candidate rows, but not
+        errata (matching the default ``record_type=decision`` search).
 
         :returns: One entry per non-empty ``(source_id, project)``
             pair, ordered by source id then project.
@@ -339,6 +354,18 @@ class CatalogStore(Protocol):
 
         :param identity: Logical identity.
         :returns: Events, oldest first.
+        """
+        ...
+
+    def list_decisions_for(
+        self, identities: Collection[Identity]
+    ) -> list[DecisionEvent]:
+        """
+        List all decision events of several identities in one query.
+
+        :param identities: Logical identities.
+        :returns: Events of all of them, oldest first; group them by
+            :attr:`~app.storage.port.DecisionEvent.identity`.
         """
         ...
 

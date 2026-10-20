@@ -9,13 +9,14 @@ Only rendered, sanitized HTML is stored for the erratum sections: the
 raw Markdown is already kept in the immutable ``revision`` snapshot of
 the row's digest, which is what diffs and approval evidence use.
 
-Public API: :class:`StoredErratum`.
+Public API: :class:`StoredErratum`, :class:`LinkTarget`.
 """
 
 import datetime
 from dataclasses import dataclass
 
 from app.domain.errata import ErratumType
+from app.domain.relationships import RecordSummary
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -41,3 +42,19 @@ class StoredErratum:
     original_html: str | None
     corrected_html: str
     notes_html: str | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LinkTarget:
+    """
+    A published row that a link may resolve to, with its title.
+
+    Used to label erratum search hits ("Erratum for <title>") without
+    one query per hit.
+
+    :param summary: Relationship summary, keyed by ``str(record id)``.
+    :param title: Display title of the row.
+    """
+
+    summary: RecordSummary
+    title: str

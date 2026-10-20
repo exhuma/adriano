@@ -41,8 +41,25 @@ Design decisions worth recording for later phases:
   bounded by the small number of links a record has, not by catalog
   size.
 
+- **Which errata belong to a record.** Errata are fetched by the
+  record's UUID (:meth:`~app.storage.port.CatalogStore.
+  list_errata_for`, published *and* candidate rows from every
+  registration) and added to the index with only their ``corrects``
+  link. An erratum belongs to the record when that link resolves --
+  with the usual same-project, same-registration, global tiers -- to
+  a row of the record's own identity (the published row, or the
+  newest candidate when nothing is published). So an erratum in
+  another project is not shown when a decision with the same UUID
+  exists closer to it, an ambiguous ``erratum-for`` belongs to no
+  record, and the errata of a decision show on its published row and
+  on its candidate revisions alike. As for other links, candidates of
+  *other* identities are not link targets.
+- **The erratum's own target.** On an erratum's page the ``corrects``
+  link is reported as :class:`ErratumForInfo` and dropped from the
+  outbound links.
+
 Public API: :class:`OutboundLinkInfo`, :class:`InboundLinkInfo`,
-:class:`ErratumInfo`, :class:`RecordRelationships`,
+:class:`ErratumForInfo`, :class:`RecordRelationships`,
 :func:`build_relationships`.
 """
 
@@ -61,11 +78,16 @@ from app.domain.relationships import (
     Resolution,
     ResolvedLink,
 )
-from app.domain.values import LinkType
-from app.storage.port import CatalogStore, RecordState, StoredRecord
+from app.domain.values import Links, LinkType, RecordKind
+from app.storage.port import (
+    CatalogStore,
+    ErratumRow,
+    RecordState,
+    StoredRecord,
+)
 
 __all__ = [
-    "ErratumInfo",
+    "ErratumForInfo",
     "InboundLinkInfo",
     "OutboundLinkInfo",
     "RecordRelationships",
@@ -114,16 +136,20 @@ class InboundLinkInfo:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ErratumInfo:
+class ErratumForInfo:
     """
-    One erratum record correcting the record being viewed.
+    The decision an erratum corrects (its ``erratum-for``).
 
-    :param id: Erratum record id.
-    :param title: Erratum title.
+    :param uuid: The authored target UUID.
+    :param id: Resolved target record id, or ``None``.
+    :param title: Resolved target title, or ``None``.
+    :param resolved: Whether the link resolved to exactly one record.
     """
 
-    id: uuid.UUID
-    title: str
+    uuid: uuid.UUID
+    id: uuid.UUID | None
+    title: str | None
+    resolved: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -131,9 +157,12 @@ class RecordRelationships:
     """
     Relationship facts of one record, ready for the detail page.
 
-    :param outbound_links: Resolved outbound links, authored order.
+    :param outbound_links: Resolved outbound links, authored order;
+        without an erratum's own ``corrects`` link.
     :param inbound_links: Inbound ``updated_by``/``obsoleted_by`` links.
-    :param errata: Errata correcting the record.
+    :param errata: Erratum rows (published first, then candidates)
+        that belong to the record; see the module docstring.
+    :param erratum_for: For an erratum, the decision it corrects.
     :param status: Derived display status.
     :param issues: Read-time relationship issues (``missing_target``,
         ``ambiguous_target``, ``duplicate_uuid``).
@@ -141,7 +170,8 @@ class RecordRelationships:
 
     outbound_links: tuple[OutboundLinkInfo, ...]
     inbound_links: tuple[InboundLinkInfo, ...]
-    errata: tuple[ErratumInfo, ...]
+    errata: tuple[ErratumRow, ...]
+    erratum_for: ErratumForInfo | None
     status: DisplayStatus
     issues: tuple[Issue, ...]
 
@@ -165,13 +195,13 @@ def _summary(record: StoredRecord) -> RecordSummary:
     )
 
 
-def _relationship_index(
+def _relationship_summaries(
     store: CatalogStore,
     record: StoredRecord,
     siblings: Sequence[StoredRecord],
-) -> RelationshipIndex:
+) -> dict[str, RecordSummary]:
     """
-    Build the relationship index for one detail request.
+    Collect the summaries of the relationship index for one request.
 
     Only the published rows that can affect *record*'s own view are
     fetched (:meth:`~app.storage.port.CatalogStore.
@@ -185,7 +215,7 @@ def _relationship_index(
     :param store: Store of the caller's unit of work.
     :param record: The record whose detail page is being assembled.
     :param siblings: Every row of the detail record's identity.
-    :returns: The index.
+    :returns: Summaries by row key.
     """
     if record.adr_uuid is None:
         summaries: dict[str, RecordSummary] = {}
@@ -197,7 +227,71 @@ def _relationship_index(
         summaries = {summary.key: summary for summary in candidates}
     for sibling in siblings:
         summaries.setdefault(str(sibling.id), _summary(sibling))
-    return RelationshipIndex(summaries.values())
+    return summaries
+
+
+def _erratum_summary(row: ErratumRow, target: uuid.UUID) -> RecordSummary:
+    """
+    Build the summary of an erratum row with only its ``corrects`` link.
+
+    :param row: The erratum row.
+    :param target: The UUID it corrects.
+    :returns: Its summary, keyed by ``str(row.id)``.
+    """
+    return RecordSummary(
+        key=str(row.id),
+        identity=row.identity,
+        adr_uuid=row.adr_uuid,
+        links=Links(corrects=target),
+        record_kind=RecordKind.ERRATUM,
+        path=row.path,
+        published=row.kind is RecordState.PUBLISHED,
+        updated_at=row.updated_at,
+    )
+
+
+def _resolved_errata(
+    store: CatalogStore,
+    record: StoredRecord,
+    siblings: Sequence[StoredRecord],
+    summaries: dict[str, RecordSummary],
+) -> tuple[ErratumRow, ...]:
+    """
+    Select the errata whose ``corrects`` link resolves to the record.
+
+    See the module docstring "Which errata belong to a record".
+
+    :param store: Store of the caller's unit of work.
+    :param record: The viewed record.
+    :param siblings: Every row of its identity.
+    :param summaries: The record's relationship summaries.
+    :returns: The matching erratum rows, in store order.
+    """
+    if record.adr_uuid is None:
+        return ()
+    rows = store.list_errata_for(record.adr_uuid)
+    if not rows:
+        return ()
+    extended = dict(summaries)
+    for row in rows:
+        extended.setdefault(str(row.id), _erratum_summary(row, record.adr_uuid))
+    index = RelationshipIndex(extended.values())
+    own = {str(sibling.id) for sibling in siblings} | {str(record.id)}
+    return tuple(row for row in rows if _corrects_key(index, row) in own)
+
+
+def _corrects_key(index: RelationshipIndex, row: ErratumRow) -> str | None:
+    """
+    Find the row key an erratum's ``corrects`` link resolved to.
+
+    :param index: Index containing the erratum row.
+    :param row: The erratum row.
+    :returns: The resolved key, or ``None``.
+    """
+    for link in index.view(str(row.id)).outbound:
+        if link.link_type is LinkType.CORRECTS:
+            return link.target_key
+    return None
 
 
 def _related_titles(
@@ -214,7 +308,6 @@ def _related_titles(
     """
     keys = {link.target_key for link in view.outbound if link.target_key}
     keys |= {link.source_key for link in view.inbound}
-    keys |= set(view.errata)
     titles: dict[str, str] = {}
     for key in keys:
         related = store.get_record(uuid.UUID(key))
@@ -257,14 +350,28 @@ def _inbound_links(
     )
 
 
-def _errata(
-    keys: Iterable[str], titles: dict[str, str]
-) -> tuple[ErratumInfo, ...]:
-    """Convert erratum row keys to :class:`ErratumInfo`."""
-    return tuple(
-        ErratumInfo(id=uuid.UUID(key), title=titles.get(key, ""))
-        for key in keys
-    )
+def _erratum_for(
+    record: StoredRecord, links: Iterable[OutboundLinkInfo]
+) -> ErratumForInfo | None:
+    """
+    Report the decision an erratum corrects.
+
+    :param record: The viewed record.
+    :param links: Its resolved outbound links.
+    :returns: The target, or ``None`` for a decision or an erratum
+        without a valid ``erratum-for``.
+    """
+    if record.record_kind is not RecordKind.ERRATUM:
+        return None
+    for link in links:
+        if link.link_type is LinkType.CORRECTS:
+            return ErratumForInfo(
+                uuid=link.target_uuid,
+                id=link.target_id,
+                title=link.target_title,
+                resolved=link.target_id is not None,
+            )
+    return None
 
 
 def build_relationships(
@@ -280,12 +387,20 @@ def build_relationships(
     :param siblings: Every row of its identity (including itself).
     :returns: Links, errata, status and read-time issues.
     """
-    view = _relationship_index(store, record, siblings).view(str(record.id))
+    summaries = _relationship_summaries(store, record, siblings)
+    view = RelationshipIndex(summaries.values()).view(str(record.id))
     titles = _related_titles(store, view)
+    outbound = _outbound_links(view.outbound, titles)
+    erratum_for = _erratum_for(record, outbound)
+    if erratum_for is not None:
+        outbound = tuple(
+            link for link in outbound if link.link_type is not LinkType.CORRECTS
+        )
     return RecordRelationships(
-        outbound_links=_outbound_links(view.outbound, titles),
+        outbound_links=outbound,
         inbound_links=_inbound_links(view.inbound, titles),
-        errata=_errata(view.errata, titles),
+        errata=_resolved_errata(store, record, siblings, summaries),
+        erratum_for=erratum_for,
         status=view.status,
         issues=view.issues,
     )

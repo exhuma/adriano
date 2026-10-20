@@ -72,6 +72,13 @@ def list_records(
             "policy missing."
         ),
     ),
+    record_type: search.RecordTypeFilter = Query(
+        default=search.RecordTypeFilter.DECISION,
+        description=(
+            "Which records to return: `decision` (default), `erratum`, "
+            "or `all`. Combines with every other filter."
+        ),
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=_DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     provider: CatalogStoreProvider = Depends(get_store_provider),
@@ -86,6 +93,7 @@ def list_records(
     :param project: Restrict to one project path.
     :param state: Restrict to ``published`` or ``candidate``.
     :param needs_approval: Restrict to records that need approval.
+    :param record_type: Decisions (default), errata, or both.
     :param page: 1-based page number.
     :param page_size: Page size, 1 to :data:`~app.storage.port.MAX_PAGE_SIZE`.
     :param provider: Storage provider (overridden by tests).
@@ -104,6 +112,7 @@ def list_records(
             page_size=page_size,
             policy=policy,
             needs_approval=needs_approval,
+            record_type=record_type,
         )
     return SearchPageOut.model_validate(page_result)
 

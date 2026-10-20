@@ -308,12 +308,14 @@ class SearchFilters:
     :param kind: Published or candidate.
     :param needs_approval: Only records whose approval state needs
         approval (:func:`app.domain.approval.evaluate`).
+    :param record_kind: Only decisions or only errata.
     """
 
     source_id: str | None = None
     project: str | None = None
     kind: RecordState | None = None
     needs_approval: bool = False
+    record_kind: RecordKind | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -338,6 +340,7 @@ class SearchItem:
     :param approval_state: Approval state of the current digest, computed
         by the store with the same rules as
         :func:`app.domain.approval.evaluate`.
+    :param corrects: UUID an erratum corrects (``None`` for decisions).
     """
 
     id: uuid.UUID
@@ -355,6 +358,7 @@ class SearchItem:
     decision_date_inferred: bool
     issues: tuple[Issue, ...]
     approval_state: ApprovalStateCode
+    corrects: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -381,7 +385,7 @@ class FacetEntry:
 
     Used to populate the source/project filter select in the UI
     (:meth:`app.storage.port.CatalogStore.list_facets`); counts include
-    both published and candidate rows.
+    both published and candidate decision rows, never errata.
 
     :param source_id: Registration id.
     :param project: Project path.

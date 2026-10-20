@@ -86,8 +86,14 @@ def test_erratum_is_listed_on_the_corrected_record(
     response = client.get(f"/api/v1/records/{decision_id}")
 
     assert response.status_code == 200
-    [erratum] = response.json()["errata"]
+    body = response.json()
+    [erratum] = body["errata"]
     assert erratum["title"] == "Correction"
+    assert erratum["kind"] == "published"
+    assert erratum["type"] == "editorial"
+    assert "Fixing a typo." in erratum["corrected_html"]
+    assert erratum["approval_state"] == "pending"
+    assert body["errata_summary"]["reported"] == 1
 
 
 def test_inbound_obsoleted_by_and_derived_status(

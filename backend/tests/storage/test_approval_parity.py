@@ -6,9 +6,11 @@ computed by the store (search items and the ``needs_approval`` filter)
 must equal the domain evaluation over the identity's stored events. The
 browse path (state joined after paging) and the filtered path (state
 joined before paging) are both checked, with and without a text query
-and across page boundaries.
+and across page boundaries. Erratum rows (:data:`ERRATA`) check that
+the ``record_kind`` filter combines with both paths.
 """
 
+import dataclasses
 import uuid
 
 import pytest
@@ -19,7 +21,7 @@ from app.domain.approval import (
     Policy,
     evaluate,
 )
-from app.domain.values import Identity
+from app.domain.values import Identity, Links, RecordKind
 from app.storage.port import (
     MAX_PAGE_SIZE,
     CatalogStore,
@@ -114,10 +116,19 @@ MULTI_ROW: dict[
 #: UUID in another project and in another registration.
 ELSEWHERE = (("central", "elsewhere"), ("other", "platform"))
 
+#: Published erratum identities. name -> (events on the current
+#: content, expected required state).
+ERRATA: dict[str, tuple[list[DecisionAction], str]] = {
+    "erratum_reported": ([], "pending"),
+    "erratum_verified": ([A], "accepted"),
+    "erratum_rejected": ([R], "rejected"),
+}
+
 ROW_COUNT = (
     len(SCENARIOS)
     + sum(len(rows) for rows, _, _ in MULTI_ROW.values())
     + len(ELSEWHERE)
+    + len(ERRATA)
 )
 
 POLICIES = {
@@ -220,6 +231,32 @@ def _store_multi(store: CatalogStore) -> None:
             _decide(store, identity, digests[label], action)
 
 
+def _store_errata(store: CatalogStore) -> None:
+    """
+    Store the published erratum rows of :data:`ERRATA`.
+
+    Each corrects the "none" scenario and carries the body word
+    ``divergent``, so text queries reach them too.
+
+    :param store: Store in the current unit of work.
+    """
+    for name, (actions, _) in ERRATA.items():
+        write = dataclasses.replace(
+            put_record(
+                store,
+                adr_uuid=scenario_uuid(name),
+                path=f"errata/{name}.md",
+                title=name,
+                body=f"divergent {name}",
+            ),
+            record_kind=RecordKind.ERRATUM,
+            links=Links(corrects=scenario_uuid("none")),
+        )
+        store.upsert_published(write)
+        for action in actions:
+            _decide(store, write.identity, write.digest, action)
+
+
 @pytest.fixture
 def scenarios(provider: PostgresStoreProvider) -> PostgresStoreProvider:
     """
@@ -235,6 +272,7 @@ def scenarios(provider: PostgresStoreProvider) -> PostgresStoreProvider:
     with provider.unit_of_work() as store:
         _store_single(store)
         _store_multi(store)
+        _store_errata(store)
         for source_id, project in ELSEWHERE:
             elsewhere = put_record(
                 store,
@@ -364,3 +402,49 @@ def test_fixture_covers_every_required_state(
     for source_id, project in ELSEWHERE:
         state = by_location[source_id, project, "none"]
         assert state is ApprovalStateCode.ACCEPTED
+
+
+@pytest.mark.parametrize("query", [None, "divergent"])
+@pytest.mark.parametrize("needs_approval", [False, True])
+@pytest.mark.parametrize(
+    "record_kind", [None, RecordKind.DECISION, RecordKind.ERRATUM]
+)
+@pytest.mark.parametrize("policy_name", list(POLICIES))
+def test_record_kind_filter_matches_unfiltered_rows(
+    scenarios: PostgresStoreProvider,
+    policy_name: str,
+    record_kind: RecordKind | None,
+    needs_approval: bool,
+    query: str | None,
+) -> None:
+    """Ensure the kind filter keeps exactly the matching rows and states."""
+    policy = POLICIES[policy_name]
+    unfiltered = SearchFilters(needs_approval=needs_approval)
+    filtered = SearchFilters(
+        needs_approval=needs_approval, record_kind=record_kind
+    )
+    with scenarios.unit_of_work() as store:
+        whole = _all_pages(store, query, unfiltered, policy, MAX_PAGE_SIZE)
+        paged = _all_pages(store, query, filtered, policy, page_size=4)
+    expected = [
+        item
+        for item in whole
+        if record_kind is None or item.record_kind is record_kind
+    ]
+    assert paged == expected
+    if record_kind is RecordKind.ERRATUM and not needs_approval:
+        assert len(paged) == len(ERRATA)
+
+
+def test_fixture_covers_every_erratum_state(
+    scenarios: PostgresStoreProvider,
+) -> None:
+    """Ensure each erratum row has its expected state and target."""
+    filters = SearchFilters(record_kind=RecordKind.ERRATUM)
+    with scenarios.unit_of_work() as store:
+        page = store.search(
+            None, filters, 1, MAX_PAGE_SIZE, policy=POLICIES["required"]
+        )
+    states = {item.title: item.approval_state.value for item in page.items}
+    assert states == {name: state for name, (_, state) in ERRATA.items()}
+    assert {item.corrects for item in page.items} == {scenario_uuid("none")}

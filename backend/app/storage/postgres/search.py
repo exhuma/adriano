@@ -39,6 +39,10 @@ Without the "needs approval" filter the state does not restrict the
 rows, so the page is selected first and only its rows are joined to
 the decision events; with the filter the join precedes ``LIMIT``.
 
+The ``record_kind`` filter (decisions / errata) is a plain WHERE
+condition shared by both paths, so it combines with every other filter
+including "needs approval".
+
 Text queries use ``websearch_to_tsquery`` with the ``simple``
 configuration (exact tokens: identifiers, UUIDs, paths) OR'ed with the
 ``english`` configuration (stemmed body words), matching how the
@@ -106,6 +110,7 @@ _SEARCH_COLUMNS = (
     "decision_date",
     "decision_date_inferred",
     "issues",
+    "links",
 )
 
 #: Labels of the sort keys carried by the paged subquery.
@@ -207,6 +212,8 @@ def _conditions(
         result.append(RECORD.c.project == filters.project)
     if filters.kind is not None:
         result.append(RECORD.c.kind == filters.kind.value)
+    if filters.record_kind is not None:
+        result.append(RECORD.c.record_kind == filters.record_kind.value)
     if tsquery is not None:
         result.append(RECORD.c.search.op("@@")(tsquery))
     return result

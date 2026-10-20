@@ -7,10 +7,12 @@ import uuid
 from sqlalchemy import Connection, Engine, text
 
 from alembic import command
+from app.domain.approval import DecisionAction
 from app.domain.errata import ErratumType
 from app.domain.values import Links, RecordKind
 from app.storage.port import (
     CatalogStore,
+    NewDecision,
     RecordState,
     RecordWrite,
     StoredErratum,
@@ -197,3 +199,71 @@ def _schema(connection: Connection) -> tuple[bool, bool]:
         )
     ).scalar_one()
     return column == 1, index == 1
+
+
+def _decision(write: RecordWrite) -> NewDecision:
+    """
+    Build an acceptance of a record write's digest.
+
+    :param write: The record write.
+    :returns: The decision.
+    """
+    assert write.adr_uuid is not None
+    return NewDecision(
+        identity=write.identity,
+        adr_uuid=write.adr_uuid,
+        digest=write.digest,
+        action=DecisionAction.ACCEPTED,
+        actor_issuer="iss",
+        actor_subject="sub",
+        actor_display=None,
+        actor_email=None,
+        comment=None,
+        policy_id="global",
+        policy_version=1,
+    )
+
+
+def test_list_decisions_for_reads_several_identities_at_once(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure batched decisions return exactly the given identities."""
+    with provider.unit_of_work() as store:
+        writes = [
+            put_record(store, adr_uuid=adr_uuid, path=f"{adr_uuid}.md")
+            for adr_uuid in (E1, E2, E3)
+        ]
+        for write in writes:
+            store.upsert_published(write)
+            store.append_decision(_decision(write))
+
+        events = store.list_decisions_for([w.identity for w in writes[:2]])
+        empty = store.list_decisions_for([])
+
+    assert {event.identity for event in events} == {
+        writes[0].identity,
+        writes[1].identity,
+    }
+    assert empty == []
+
+
+def test_list_published_by_uuid_returns_titles_of_published_rows(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure the title lookup skips candidates and unknown UUIDs."""
+    with provider.unit_of_work() as store:
+        store.upsert_published(
+            put_record(store, adr_uuid=TARGET, title="The target")
+        )
+        store.upsert_candidate(
+            put_record(store, adr_uuid=OTHER, ref="feature", title="Draft")
+        )
+
+        targets = store.list_published_by_uuid({TARGET, OTHER, E1})
+        empty = store.list_published_by_uuid(set())
+
+    [target] = targets
+    assert target.title == "The target"
+    assert target.summary.adr_uuid == TARGET
+    assert target.summary.published is True
+    assert empty == []

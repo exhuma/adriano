@@ -14,17 +14,32 @@ building the full relationship index
 is only available on the detail endpoint. Documented as an open item
 for the frontend and for phase 09.
 
-Public API: :class:`IssueCounts`, :class:`CatalogSearchItem`,
-:class:`CatalogSearchPage`, :func:`search_records`.
+**Record type.** :class:`RecordTypeFilter` selects decisions (the
+default), errata, or both; it is pushed into SQL like every other
+filter and combines with them (including ``needs_approval``).
+
+**Erratum target titles.** An erratum hit carries the title of the
+decision it corrects (``erratum_for_title``). The targets of all
+erratum hits of the page are read with **one** query
+(:meth:`~app.storage.port.CatalogStore.list_published_by_uuid`) and
+resolved with the same rules as the detail page's ``erratum_for``
+(:class:`~app.domain.relationships.RelationshipIndex`: published rows,
+same project first, ambiguous -> no title).
+
+Public API: :class:`RecordTypeFilter`, :class:`IssueCounts`,
+:class:`CatalogSearchItem`, :class:`CatalogSearchPage`,
+:func:`search_records`.
 """
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 
 from app.domain.approval import ApprovalStateCode, Policy
 from app.domain.issues import Issue, Severity
-from app.domain.values import RecordKind
+from app.domain.relationships import RecordSummary, RelationshipIndex
+from app.domain.values import Identity, Links, RecordKind
 from app.storage.port import (
     CatalogStore,
     RecordState,
@@ -36,8 +51,24 @@ __all__ = [
     "CatalogSearchItem",
     "CatalogSearchPage",
     "IssueCounts",
+    "RecordTypeFilter",
     "search_records",
 ]
+
+
+class RecordTypeFilter(StrEnum):
+    """Which record kinds a search returns."""
+
+    DECISION = "decision"
+    ERRATUM = "erratum"
+    ALL = "all"
+
+
+_RECORD_KIND = {
+    RecordTypeFilter.DECISION: RecordKind.DECISION,
+    RecordTypeFilter.ERRATUM: RecordKind.ERRATUM,
+    RecordTypeFilter.ALL: None,
+}
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -68,6 +99,8 @@ class CatalogSearchItem:
     :param record_kind: Decision or erratum.
     :param approval_state: Approval state of the current digest.
     :param issue_counts: Stored validation issue counts.
+    :param erratum_for_title: For an erratum, the title of the
+        decision it corrects, when that resolves.
     """
 
     id: uuid.UUID
@@ -80,6 +113,7 @@ class CatalogSearchItem:
     record_kind: RecordKind
     approval_state: ApprovalStateCode
     issue_counts: IssueCounts
+    erratum_for_title: str | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -113,11 +147,65 @@ def _issue_counts(issues: Iterable[Issue]) -> IssueCounts:
     )
 
 
-def _search_item(item: SearchItem) -> CatalogSearchItem:
+def _target_titles(
+    store: CatalogStore, items: Sequence[SearchItem]
+) -> dict[uuid.UUID, str]:
+    """
+    Resolve the corrected decision's title of every erratum hit.
+
+    :param store: Store of the caller's unit of work.
+    :param items: Hits of one page.
+    :returns: Title by erratum hit id, for targets that resolve.
+    """
+    errata = [
+        item
+        for item in items
+        if item.record_kind is RecordKind.ERRATUM and item.corrects
+    ]
+    targets = store.list_published_by_uuid(
+        {item.corrects for item in errata if item.corrects}
+    )
+    if not targets:
+        return {}
+    titles = {target.summary.key: target.title for target in targets}
+    summaries = {target.summary.key: target.summary for target in targets}
+    for item in errata:
+        summaries.setdefault(str(item.id), _hit_summary(item))
+    index = RelationshipIndex(summaries.values())
+    result: dict[uuid.UUID, str] = {}
+    for item in errata:
+        [link] = index.view(str(item.id)).outbound
+        if link.target_key in titles:
+            result[item.id] = titles[link.target_key]
+    return result
+
+
+def _hit_summary(item: SearchItem) -> RecordSummary:
+    """
+    Build the relationship summary of an erratum hit (``corrects`` only).
+
+    :param item: The erratum hit.
+    :returns: Its summary, keyed by ``str(item.id)``.
+    """
+    return RecordSummary(
+        key=str(item.id),
+        identity=Identity(item.source_id, item.project, item.record_key),
+        adr_uuid=item.adr_uuid,
+        links=Links(corrects=item.corrects),
+        record_kind=RecordKind.ERRATUM,
+        path=item.path,
+        published=item.kind is RecordState.PUBLISHED,
+    )
+
+
+def _search_item(
+    item: SearchItem, erratum_for_title: str | None
+) -> CatalogSearchItem:
     """
     Convert one storage search hit to the service value.
 
     :param item: The storage hit.
+    :param erratum_for_title: Resolved target title of an erratum.
     :returns: The search result row.
     """
     return CatalogSearchItem(
@@ -131,6 +219,7 @@ def _search_item(item: SearchItem) -> CatalogSearchItem:
         record_kind=item.record_kind,
         approval_state=item.approval_state,
         issue_counts=_issue_counts(item.issues),
+        erratum_for_title=erratum_for_title,
     )
 
 
@@ -145,6 +234,7 @@ def search_records(
     page_size: int,
     policy: Policy | None,
     needs_approval: bool = False,
+    record_type: RecordTypeFilter = RecordTypeFilter.DECISION,
 ) -> CatalogSearchPage:
     """
     Search the catalog with the Phase 1 filters.
@@ -160,6 +250,7 @@ def search_records(
     :param needs_approval: Only records whose current content does not
         satisfy the policy (pending, rejected, changed since acceptance,
         policy missing); evaluated in SQL by the store.
+    :param record_type: Decisions (default), errata, or both.
     :returns: The page.
     :raises ValueError: If *page* or *page_size* is out of bounds.
     """
@@ -168,10 +259,15 @@ def search_records(
         project=project,
         kind=kind,
         needs_approval=needs_approval,
+        record_kind=_RECORD_KIND[record_type],
     )
     page_result = store.search(query, filters, page, page_size, policy=policy)
+    titles = _target_titles(store, page_result.items)
     return CatalogSearchPage(
-        items=tuple(_search_item(item) for item in page_result.items),
+        items=tuple(
+            _search_item(item, titles.get(item.id))
+            for item in page_result.items
+        ),
         total=page_result.total,
         page=page_result.page,
         page_size=page_result.page_size,

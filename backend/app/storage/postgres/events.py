@@ -7,13 +7,14 @@ NOTHING`` so a conflict (including a concurrent one) is reported as a
 domain error without aborting the surrounding transaction.
 
 Public API: :func:`append_decision`, :func:`list_decisions`,
-:func:`start_intake_run`, :func:`finish_intake_run`,
+:func:`list_decisions_for`, :func:`start_intake_run`, :func:`finish_intake_run`,
 :func:`find_intake_run`.
 """
 
 import uuid
+from collections.abc import Collection
 
-from sqlalchemy import Table, func, select, text, update
+from sqlalchemy import Table, func, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -91,6 +92,34 @@ def list_decisions(session: Session, identity: Identity) -> list[DecisionEvent]:
             DECISION.c.source_id == identity.source_id,
             DECISION.c.project == identity.project,
             DECISION.c.record_key == identity.record_key,
+        )
+        .order_by(DECISION.c.created_at, DECISION.c.id)
+    )
+    rows = session.execute(stmt).mappings()
+    return [convert.decision_event(row) for row in rows]
+
+
+def list_decisions_for(
+    session: Session, identities: Collection[Identity]
+) -> list[DecisionEvent]:
+    """
+    List the decision events of several identities in one query.
+
+    :param session: Unit-of-work session.
+    :param identities: Logical identities; empty means no query.
+    :returns: Events of all of them, oldest first (ties by id).
+    """
+    if not identities:
+        return []
+    keys = [(i.source_id, i.project, i.record_key) for i in identities]
+    stmt = (
+        select(DECISION)
+        .where(
+            tuple_(
+                DECISION.c.source_id,
+                DECISION.c.project,
+                DECISION.c.record_key,
+            ).in_(keys)
         )
         .order_by(DECISION.c.created_at, DECISION.c.id)
     )

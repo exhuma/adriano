@@ -147,7 +147,8 @@ class FacetProject:
     Record count of one project within a source.
 
     :param project: Project path.
-    :param count: Number of rows (published and candidate) in it.
+    :param count: Number of decision rows (published and candidate)
+        in it; errata are not counted.
     """
 
     project: str

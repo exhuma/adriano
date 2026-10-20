@@ -211,6 +211,7 @@ def search_item(row: RowMapping) -> SearchItem:
         decision_date_inferred=row["decision_date_inferred"],
         issues=_issues(row["issues"]),
         approval_state=ApprovalStateCode(row["approval_state"]),
+        corrects=Links.from_dict(row["links"]).corrects,
     )
 
 
