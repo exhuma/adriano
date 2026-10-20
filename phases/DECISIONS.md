@@ -392,6 +392,46 @@ The old shape is rejected with `legacy_erratum_format`.
   "verified or not requiring review" in the summary.
 - Candidate errata count only as "proposed" (pending_count in summary).
 
+## Phase 11 updates (2026-10-20): UI/UX improvements
+
+**Product owner decisions:**
+- **Health chip:** hidden while the backend is healthy. Shown
+  automatically when degraded or offline (every role).
+- **"Pending approval" on search rows:** neutral text or icon.
+  Strong colour is reserved for issues and rejection.
+- **Sources for readers:** still visible but simplified. Env-var names,
+  recovery steps and "Poll now" actions shown only to users with
+  `operate` permission.
+- **Search sort:** add a sort control. Options are Relevance (only
+  when a query is set; default with a query), Title A–Z (default
+  without a query), and Recently changed (by `record.updated_at`,
+  newest first).
+- **Dev-login presets:** derived from the loaded catalog through a
+  dev-only endpoint, mounted under the same flag as
+  `POST /auth/dev/token`. Must never reach a production build.
+- **Theme choice:** light/dark/system in a user menu. Default follows
+  the OS. The choice is remembered per browser (localStorage, wrapped
+  in try/catch); nothing is stored on the server.
+
+**Layout and prominence:**
+- **One page width:** VContainer `maxWidth` default ~1280–1440 px for
+  all routes. Dropped `meta.wide` from router and `container--wide`
+  CSS. App bar wraps its content in a v-container with the same
+  default so brand, nav and right-hand cluster align with content
+  edges.
+- **Chip visibility rule:** status chips shown only when they differ
+  from the default ("Published" is hidden). Strong colour (warning,
+  error) reserved for issues and rejection only. "Pending approval"
+  stays visible as neutral text or icon.
+
+**Vuetify-first implementation ladder:**
+Expressed in `plugins/vuetify.ts`, `createVuetify({ defaults })`,
+`<v-defaults-provider>`, component props with utility classes, then
+SASS settings via `settings.scss`, then custom scoped CSS as last
+resort (theme variables only, each rule justified). See
+`phases/11-ui-ux-updates.md` section "Vuetify first" for the full
+decision procedure and how each finding maps to Vuetify mechanisms.
+
 ## Deferred (do not build)
 
 Admin/config UI, webhooks, more source types, quorum/multi-stage review,
