@@ -161,7 +161,7 @@ function policySummaryText(approval: ApprovalOut): string {
     <v-divider />
     <v-card-title class="text-subtitle-2">Decision history</v-card-title>
     <v-card-text>
-      <DecisionHistoryTable :history="approval.history" />
+      <DecisionHistoryTable :history="approval.history" :record-kind="recordKind" />
     </v-card-text>
 
     <DecisionDialog

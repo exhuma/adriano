@@ -178,6 +178,25 @@ describe("decisionActionLabel", () => {
       decisionActionLabel("rejected").icon,
     );
   });
+
+  it("defaults to the plain decision wording when recordKind is omitted", () => {
+    expect(decisionActionLabel("accepted").text).toBe("Accepted");
+    expect(decisionActionLabel("accepted", "decision").text).toBe(
+      "Accepted",
+    );
+  });
+
+  it("labels an accepted erratum 'Verified' (RFC vocabulary)", () => {
+    expect(decisionActionLabel("accepted", "erratum").text).toBe(
+      "Verified",
+    );
+  });
+
+  it("keeps 'Rejected' for an erratum's rejected action", () => {
+    expect(decisionActionLabel("rejected", "erratum").text).toBe(
+      "Rejected",
+    );
+  });
 });
 
 describe("divergenceLabel", () => {

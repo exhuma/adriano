@@ -2,16 +2,26 @@
 /**
  * Append-only decision history of one record's identity: action,
  * reviewer, timestamp, comment, digest, and provenance for every
- * accept/reject event, oldest first (as the API returns it).
+ * accept/reject event, oldest first (as the API returns it). The
+ * action wording switches to "Verified" for an accepted erratum
+ * (RFC report/verify/reject vocabulary) when `recordKind` is
+ * "erratum"; the underlying action stays accepted/rejected either
+ * way.
  */
 import type { DecisionSummaryOut } from "@/types/approval";
+import type { RecordKind } from "@/types/records";
 import { formatDateTime, formatRelativeTime } from "@/utils/dates";
 import { decisionActionLabel } from "@/utils/labels";
 import { shortDigest } from "@/utils/digest";
 
-defineProps<{
+const props = defineProps<{
   /** Every decision event of the record's identity, oldest first. */
   history: DecisionSummaryOut[];
+  /** Whether the viewed record is a normal decision or an erratum;
+   *  picks the "Accepted" vs "Verified" wording for the accepted
+   *  action (RFC report/verify/reject vocabulary). Defaults to
+   *  "decision" for callers that have not yet opted in. */
+  recordKind?: RecordKind;
 }>();
 
 function provenanceText(event: DecisionSummaryOut): string {
@@ -38,12 +48,12 @@ function provenanceText(event: DecisionSummaryOut): string {
       <tr v-for="event in history" :key="event.id">
         <td>
           <v-icon
-            :icon="decisionActionLabel(event.action).icon"
-            :color="decisionActionLabel(event.action).color"
+            :icon="decisionActionLabel(event.action, props.recordKind).icon"
+            :color="decisionActionLabel(event.action, props.recordKind).color"
             size="small"
             aria-hidden="true"
           />
-          {{ decisionActionLabel(event.action).text }}
+          {{ decisionActionLabel(event.action, props.recordKind).text }}
         </td>
         <td>
           <span :title="`${event.actor_issuer}|${event.actor_subject}`">

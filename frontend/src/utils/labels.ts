@@ -127,12 +127,21 @@ export function approvalStateExplanation(
  * Describe a formal decision action for display (history table).
  *
  * :param action: Accepted or rejected.
+ * :param recordKind: Whether the record is a normal decision or an
+ *     erratum; an erratum's "accepted" action reads "Verified" (RFC
+ *     report/verify/reject vocabulary), matching `erratumStatusLabel`.
  * :returns: Icon, label text, and colour.
  */
-export function decisionActionLabel(action: DecisionAction): StatusLabel {
-  return action === "accepted"
-    ? { icon: "mdi-check-circle", text: "Accepted", color: "success" }
-    : { icon: "mdi-close-circle", text: "Rejected", color: "error" };
+export function decisionActionLabel(
+  action: DecisionAction,
+  recordKind: RecordKind = "decision",
+): StatusLabel {
+  if (action === "accepted") {
+    return recordKind === "erratum"
+      ? { icon: "mdi-check-circle", text: "Verified", color: "success" }
+      : { icon: "mdi-check-circle", text: "Accepted", color: "success" };
+  }
+  return { icon: "mdi-close-circle", text: "Rejected", color: "error" };
 }
 
 /**
