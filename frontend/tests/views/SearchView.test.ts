@@ -92,6 +92,7 @@ describe("SearchView", () => {
           record_kind: "decision",
           approval_state: "pending",
           issue_counts: { error: 0, warning: 1 },
+          erratum_for_title: null,
         },
       ],
       total: 1,

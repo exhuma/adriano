@@ -82,6 +82,7 @@ export interface paths {
          *     :param project: Restrict to one project path.
          *     :param state: Restrict to ``published`` or ``candidate``.
          *     :param needs_approval: Restrict to records that need approval.
+         *     :param record_type: Decisions (default), errata, or both.
          *     :param page: 1-based page number.
          *     :param page_size: Page size, 1 to :data:`~app.storage.port.MAX_PAGE_SIZE`.
          *     :param provider: Storage provider (overridden by tests).
@@ -575,8 +576,72 @@ export interface components {
             message: string;
         };
         /**
+         * ErrataSummaryOut
+         * @description Counts of the record's errata for the top notice.
+         *
+         *     ``total``/``verified``/``reported``/``rejected``/``changed`` count
+         *     published errata only (``not_required`` counts as verified);
+         *     ``proposed`` counts candidate errata.
+         */
+        ErrataSummaryOut: {
+            /** Total */
+            total: number;
+            /** Verified */
+            verified: number;
+            /** Reported */
+            reported: number;
+            /** Rejected */
+            rejected: number;
+            /** Changed */
+            changed: number;
+            /** Proposed */
+            proposed: number;
+        };
+        /**
+         * ErratumContentOut
+         * @description The structured content of an erratum (on its own page).
+         */
+        ErratumContentOut: {
+            type: components["schemas"]["ErratumType"] | null;
+            /** Section */
+            section: string | null;
+            /** Reported By */
+            reported_by: string | null;
+            /** Reported Date */
+            reported_date: string | null;
+            /** Original Html */
+            original_html: string | null;
+            /** Corrected Html */
+            corrected_html: string;
+            /** Notes Html */
+            notes_html: string | null;
+        };
+        /**
+         * ErratumForOut
+         * @description The decision an erratum corrects, resolved like outbound links.
+         */
+        ErratumForOut: {
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            uuid: string;
+            /** Id */
+            id: string | null;
+            /** Title */
+            title: string | null;
+            /** Resolved */
+            resolved: boolean;
+        };
+        /**
          * ErratumOut
-         * @description One erratum record correcting the record being viewed.
+         * @description One erratum (published or candidate) of the record being viewed.
+         *
+         *     ``approval_state`` is the erratum's own state: ``pending`` /
+         *     ``policy_missing`` = reported, ``accepted`` = verified,
+         *     ``rejected``, ``changed_since_acceptance``; ``not_required`` means
+         *     no review is required. ``has_content`` is false (and the content
+         *     fields empty) for a row stored before erratum content was.
          */
         ErratumOut: {
             /**
@@ -584,9 +649,47 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            kind: components["schemas"]["RecordState"];
+            /** Ref */
+            ref: string;
+            /** Source Id */
+            source_id: string;
+            /** Project */
+            project: string;
+            /** Path */
+            path: string;
             /** Title */
             title: string;
+            type: components["schemas"]["ErratumType"] | null;
+            /** Section */
+            section: string | null;
+            /** Reported By */
+            reported_by: string | null;
+            /** Reported Date */
+            reported_date: string | null;
+            /** Original Html */
+            original_html: string | null;
+            /** Corrected Html */
+            corrected_html: string;
+            /** Notes Html */
+            notes_html: string | null;
+            approval_state: components["schemas"]["ApprovalStateCode"];
+            /** Digest */
+            digest: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Has Content */
+            has_content: boolean;
         };
+        /**
+         * ErratumType
+         * @description Kind of correction an erratum reports.
+         * @enum {string}
+         */
+        ErratumType: "technical" | "editorial";
         /**
          * FacetProjectOut
          * @description Record count of one project within a source.
@@ -668,7 +771,7 @@ export interface components {
          * @description Stable machine-readable validation issue codes.
          * @enum {string}
          */
-        IssueCode: "bad_yaml" | "missing_frontmatter" | "missing_uuid" | "bad_uuid" | "bad_date" | "missing_date" | "unknown_field" | "bad_field_type" | "duplicate_uuid" | "missing_target" | "ambiguous_target" | "legacy_alias" | "legacy_signoff" | "corrects_on_non_erratum" | "erratum_without_target" | "bad_encoding";
+        IssueCode: "bad_yaml" | "missing_frontmatter" | "missing_uuid" | "bad_uuid" | "bad_date" | "missing_date" | "unknown_field" | "bad_field_type" | "duplicate_uuid" | "missing_target" | "ambiguous_target" | "legacy_alias" | "legacy_signoff" | "corrects_on_non_erratum" | "erratum_without_target" | "bad_encoding" | "bad_erratum_type" | "erratum_missing_corrected_text" | "erratum_unknown_section_heading" | "legacy_erratum_format";
         /**
          * IssueCountsOut
          * @description Stored-issue counts of one record, by severity.
@@ -844,6 +947,9 @@ export interface components {
             inbound_links: components["schemas"]["InboundLinkOut"][];
             /** Errata */
             errata: components["schemas"]["ErratumOut"][];
+            errata_summary: components["schemas"]["ErrataSummaryOut"];
+            erratum: components["schemas"]["ErratumContentOut"] | null;
+            erratum_for: components["schemas"]["ErratumForOut"] | null;
             status: components["schemas"]["DisplayStatus"];
             /** Siblings */
             siblings: components["schemas"]["SiblingOut"][];
@@ -881,6 +987,12 @@ export interface components {
          * @enum {string}
          */
         RecordState: "published" | "candidate";
+        /**
+         * RecordTypeFilter
+         * @description Which record kinds a search returns.
+         * @enum {string}
+         */
+        RecordTypeFilter: "decision" | "erratum" | "all";
         /**
          * Resolution
          * @description Tier at which an outbound link was resolved.
@@ -921,6 +1033,8 @@ export interface components {
             record_kind: components["schemas"]["RecordKind"];
             approval_state: components["schemas"]["ApprovalStateCode"];
             issue_counts: components["schemas"]["IssueCountsOut"];
+            /** Erratum For Title */
+            erratum_for_title: string | null;
         };
         /**
          * SearchPageOut
@@ -1079,6 +1193,8 @@ export interface operations {
                 state?: components["schemas"]["RecordState"] | null;
                 /** @description Only records whose current content does not satisfy the policy: pending, rejected, changed since acceptance, or policy missing. */
                 needs_approval?: boolean;
+                /** @description Which records to return: `decision` (default), `erratum`, or `all`. Combines with every other filter. */
+                record_type?: components["schemas"]["RecordTypeFilter"];
                 page?: number;
                 page_size?: number;
             };
