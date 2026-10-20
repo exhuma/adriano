@@ -382,6 +382,16 @@ are separate files with `erratum-for`, `type`, optional `section`/
 "Notes"; their status reuses accept/reject (Reported / Verified / Rejected).
 The old shape is rejected with `legacy_erratum_format`.
 
+**Phase 10 updates:**
+- `kind: decision` now gives an `obsolete_kind_field` warning. Only
+  `kind: erratum` + `corrects` are legacy-format errors; plain decisions
+  do not fail validation.
+- Facets count decisions only, matching the default search filter
+  (record_type = decision).
+- A published erratum under a `required: false` policy counts as
+  "verified or not requiring review" in the summary.
+- Candidate errata count only as "proposed" (pending_count in summary).
+
 ## Deferred (do not build)
 
 Admin/config UI, webhooks, more source types, quorum/multi-stage review,

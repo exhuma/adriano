@@ -14,7 +14,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 07 | Approval slice | done | see git log | see notes |
 | 08 | Samples, deploy, demo | done | see git log | see notes |
 | 09 | Benchmark & report | done | 3db7e88 d0ee735 c0e831c 22386ae f154ddf | see notes |
-| 10 | UI sidebar + erratum format | in-progress | | post-Phase-1 change authorized by the product owner (2026-10-20) |
+| 10 | UI sidebar + erratum format | done | db781ea..21b01cb | see notes |
 
 ## Handoff notes
 
@@ -353,15 +353,48 @@ open issues, anything the next phase must know.
   limitations" and "Deferred backlog" for everything deliberately not
   done. **Stop for product-owner review; no Phase 2 work started.**
 
-### Phase 10 (in progress — paused 2026-10-20)
+### Phase 10
 
-- Done and committed: T0 (plan, db781ea), T1 domain (997a57d), test
-  isolation fix (573e777), T2 storage + migration 0003 (d3c8617), T3
-  services/API (5d18803), T4 seeds/samples (efd02a5), T5 types
-  (13c0cc8), T6 layout (99f7a40), `kind: decision` warning fix
-  (ff0d11f), T7 errata UI (2c96eed). Tests: 533 backend, 209 frontend.
-- Next: T8 docs (stopped before any edits; restart from scratch), then
-  T9 Playwright screenshots — the user APPROVED using the scratchpad
-  Playwright package with its bundled Chromium (the MCP browser lacks
-  Chrome); then T10 review, T11 fixes, T12 bookkeeping.
-- The user runs their own servers on 8100/5180; agents use 8102/5182.
+Two-column record page redesign (status banners at top, metadata sidebar),
+RFC-style erratum format, and erratum review semantics:
+
+- **Record page layout:** two-column design with status banners,
+  metadata/links in right sidebar, About/Issues/Links sections. Links to
+  competing candidates and errata. Record type filter on search (decisions
+  only by default; facets count decisions only).
+
+- **Erratum format:** separate files with `erratum-for` (required),
+  `type`, optional `section`/`reported-by`/`date`, and sections
+  "Original text", "Corrected text", "Notes". Schema validated by
+  dedicated issue codes. The old `kind: erratum` + `corrects` ADR shape
+  now yields `legacy_erratum_format` warning.
+
+- **Erratum review:** errata under a decision use accept/reject with
+  Reported/Verified/Rejected display (same semantics as decisions).
+  Erratum pages titled "Erratum for <decision>". `errata_summary` field
+  lists errata and their status per decision.
+
+- **Storage:** migration 0003 adds `record.erratum` JSONB field, index
+  `ix_record_links_corrects` for reversed lookups.
+
+- **Issue codes:** bad_erratum_type, erratum_missing_corrected_text,
+  erratum_unknown_section_heading, legacy_erratum_format,
+  obsolete_kind_field, erratum_targets_itself,
+  erratum_relationship_ignored, erratum_duplicate_section,
+  erratum_target_is_erratum.
+
+- **Commits (db781ea..21b01cb):** Phase 10 plan; domain parse
+  (997a57d); test isolation (573e777); storage + migration 0003
+  (d3c8617); services/API (5d18803); seeds/samples (efd02a5); types
+  (13c0cc8); layout (99f7a40); `kind: decision` warning (ff0d11f);
+  errata UI (2c96eed); doc (d2c8b42); demo walk-through (e98bfcd);
+  tracking removed (f748339); errata search (8268a81); frontend
+  vocabulary (80a0ec4); OpenAPI regen (80a0ec4); demo screenshots
+  (2c76800); verified label (21b01cb).
+
+- **Tests:** 548 backend, 242 frontend.
+
+- **Known limitations:** candidate-only targets show errata list but
+  erratum page says unknown decision (no candidate detail route);
+  facets count decisions only; demo screenshots 06a–12c are
+  pre-redesign; dev DB reset during screenshot runs.
