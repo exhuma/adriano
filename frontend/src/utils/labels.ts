@@ -10,6 +10,7 @@ import type {
   ApprovalStateCode,
   DisplayStatus,
   IssueCountsOut,
+  RecordKind,
   RecordState,
 } from "@/types/records";
 import type { PollStatus } from "@/types/sources";
@@ -144,6 +145,20 @@ export function recordStateLabel(kind: RecordState, ref?: string): StatusLabel {
     text: ref ? `Candidate (${ref})` : "Candidate",
     color: "info",
   };
+}
+
+/**
+ * Describe a record's own kind (a decision or an erratum correcting
+ * one) for the detail page header chip. Distinct from
+ * `recordStateLabel`, which labels published/candidate.
+ *
+ * :param kind: Decision or erratum.
+ * :returns: Icon and label text.
+ */
+export function recordKindTypeLabel(kind: RecordKind): StatusLabel {
+  return kind === "erratum"
+    ? { icon: "mdi-file-alert-outline", text: "Erratum" }
+    : { icon: "mdi-file-document-outline", text: "Decision" };
 }
 
 /**

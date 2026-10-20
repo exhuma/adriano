@@ -68,6 +68,13 @@ const devDialogOpen = ref(false);
  *  regardless of auth state -- it is how sign-in completes. */
 const isCallbackRoute = computed(() => route.name === "auth-callback");
 
+/** Routes that opt into a wider container (currently only the record
+ *  detail page, whose two-column layout needs more width than the
+ *  rest of the app -- see `router/index.ts` `meta.wide`). Scoped to
+ *  this one route by a class on the shared container, so every other
+ *  page keeps its current width. */
+const wideContainer = computed(() => route.meta.wide === true);
+
 /** `/healthz` reports the backend cannot authenticate anyone at all
  *  (no OIDC and no dev secret configured) -- distinct from "nobody
  *  has signed in yet": nobody *can*. */
@@ -216,7 +223,11 @@ async function handleSignOut(): Promise<void> {
     </v-app-bar>
 
     <v-main>
-      <v-container id="main-content" tabindex="-1">
+      <v-container
+        id="main-content"
+        tabindex="-1"
+        :class="{ 'container--wide': wideContainer }"
+      >
         <router-view v-if="isCallbackRoute" />
 
         <AuthBlockingScreen
@@ -280,5 +291,12 @@ async function handleSignOut(): Promise<void> {
 
 .config-warning-link {
   text-decoration: none;
+}
+
+/* Record detail page only (`router/index.ts` `meta.wide`): raise the
+   container's max-width ceiling so its two-column layout has more
+   room. Still 100%-wide (and so unaffected) below that breakpoint. */
+.container--wide {
+  max-width: 1280px;
 }
 </style>

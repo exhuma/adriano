@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /**
- * Record detail page's metadata card: UUID (with copy-to-clipboard),
- * decision date, and record kind.
+ * Record detail page sidebar's metadata card: UUID (shortened, with
+ * the full value in a tooltip and copy-to-clipboard, per
+ * module-ux-principles "Technical identifiers"), decision date, and
+ * record kind.
  */
 import { computed, ref } from "vue";
 
 import StatusChip from "@/components/StatusChip.vue";
 import type { RecordKind } from "@/types/records";
 import { formatDate } from "@/utils/dates";
+import { shortUuid } from "@/utils/digest";
 
 const props = defineProps<{
   /** Canonical ADR UUID, or `null`/absent when the file has none. */
@@ -43,19 +46,20 @@ async function copyUuid(): Promise<void> {
 </script>
 
 <template>
-  <v-card class="mb-4" variant="outlined">
-    <v-card-title class="text-subtitle-1">Metadata</v-card-title>
+  <v-card class="mb-3" variant="outlined" density="compact">
+    <v-card-title class="text-subtitle-2">Metadata</v-card-title>
     <v-list density="compact">
       <v-list-item>
         <v-list-item-title>UUID</v-list-item-title>
         <v-list-item-subtitle>
           <span v-if="adrUuid">
-            <code>{{ adrUuid }}</code>
+            <code :title="adrUuid">{{ shortUuid(adrUuid) }}</code>
             <v-btn
               icon="mdi-content-copy"
               size="x-small"
               variant="text"
-              :aria-label="copied ? 'Copied UUID to clipboard' : 'Copy UUID to clipboard'"
+              :title="adrUuid"
+              :aria-label="copied ? 'Copied full UUID to clipboard' : 'Copy full UUID to clipboard'"
               @click="copyUuid"
             />
             <span v-if="copied" class="text-success">Copied!</span>

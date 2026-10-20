@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * Record detail page's relationship cards: outbound links ("Related
- * decisions"), inbound links ("Referenced by"), and errata. Grouped
- * together as the record's three link-shaped relationship lists,
- * each independently optional.
+ * Record detail page sidebar's relationship cards: outbound links
+ * ("Related decisions") and inbound links ("Referenced by"). Errata
+ * moved to the main column's errata section, since they are content
+ * (not a sidebar-sized relationship list) -- see `RecordView`'s
+ * `#errata` section.
  */
-import type { ErratumOut, InboundLinkOut, OutboundLinkOut } from "@/types/records";
+import type { InboundLinkOut, OutboundLinkOut } from "@/types/records";
 import { linkTypeLabel } from "@/utils/labels";
 
 defineProps<{
@@ -13,18 +14,17 @@ defineProps<{
   outboundLinks: OutboundLinkOut[];
   /** Other records linking to this one. */
   inboundLinks: InboundLinkOut[];
-  /** Errata correcting this record. */
-  errata: ErratumOut[];
 }>();
 </script>
 
 <template>
   <v-card
     v-if="outboundLinks.length > 0"
-    class="mb-4"
+    class="mb-3"
     variant="outlined"
+    density="compact"
   >
-    <v-card-title class="text-subtitle-1">Related decisions</v-card-title>
+    <v-card-title class="text-subtitle-2">Related decisions</v-card-title>
     <v-list density="compact">
       <v-list-item v-for="(link, index) in outboundLinks" :key="index">
         <v-list-item-title>{{ linkTypeLabel(link.link_type) }}</v-list-item-title>
@@ -48,10 +48,11 @@ defineProps<{
 
   <v-card
     v-if="inboundLinks.length > 0"
-    class="mb-4"
+    class="mb-3"
     variant="outlined"
+    density="compact"
   >
-    <v-card-title class="text-subtitle-1">Referenced by</v-card-title>
+    <v-card-title class="text-subtitle-2">Referenced by</v-card-title>
     <v-list density="compact">
       <v-list-item
         v-for="link in inboundLinks"
@@ -63,15 +64,6 @@ defineProps<{
             {{ link.source_title }}
           </router-link>
         </v-list-item-subtitle>
-      </v-list-item>
-    </v-list>
-  </v-card>
-
-  <v-card v-if="errata.length > 0" class="mb-4" variant="outlined">
-    <v-card-title class="text-subtitle-1">Errata</v-card-title>
-    <v-list density="compact">
-      <v-list-item v-for="erratum in errata" :key="erratum.id">
-        <router-link :to="`/records/${erratum.id}`">{{ erratum.title }}</router-link>
       </v-list-item>
     </v-list>
   </v-card>

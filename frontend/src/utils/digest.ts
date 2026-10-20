@@ -1,12 +1,17 @@
 /**
- * Display helpers for canonical content digests
- * (`sha256-v1:<64 hex>`), mirroring the backend's own
- * `app.services.diff.short_digest` so the short form shown in the UI
- * matches what appears in server-side diff labels.
+ * Display helpers for shortening machine identifiers in running text
+ * (module-ux-principles "Technical identifiers"): content digests
+ * (`sha256-v1:<64 hex>`, mirroring the backend's own
+ * `app.services.diff.short_digest`) and record UUIDs. Both keep the
+ * full value reachable via tooltip/copy at the call site; this
+ * module only shortens the displayed text.
  */
 
-/** Number of hex characters kept in the shortened form. */
+/** Number of hex characters kept in the shortened digest form. */
 const SHORT_HEX = 12;
+
+/** Number of characters kept in a shortened UUID. */
+const SHORT_UUID_CHARS = 8;
 
 /**
  * Shorten a digest string for display, keeping its algorithm prefix.
@@ -23,4 +28,16 @@ export function shortDigest(digest: string): string {
   const algorithm = digest.slice(0, separatorIndex);
   const hex = digest.slice(separatorIndex + 1);
   return `${algorithm}:${hex.slice(0, SHORT_HEX)}`;
+}
+
+/**
+ * Shorten a UUID for display in running text. The caller must keep
+ * the full value reachable (tooltip and copy-to-clipboard), never
+ * showing only this short form.
+ *
+ * :param uuid: Full UUID string.
+ * :returns: The UUID's first 8 characters.
+ */
+export function shortUuid(uuid: string): string {
+  return uuid.slice(0, SHORT_UUID_CHARS);
 }

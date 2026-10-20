@@ -1,9 +1,12 @@
 <script setup lang="ts">
 /**
- * Record detail page header: title, state/status/issue chips, the
+ * Record detail page header: title, state/kind/issue chips, the
  * provenance sentence distinguishing candidate from published, and
  * the accepted-candidate note. Purely presentational: all labels are
- * computed by the parent view from the loaded record.
+ * computed by the parent view from the loaded record. Obsoleted/
+ * updated status moved to the prominent `RecordStatusBanners` below
+ * this header (rfc-editor.org/info layout), so it is no longer a
+ * small chip here.
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { StatusLabel } from "@/utils/labels";
@@ -13,8 +16,9 @@ defineProps<{
   title: string;
   /** Candidate/published chip, or `null` to hide it. */
   recordKindLabel: StatusLabel | null;
-  /** Active/updated/obsoleted chip, or `null` to hide it. */
-  statusLabel: StatusLabel | null;
+  /** Decision/erratum chip (from `metadata.record_kind`), or `null`
+   *  to hide it. */
+  recordTypeLabel: StatusLabel | null;
   /** Validation issue-count chip, or `null` when there are none. */
   issueIndicator: StatusLabel | null;
   /** Sentence distinguishing candidate (with branch) from published. */
@@ -29,7 +33,7 @@ defineProps<{
     <h1 id="record-heading" class="text-h5">{{ title }}</h1>
     <div class="record-header-chips">
       <StatusChip v-if="recordKindLabel" v-bind="recordKindLabel" />
-      <StatusChip v-if="statusLabel" v-bind="statusLabel" />
+      <StatusChip v-if="recordTypeLabel" v-bind="recordTypeLabel" />
       <StatusChip v-if="issueIndicator" v-bind="issueIndicator" />
     </div>
   </header>

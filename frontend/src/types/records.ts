@@ -52,6 +52,14 @@ export type OutboundLinkOut = components["schemas"]["OutboundLinkOut"];
 export type InboundLinkOut = components["schemas"]["InboundLinkOut"];
 /** One erratum record correcting the record being viewed. */
 export type ErratumOut = components["schemas"]["ErratumOut"];
+/** Counts of a record's errata for the top notice. */
+export type ErrataSummaryOut = components["schemas"]["ErrataSummaryOut"];
+/** The structured content of an erratum, shown on its own page. */
+export type ErratumContentOut = components["schemas"]["ErratumContentOut"];
+/** The decision an erratum corrects, resolved like outbound links. */
+export type ErratumForOut = components["schemas"]["ErratumForOut"];
+/** Kind of correction an erratum reports. */
+export type ErratumType = components["schemas"]["ErratumType"];
 /** One published or candidate row sharing a record's identity. */
 export type SiblingOut = components["schemas"]["SiblingOut"];
 /** The applicable approval policy, or why there is none. */

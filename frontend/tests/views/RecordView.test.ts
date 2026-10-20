@@ -300,3 +300,108 @@ describe("RecordView legacy sign-off card", () => {
     expect(wrapper.text()).not.toContain("Legacy sign-off (unverified)");
   });
 });
+
+describe("RecordView status banners and layout", () => {
+  beforeEach(() => {
+    getRecordDiff.mockResolvedValue(noPriorDiff);
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("shows the obsoleted banner from an inbound obsoleted_by link", async () => {
+    const detail = baseDetail();
+    detail.inbound_links = [
+      { link_type: "obsoleted_by", source_id: "33333333-3333-3333-3333-333333333333", source_title: "Use gRPC" },
+    ];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("This decision is obsolete, see");
+    expect(wrapper.text()).toContain("Use gRPC");
+  });
+
+  it("shows the updated banner from an inbound updated_by link", async () => {
+    const detail = baseDetail();
+    detail.inbound_links = [
+      { link_type: "updated_by", source_id: "33333333-3333-3333-3333-333333333333", source_title: "Use PostgreSQL v2" },
+    ];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("This decision was updated, see");
+    expect(wrapper.text()).toContain("Use PostgreSQL v2");
+  });
+
+  it("shows the has-errata notice with counts and a working #errata anchor", async () => {
+    const detail = baseDetail();
+    detail.errata_summary = {
+      total: 1,
+      verified: 0,
+      reported: 1,
+      rejected: 0,
+      changed: 0,
+      proposed: 0,
+    };
+    detail.errata = [
+      {
+        id: "44444444-4444-4444-4444-444444444444",
+        kind: "published",
+        ref: "main",
+        source_id: "central",
+        project: "platform",
+        path: "doc/decisions/errata/2025-05-01-fix.md",
+        title: "Erratum: Consequences",
+        type: "technical",
+        section: "Consequences",
+        reported_by: null,
+        reported_date: null,
+        original_html: null,
+        corrected_html: "<p>fixed</p>",
+        notes_html: null,
+        approval_state: "pending",
+        digest: "sha256-v1:def",
+        updated_at: "2026-01-01T00:00:00Z",
+        has_content: true,
+      },
+    ];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("This decision has 1 errata (0 verified, 1 reported).");
+    const anchorTarget = wrapper.find("#errata");
+    expect(anchorTarget.exists()).toBe(true);
+    expect(anchorTarget.text()).toContain("Erratum: Consequences");
+  });
+
+  it("shows the erratum-for banner on an erratum page, resolved to its target", async () => {
+    const detail = baseDetail();
+    detail.metadata.record_kind = "erratum";
+    detail.erratum_for = {
+      uuid: "55555555-5555-5555-5555-555555555555",
+      id: "66666666-6666-6666-6666-666666666666",
+      title: "Use PostgreSQL",
+      resolved: true,
+    };
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("This is an erratum for");
+    expect(wrapper.text()).toContain("Use PostgreSQL");
+    expect(wrapper.text()).toContain("Erratum");
+  });
+
+  it("puts the sidebar's metadata after the main column in document order", async () => {
+    getRecord.mockResolvedValue(baseDetail());
+
+    const wrapper = await mountRecordView();
+
+    const html = wrapper.html();
+    expect(html.indexOf("Approval")).toBeLessThan(html.indexOf("About this decision"));
+  });
+});
