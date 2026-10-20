@@ -133,6 +133,38 @@ record, an Accept/Reject dialog requiring a comment is optional but
 supported. `GET /api/v1/me` reports whether the signed-in principal
 is an eligible reviewer and why not, when they are not.
 
+## Errata
+
+An erratum (see `docs/schema.md` "Errata") is its own record with its
+own UUID, content hash, and approval history -- reviewing an erratum
+never touches the corrected decision's digest, approval state, or
+decision history. Filing, verifying, or rejecting an erratum is
+exactly the hash-bound accept/reject workflow described above,
+applied to the erratum's own content.
+
+Because an erratum is reviewed as a *report*, not as a new decision,
+the UI labels the same five states with erratum-specific wording:
+
+| Approval state | Erratum label |
+|---|---|
+| `pending` / `policy_missing` | Reported |
+| `accepted` | Verified |
+| `rejected` | Rejected |
+| `changed_since_acceptance` | Changed since verification |
+| `not_required` | Published (no review required) |
+
+The record detail page's errata section and top notice count only
+**published** errata (`total`/`verified`/`reported`/`rejected`/
+`changed`); a candidate erratum -- one still on a feature branch, not
+yet on the published ref -- is counted separately as `proposed` and
+is never mixed into the published counts.
+
+An eligible reviewer sees "Verify erratum" / "Reject erratum" buttons
+instead of "Accept" / "Reject" on an erratum's own page; eligibility,
+the decide logic, and the append-only history are identical to a
+decision's. Verifying or rejecting an erratum never changes the
+corrected decision's own approval state, content, or history.
+
 ## CI workflow
 
 A CI pipeline pushes a candidate (never a published record -- push

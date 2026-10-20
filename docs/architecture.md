@@ -15,10 +15,10 @@ only downward (`phases/DECISIONS.md` "Repository layout"):
 graph TD
     UI["frontend/ (Vue 3 + Vuetify SPA)"]
     Routers["app/routers/ (HTTP boundary)"]
-    Services["app/services/ (ingest, polling, intake,\ncatalog read, decisions, diff)"]
-    Domain["app/domain/ (pure: parsing, hashing,\nrelationships, approval evaluation)"]
+    Services["app/services/ (ingest, polling, intake,\ncatalog read, decisions, diff, errata_view)"]
+    Domain["app/domain/ (pure: parsing, hashing,\nrelationships, approval evaluation, errata)"]
     Sources["app/sources/ (adapter Protocol;\nfilesystem, gitlab)"]
-    Storage["app/storage/ (CatalogStore Protocol;\nPostgreSQL implementation)"]
+    Storage["app/storage/ (CatalogStore Protocol;\nPostgreSQL implementation, incl. errata)"]
     Auth["app/auth/ (OIDC, dev bypass, RBAC)"]
     DB[(PostgreSQL)]
 

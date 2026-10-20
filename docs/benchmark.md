@@ -37,7 +37,7 @@ raw SQL.
 - **Relationships:** ~15% of records link `updates`/`obsoletes` to an
   earlier record by UUID (catalog-wide, not only within their own
   project, matching how `record_relationships.py` resolves links);
-  ~5% are `erratum` records that `corrects` an earlier one.
+  ~5% are errata (`erratum-for` an earlier decision; RFC-style, see `docs/schema.md`).
 - **Legacy fields:** ~7% carry a legacy `signed-off-by` list; a share
   of `obsoletes` links are spelled as the legacy `deprecates` alias.
 - **Deliberate issues:** ~5% of records carry one deliberate

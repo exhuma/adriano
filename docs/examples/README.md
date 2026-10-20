@@ -9,7 +9,9 @@ full field reference.
   `samples/adr-root/platform/doc/decisions/2024-01-10-use-postgresql.md`
 - Legacy file using `deprecates` (legacy alias of `obsoletes`):
   `samples/adr-root/payments/doc/decisions/2024-02-02-retire-legacy-invoicing.md`
-- Current-schema file (`title`, `kind`, `uuid`), no relationships:
+- Current-schema file (`title`, `uuid`), no relationships, keeping an
+  obsolete `kind: decision` line on purpose to demonstrate the
+  `obsolete_kind_field` warning:
   `samples/adr-root/payments/doc/decisions/2024-09-09-adopt-event-sourcing.md`
 - `obsoletes` (replacing record points at the one it replaces):
   `samples/adr-root/platform/doc/decisions/2025-02-20-add-rest-gateway-for-grpc-services.md`

@@ -348,3 +348,19 @@ Work stops here. No Phase 2 or later-scope item has been started. This
 report, the demo (`docs/demo/README.md`), and the measured latency
 above are presented for explicit product-owner review before any
 further work begins.
+
+## 9. Post-review change (2026-10-20)
+
+After reviewing this report, the product owner authorized one
+post-Phase-1 change: a record-page redesign (status banners at the
+top, metadata moved into a sidebar, modelled on rfc-editor.org/info
+pages) and a dedicated erratum file format (`erratum-for`, `type`,
+`section`, body sections "Original text" / "Corrected text" /
+"Notes") replacing the `kind: erratum` + `corrects:` shape, with
+errata reviewed as reports (Reported / Verified / Rejected / Changed
+since verification) rather than as new decisions. See
+`phases/10-ui-errata.md` for the full plan and `phases/DECISIONS.md`
+"Authorized post-Phase-1 change" for the confirmed decision. This
+change does not alter any of the 27 criteria verdicts above: it
+changes how decisions and errata are presented and authored, not
+whether Phase 1's requirements are met.

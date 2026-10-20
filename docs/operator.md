@@ -200,6 +200,65 @@ push-adr-candidate:
 `delivery_id` makes a retried CI job idempotent: a repeated id returns
 the earlier result (`deduplicated: true`) instead of re-ingesting.
 
+### Pushing an erratum candidate
+
+Pushing an **erratum** candidate uses the same endpoint. The pushed
+content's own `uuid` is the erratum's identity -- not the decision it
+corrects, which is instead named in the erratum's own `erratum-for`
+frontmatter field (see `docs/schema.md` "Errata"). A reviewer verifies
+or rejects it exactly like any other candidate (`docs/approval.md`
+"Errata"); the corrected decision's own approval state never changes.
+
+`samples/push-candidate.sh` takes the erratum file's path inside the
+project as an optional 6th argument, so a pushed erratum candidate
+lands at the same path it would use once published:
+
+```sh
+samples/push-candidate.sh \
+  samples/candidates/2026-02-01-erratum-ledger-snapshot-cadence.md \
+  payments feature/erratum-ledger-snapshot-cadence central "" \
+  doc/decisions/errata/2026-02-01-erratum-ledger-snapshot-cadence.md
+```
+
+The same CI job shape as above works for an erratum file, with an
+explicit `path` so it lands under `errata/` once merged and polled:
+
+```yaml
+push-adr-erratum:
+  stage: review
+  rules:
+    - if: '$CI_COMMIT_BRANCH != "main"'
+  script:
+    - |
+      python3 - <<'PY'
+      import json, os, pathlib, urllib.request
+
+      path = pathlib.Path(
+          "doc/decisions/errata/2026-02-01-erratum-ledger-snapshot-cadence.md"
+      )
+      content = path.read_text(encoding="utf-8")
+      body = json.dumps({
+          "source_id": "central",
+          "project": "payments",
+          "adr_uuid": "201eeb83-8117-43c2-b429-aba67ee26f90",
+          "ref": os.environ["CI_COMMIT_REF_NAME"],
+          "content": content,
+          "path": str(path),
+          "delivery_id": os.environ["CI_PIPELINE_ID"],
+      }).encode("utf-8")
+      req = urllib.request.Request(
+          "https://adriano.example.com/api/v1/candidates",
+          data=body,
+          method="PUT",
+          headers={
+              "Authorization": f"Bearer {os.environ['ADRIANO_PUSH_TOKEN']}",
+              "Content-Type": "application/json",
+          },
+      )
+      urllib.request.urlopen(req, timeout=10)
+      PY
+```
+
 ## Polling schedule
 
 Scheduled indexing is an **external job**, not a timer inside a web
@@ -357,10 +416,17 @@ docker compose run --rm migrate
 docker compose run --rm backend alembic upgrade head
 ```
 
-Migrations: `0001_initial` (schema) and
-`0002_no_truncate_decisions` (refuses `TRUNCATE` on
-`decision_event`, see "Database role and tamper resistance"). The
-faster
+Migrations: `0001_initial` (schema), `0002_no_truncate_decisions`
+(refuses `TRUNCATE` on `decision_event`, see "Database role and
+tamper resistance"), and `0003_erratum_content` (adds the nullable
+`record.erratum` column holding an erratum's sanitized content, plus
+an expression index on `links ->> 'corrects'` for the "errata of this
+decision" reverse lookup). Upgrading to `0003` clears `change_token`
+for any `erratum`-kind row with no stored erratum content yet
+(records ingested before this migration, including ones using the
+retired `kind: erratum` shape), so the next poll re-fetches and
+re-ingests them with the current parser; a pushed candidate erratum
+is only refreshed by its next push. The faster
 "Needs approval" filter (see `docs/benchmark.md`) is a query change
 only and adds no migration. It relies on the existing unique
 constraint/index `uq_decision_event_identity_digest` (one decision per

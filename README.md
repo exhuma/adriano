@@ -97,6 +97,33 @@ it covers `docker compose build && docker compose up -d` against your
 own `catalog.yaml` and `.env`, with no dev auth and a real OIDC
 provider.
 
+## Reading a record page
+
+Opening any decision or erratum from search shows:
+
+- **Status banners** at the top: "This decision is obsolete, see
+  ...", "This decision was updated, see ...", "This decision has N
+  errata (...)", or, on an erratum's own page, "This is an erratum
+  for <decision>" plus its own status (Reported / Verified /
+  Rejected / Changed since verification).
+- **The document** itself in the main column: the rendered decision
+  text, or, for an erratum, its type/section line followed by
+  labelled "Original text (says)", "Corrected text (should say)" and
+  "Notes" blocks.
+- An **"About this decision"** (or "About this erratum") sidebar with
+  everything that is not the document itself: an approval summary
+  chip linking to the full approval history, the UUID, decision
+  date/provenance/freshness, links to other decisions, sibling
+  revisions, and any legacy sign-off.
+- An **errata section** lower in the main column, listing every
+  erratum reported against the decision with its status, type,
+  section, and the original/corrected text, each linking to its own
+  page.
+
+Search has a **"Show"** filter (Decisions / Errata / Both) next to
+the Published/Candidate toggle, so you can include or focus on
+errata.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and adjust as needed; the defaults
