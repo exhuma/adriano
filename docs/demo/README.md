@@ -349,13 +349,23 @@ same exact-digest confirmation as a decision:
 
 ![Verify-erratum confirmation dialog, with the exact digest](p10-f1-verify-erratum-dialog.png)
 
-After confirming, the erratum records a "Verified — candidate" history
-entry, demonstrated here by the explanation sentence beneath the
-status chip ("This erratum was verified for this exact content.") and
-a confirmation snackbar; see "UI bugs found" below for a wording
-inconsistency observed in this exact screenshot:
+After confirming, the erratum's own status chip (both on its approval
+card and in the "About this erratum" sidebar) reads "Verified —
+Proposed (branch feature/erratum-ledger-snapshot-cadence)" — verified
+for this exact content, but still only a candidate on a feature
+branch — with the explanation sentence "This erratum was verified for
+this exact content." beneath it, and a confirmation snackbar:
 
 ![Erratum candidate after verifying](p10-f2-verified-result.png)
+
+Because the erratum candidate is still proposed (kind `candidate`, not
+yet merged/polled onto the published ref), the *target* decision
+("Adopt event sourcing for the ledger service") keeps listing it under
+"Proposed errata" rather than moving it into the published errata
+group, with the same "Verified — Proposed (branch
+feature/erratum-ledger-snapshot-cadence)" wording on its entry:
+
+![Event-sourcing decision after verifying: the proposed erratum shows Verified — Proposed (branch …)](p10-f3-target-shows-verified.png)
 
 Search gained a **"Show"** filter (Decisions / Errata / Both, synced
 to the URL as `record_type`) next to the Published/Candidate toggle.
@@ -366,36 +376,10 @@ with an "Erratum for &lt;decision&gt;" line:
 
 At a 390px mobile viewport the same gRPC decision page keeps the
 sidebar below the main column (not beside it) with no horizontal
-scrolling:
+scrolling — a full-page capture, so the stacked sidebar is visible
+below the document body:
 
-![gRPC decision page at 390px width: sidebar stacked below the document](p10-h-mobile-390-grpc-decision.png)
-
-### UI bug found during this verification (not fixed; reported only)
-
-On an erratum's **own** detail page, the "Approval" card's status chip
-and the sidebar's approval-summary chip both use the generic
-decision vocabulary ("Pending approval" / "Accepted — candidate" /
-"Accepted — published") via `approvalStateLabel()`
-(`frontend/src/components/ApprovalCard.vue:100` and
-`frontend/src/components/record/RecordSidebar.vue:68`), while the
-explanation sentence directly beneath the chip on the same card
-correctly switches to the RFC "report/verify/reject" vocabulary via
-`approvalStateExplanation(..., recordKind)` (e.g. "This erratum is
-reported and awaits verification." / "This erratum was verified for
-this exact content."). A dedicated `erratumStatusLabel()` helper
-already exists in `frontend/src/utils/labels.ts` and is used
-correctly for the same erratum when it is listed on its *target*
-decision's errata section (`ErratumEntry.vue`, showing "Reported" /
-"Verified" / "Rejected" there) — but `ApprovalCard.vue` and
-`RecordSidebar.vue` never call it, even though both already receive
-`recordKind` as a prop (used there for the "Verify erratum"/"Reject
-erratum" button labels and the sidebar heading). Repro: open any
-erratum's own page (e.g. the gRPC erratum,
-`/records/2d4988c9-ab30-4105-ac2b-073e3fdb9070`, or the "ledger
-snapshot cadence" candidate used above) and compare the status chip's
-text ("Pending approval") against the sentence below it ("This
-erratum is reported and awaits verification.") — visible in
-`p10-c-erratum-page.png` and `p10-f2-verified-result.png` above.
+![gRPC decision page at 390px width, full page: sidebar stacked below the document](p10-h-mobile-390-grpc-decision.png)
 
 ## Known limitations observed during this walk-through
 

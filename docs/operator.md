@@ -426,7 +426,19 @@ for any `erratum`-kind row with no stored erratum content yet
 (records ingested before this migration, including ones using the
 retired `kind: erratum` shape), so the next poll re-fetches and
 re-ingests them with the current parser; a pushed candidate erratum
-is only refreshed by its next push. The faster
+is only refreshed by its next push. This re-fetch relies on a real
+poll-capable adapter behind the registration. Synthetic/seeded
+erratum rows (`adriano seed-synthetic`, `task bench:seed`) are
+written directly through the store port and never polled -- the
+seeded registration's `root` need not even exist -- so clearing their
+`change_token` has no poll to act on: a seeded erratum row stored
+before `0003` stays without erratum content until you re-run
+`adriano seed-synthetic` (or `task bench:seed`) against that database,
+which re-ingests the same deterministic corpus with the current
+parser. Likewise, re-push any legacy erratum candidate (e.g. via
+`samples/push-candidate.sh` or your CI job) stored before `0003`, since
+a pushed candidate is refreshed only by its next push, never by a
+poll. The faster
 "Needs approval" filter (see `docs/benchmark.md`) is a query change
 only and adds no migration. It relies on the existing unique
 constraint/index `uq_decision_event_identity_digest` (one decision per

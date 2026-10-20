@@ -25,6 +25,7 @@ Demo note: this file is pushed as an **erratum candidate** (see
 `samples/push-candidate.sh`) against the already-published "Adopt
 event sourcing for the ledger service" decision
 (`samples/adr-root/payments/doc/decisions/2024-09-09-adopt-event-sourcing.md`).
-A reviewer verifies it while still a candidate ("Verified --
-candidate" on the erratum's own history), demonstrating the erratum
-report -> verify workflow described in `phases/10-ui-errata.md`.
+A reviewer verifies it while still a candidate, demonstrating the
+erratum report -> verify workflow described in
+`phases/10-ui-errata.md`; see `docs/demo/README.md` section 14 for
+the resulting UI wording.
