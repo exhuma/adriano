@@ -7,7 +7,10 @@
  * the `operate` permission (`useAuth().can("operate")`); everyone
  * else sees a short note naming who can poll instead of a disabled,
  * unexplained control (module-ux-principles "Write recovery messages
- * for humans").
+ * for humans"). The same permission gates the problem/recovery
+ * column's content (env-var names, recovery steps -- `SourceProblemCell`'s
+ * `canOperate` prop): a reader sees status and dates only
+ * (phases/11-ui-ux-updates.md decision 3).
  */
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 
@@ -294,7 +297,11 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
                 <span v-else>Never</span>
               </td>
               <td class="problem-column">
-                <SourceProblemCell :problem="row.problem" :hint="row.hint" />
+                <SourceProblemCell
+                  :problem="row.problem"
+                  :hint="row.hint"
+                  :can-operate="canOperate"
+                />
               </td>
               <td v-if="canOperate">
                 <v-btn

@@ -156,7 +156,10 @@ describe("RecordView approval controls", () => {
     const buttons = wrapper.findAll("button").map((b) => b.text());
     expect(buttons).not.toContain("Accept");
     expect(buttons).not.toContain("Reject");
-    expect(wrapper.text()).toContain("sign in as a reviewer to decide");
+    // The raw backend reason is replaced with plain-language copy
+    // for the stable blocker code (docs/ui-review R-10; Task 8).
+    expect(wrapper.text()).toContain("Sign in as a reviewer to decide this.");
+    expect(wrapper.text()).not.toContain("sign in as a reviewer to decide");
   });
 
   it("explains an unconfigured policy distinctly from a pending review", async () => {

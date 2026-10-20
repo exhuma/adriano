@@ -4,9 +4,14 @@
  * by severity, with the severity announced to assistive tech even
  * though it is also conveyed by icon colour. Messages wrap in full
  * instead of being cut at one line (docs/ui-review R-09), and the
- * static list is not a tab stop (G-10).
+ * static list is not a tab stop (G-10). Each message is prefixed
+ * with a plain-language headline for its stable issue code
+ * (docs/ui-review R-10) -- the backend's own message is kept in
+ * full afterwards, so no per-instance detail (field name, value,
+ * target) is lost.
  */
 import type { IssueOut } from "@/types/records";
+import { validationIssueText } from "@/utils/labels";
 
 defineProps<{
   /** Stored validation issues for this record. */
@@ -30,7 +35,7 @@ defineProps<{
         </template>
         <v-list-item-title class="text-wrap text-break">
           <span class="d-sr-only">{{ issue.severity }}: </span>
-          {{ issue.message }}
+          {{ validationIssueText(issue.code, issue.message) }}
         </v-list-item-title>
       </v-list-item>
     </v-list>

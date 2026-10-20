@@ -3,8 +3,12 @@
  * wording when the viewed record is an erratum (buttons, dialog
  * title via `DecisionDialog`, and the state explanation), while a
  * normal decision keeps the plain Accept/Reject wording; that focus
- * returns to the button that opened the decision dialog; and that the
- * card's titles are headings (docs/ui-review G-05).
+ * returns to the button that opened the decision dialog; that the
+ * card's titles are headings (docs/ui-review G-05); that content
+ * which cannot be decided shows the neutral "Blocked" status instead
+ * of "Pending approval" (R-02); and that the "why you can't decide"
+ * line uses plain-language copy for the blocker code, muted for a
+ * reader, instead of the raw `decide_blocked_reason` text (R-10).
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
@@ -112,5 +116,83 @@ describe("ApprovalCard dialog focus", () => {
 
     expect(wrapper.find("h2").text()).toBe("Approval");
     expect(wrapper.find("h3").text()).toBe("Decision history");
+  });
+});
+
+describe("ApprovalCard blocked content (R-02, R-10)", () => {
+  it("shows the neutral 'Blocked' status instead of 'Pending approval'", () => {
+    const wrapper = mount(ApprovalCard, {
+      props: {
+        approval: {
+          ...baseApproval(),
+          approvable: false,
+          can_decide: false,
+          decide_blocked_code: "not_approvable",
+          decide_blocked_reason:
+            "this content cannot be decided: the record has no valid `uuid`",
+        },
+        kind: "published",
+        recordKind: "decision",
+        recordId: "11111111-1111-1111-1111-111111111111",
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    expect(wrapper.text()).toContain("Blocked");
+    expect(wrapper.text()).not.toContain("Pending approval");
+    expect(wrapper.text()).toContain(
+      "This content can't be decided until its problems are fixed.",
+    );
+    expect(wrapper.text()).toContain(
+      "Details: this content cannot be decided: the record has no " +
+        "valid `uuid`",
+    );
+  });
+
+  it("shows a short, muted line for a reader blocked by not_eligible", () => {
+    const wrapper = mount(ApprovalCard, {
+      props: {
+        approval: {
+          ...baseApproval(),
+          can_decide: false,
+          decide_blocked_code: "not_eligible",
+          decide_blocked_reason:
+            "not a reviewer: the approval policy lists neither this " +
+            "user nor any of their roles",
+        },
+        kind: "published",
+        recordKind: "decision",
+        recordId: "11111111-1111-1111-1111-111111111111",
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    expect(wrapper.text()).toContain("Only reviewers can approve this.");
+    expect(wrapper.text()).not.toContain("not a reviewer:");
+    expect(wrapper.find(".text-medium-emphasis").exists()).toBe(true);
+  });
+
+  it("uses a plain-language reason for every other blocker code too", () => {
+    const wrapper = mount(ApprovalCard, {
+      props: {
+        approval: {
+          ...baseApproval(),
+          can_decide: false,
+          decide_blocked_code: "policy_missing",
+          decide_blocked_reason:
+            "the approval policy is not configured or invalid; " +
+            "decisions are refused",
+        },
+        kind: "published",
+        recordKind: "decision",
+        recordId: "11111111-1111-1111-1111-111111111111",
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    expect(wrapper.text()).toContain(
+      "No approval policy is configured, so nothing can be decided yet.",
+    );
+    expect(wrapper.text()).not.toContain("decisions are refused");
   });
 });

@@ -5,12 +5,18 @@
  * function here is a pure mapping with no I/O, reused by both
  * `SearchView`/`RecordView`/`SourcesView` and their tests.
  */
-import type { DecisionAction, DivergenceKind, PolicyStatus } from "@/types/approval";
+import type {
+  DecideBlockedCode,
+  DecisionAction,
+  DivergenceKind,
+  PolicyStatus,
+} from "@/types/approval";
 import type {
   ApprovalStateCode,
   DisplayStatus,
   ErrataSummaryOut,
   ErratumType,
+  IssueCode,
   IssueCountsOut,
   RecordKind,
   RecordState,
@@ -78,17 +84,27 @@ export function approvalStateLabel(
  * distinguishing an unconfigured/invalid policy from an ordinary
  * pending review so a missing configuration is never mistaken for a
  * reviewer delay (SPEC.md "Independent approval and sign-off
- * workflow").
+ * workflow"). When the content itself cannot be decided (a content
+ * problem, not a policy or reviewer one -- R-02), this overrides the
+ * ordinary "Awaiting review" wording, matching the "Blocked" chip
+ * from {@link approvalDisplayLabel}.
  *
  * :param state: Approval state of the record's current content.
  * :param policyStatus: Configuration status of the global policy.
+ * :param recordKind: Decision or erratum; picks the wording.
+ * :param approvable: Whether the content itself can be decided at
+ *     all, independent of policy/reviewer (`ApprovalOut.approvable`).
  * :returns: A one-sentence explanation.
  */
 export function approvalStateExplanation(
   state: ApprovalStateCode,
   policyStatus: PolicyStatus,
   recordKind: RecordKind = "decision",
+  approvable = true,
 ): string {
+  if (!approvable) {
+    return BLOCKED_EXPLANATION;
+  }
   if (state === "policy_missing" || policyStatus !== "configured") {
     return policyStatus === "invalid"
       ? "The configured approval policy is invalid — an operator " +
@@ -242,6 +258,61 @@ export function erratumStatusLabel(
   }
   const proposed = ref ? `Proposed (branch ${ref})` : "Proposed";
   return { ...base, text: `${base.text} — ${proposed}` };
+}
+
+/**
+ * Neutral status for content that cannot be decided at all because
+ * of a content problem (R-02), e.g. a missing/invalid `uuid` or
+ * invalid encoding (`ApprovalOut.approvable === false`). The icon is
+ * error-ish (an alert glyph) but the chip carries no colour: text
+ * and icon carry the meaning, not an error-red fill
+ * (phases/11-ui-ux-updates.md: "a neutral chip with an error-ish
+ * icon [...] not the error colour as the only signal").
+ */
+const BLOCKED_STATUS_LABEL: StatusLabel = {
+  icon: "mdi-alert-circle-outline",
+  text: "Blocked",
+  ariaLabel: "Blocked — this content cannot be decided",
+};
+
+/** Explanation sentence paired with {@link BLOCKED_STATUS_LABEL}. */
+const BLOCKED_EXPLANATION =
+  "This content can't be decided until its problems are fixed.";
+
+/**
+ * Describe a record's approval state for display, overriding to the
+ * neutral "Blocked" status whenever the content itself cannot be
+ * decided (R-02). This is the single place a record's approval chip
+ * is derived everywhere it appears (the sidebar summary card and the
+ * approval card); search rows use {@link searchApprovalStateLabel}
+ * directly instead, since the search payload carries no `approvable`
+ * field to derive "Blocked" from.
+ *
+ * `approvable` is distinct from the per-viewer
+ * `decide_blocked_code`: a reader is blocked by `not_eligible` even
+ * on perfectly valid content, but `approvable` is the same for every
+ * viewer, so it is the right signal for a status chip everyone sees
+ * the same way.
+ *
+ * :param approval: The state and content-approvability of the
+ *     record's current content.
+ * :param kind: Published or candidate; picks the "accepted" wording.
+ * :param recordKind: Decision or erratum; picks the vocabulary.
+ * :param ref: Source ref (branch/label) for a candidate erratum.
+ * :returns: Icon, label text, and colour.
+ */
+export function approvalDisplayLabel(
+  approval: { state: ApprovalStateCode; approvable: boolean },
+  kind: RecordState,
+  recordKind: RecordKind = "decision",
+  ref?: string,
+): StatusLabel {
+  if (!approval.approvable) {
+    return BLOCKED_STATUS_LABEL;
+  }
+  return recordKind === "erratum"
+    ? erratumStatusLabel(approval.state, kind, ref)
+    : approvalStateLabel(approval.state, kind);
 }
 
 /**
@@ -567,4 +638,146 @@ export function issueIndicatorLabel(counts: IssueCountsOut): StatusLabel | null 
     return { icon: "mdi-alert-circle", text, color: "error" };
   }
   return { icon: "mdi-alert", text, color: "warning" };
+}
+
+/**
+ * Plain-language message for every stable reason the caller cannot
+ * decide a record now (`ApprovalOut.decide_blocked_code`;
+ * docs/ui-review R-10). Replaces the raw `decide_blocked_reason`
+ * text ("not a reviewer: the approval policy lists neither this
+ * user nor any of their roles") that used to be shown verbatim.
+ *
+ * `not_eligible` (a reader, or a signed-in user the policy does not
+ * list) intentionally gets the shortest, most muted line -- "a muted
+ * 'Only reviewers can approve' style line is enough" (Task 8). Every
+ * other code's backend message is fully static, except
+ * `not_approvable`, whose nested reader-facing reason (e.g. "the
+ * record has no valid `uuid`") has no code of its own; the caller
+ * shows that raw text separately, in a secondary "Details" position,
+ * rather than this function trying to parse it out of
+ * `decide_blocked_reason`.
+ *
+ * :param code: The stable blocker code, or `null` when not blocked.
+ * :returns: The message, or `null` for `null`/an unrecognised code
+ *     (the caller falls back to the raw `decide_blocked_reason`).
+ */
+export function decideBlockedLabel(
+  code: DecideBlockedCode | null,
+): string | null {
+  if (code === null) {
+    return null;
+  }
+  const messages: Record<DecideBlockedCode, string> = {
+    policy_missing:
+      "No approval policy is configured, so nothing can be decided yet.",
+    approval_not_required: "This content does not require approval.",
+    not_eligible: "Only reviewers can approve this.",
+    not_approvable: BLOCKED_EXPLANATION,
+    self_approval: "You wrote this content, so you can't decide it yourself.",
+    already_decided:
+      "This exact content was already decided and can't be decided again.",
+    anonymous: "Sign in as a reviewer to decide this.",
+  };
+  return messages[code] ?? null;
+}
+
+/**
+ * Plain-language headline for a stable validation issue code
+ * (`IssueOut.code`; docs/ui-review R-10, Task 8). The backend's own
+ * `message` is kept in full alongside it ({@link validationIssueText}
+ * composes the two) -- these headlines summarise *what kind* of
+ * problem the code is, while the per-instance detail (which field,
+ * which UUID, which heading) only exists in the free-text message
+ * the backend sends, which is never parsed to extract it.
+ *
+ * :param code: The stable issue code.
+ * :returns: A short, human headline.
+ */
+export function issueCodeLabel(code: IssueCode): string {
+  const headlines: Record<IssueCode, string> = {
+    bad_yaml: "The file's front matter is not valid YAML",
+    missing_frontmatter: "The file has no front matter block",
+    missing_uuid: "The record has no `uuid`",
+    bad_uuid: "The record's `uuid` is not valid",
+    bad_date: "The record's date is not valid",
+    missing_date: "The record has no decision date",
+    unknown_field: "The front matter has a field the catalog does not use",
+    bad_field_type: "A front-matter field has an unexpected value",
+    duplicate_uuid: "Another record already uses this `uuid`",
+    missing_target: "A linked record could not be found",
+    ambiguous_target: "A link matches more than one record",
+    legacy_alias: "This field is a legacy alias of a newer one",
+    legacy_signoff: "This uses the old, unverified sign-off field",
+    corrects_on_non_erratum:
+      "A `corrects` field was used outside an erratum, which is no " +
+      "longer supported",
+    erratum_without_target:
+      "This erratum does not say which decision it corrects",
+    bad_encoding: "The file is not valid UTF-8 text",
+    bad_erratum_type: "The erratum's `type` is missing or not recognised",
+    erratum_missing_corrected_text:
+      "The erratum is missing its corrected text",
+    erratum_unknown_section_heading:
+      "The erratum has a section heading the catalog does not recognise",
+    erratum_duplicate_section: "The erratum repeats the same section twice",
+    erratum_targets_itself: "An erratum can't correct itself",
+    erratum_relationship_ignored:
+      "A relationship field on this erratum is ignored",
+    erratum_target_is_erratum:
+      "This erratum corrects another erratum, which is not supported",
+    legacy_erratum_format:
+      "This uses the old erratum format, which is no longer supported",
+    obsolete_kind_field: "The `kind` field is no longer needed",
+  };
+  return headlines[code];
+}
+
+/**
+ * Compose one validation issue's display text: the plain-language
+ * headline followed by the backend's own actionable message, so no
+ * per-instance detail (field name, value, target) is ever lost or
+ * parsed out of free text.
+ *
+ * :param code: The stable issue code.
+ * :param message: The backend's own message for this issue.
+ * :returns: "<headline> — <message>".
+ */
+export function validationIssueText(code: IssueCode, message: string): string {
+  return `${issueCodeLabel(code)} — ${message}`;
+}
+
+/** Stable poll-problem codes (`PollProblem.code`; see
+ *  `backend/app/services/polling.py` and `poll_plan.py`), mapped to a
+ *  plain-language headline. The field is untyped JSON on the wire
+ *  (`SourceOut.last_error`), not a generated enum, so this is keyed
+ *  by the documented string values rather than a TypeScript union. */
+const POLL_PROBLEM_HEADLINES: Record<string, string> = {
+  source_error: "Couldn't reach the source",
+  internal_error: "An unexpected error interrupted the poll",
+  projects_incomplete:
+    "The project list could not be fully read; some projects may be missing",
+  listing_failed: "Couldn't list the files in this project",
+  listing_incomplete:
+    "The file list could not be fully read; some files may be missing",
+  fetch_failed: "Couldn't fetch a changed file",
+  ownership_conflict: "Skipped — already handled by an earlier registration",
+  not_pollable: "This registration can't be polled",
+};
+
+/**
+ * Plain-language headline for a poll-problem code (docs/ui-review
+ * R-10, Task 8). The backend's own message, which is kept alongside
+ * it as secondary "Details" text by the caller, carries the
+ * per-instance specifics (which project, which file, the underlying
+ * source error).
+ *
+ * :param code: The stable code from one `problems[]` entry, if any.
+ * :returns: The headline, or `null` for a missing/unrecognised code
+ *     (the caller falls back to the raw message alone).
+ */
+export function pollProblemLabel(code: string | undefined): string | null {
+  if (code === undefined) {
+    return null;
+  }
+  return POLL_PROBLEM_HEADLINES[code] ?? null;
 }

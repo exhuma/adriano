@@ -139,7 +139,8 @@ describe("SourcesView", () => {
     expect(wrapper.text()).toContain("ask an administrator");
   });
 
-  it("renders a problems[] last_error as a list with code as secondary text", async () => {
+  it("renders a problems[] last_error as plain-language text, " +
+    "keeping the raw message as Details", async () => {
     listSources.mockResolvedValue([
       {
         ...baseSource,
@@ -156,10 +157,32 @@ describe("SourcesView", () => {
 
     const items = wrapper.findAll("li");
     expect(items).toHaveLength(2);
-    expect(items[0].text()).toContain("fake source is down");
-    expect(items[0].text()).toContain("source_error");
-    expect(items[1].text()).toContain("could not fetch a.md");
+    expect(items[0].text()).toContain("Couldn't reach the source");
+    expect(items[0].text()).toContain("Details: fake source is down");
+    expect(items[1].text()).toContain("Couldn't fetch a changed file");
+    expect(items[1].text()).toContain("Details: could not fetch a.md");
     expect(wrapper.text()).not.toContain("{");
+  });
+
+  it("hides problem/recovery detail from a reader, keeping status " +
+    "and dates", async () => {
+    canOperate = false;
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        last_status: "failed",
+        last_attempt_at: "2026-01-01T00:00:00Z",
+        last_error: {
+          problems: [{ code: "source_error", message: "fake source is down" }],
+        },
+      },
+    ]);
+    const wrapper = await mountView();
+
+    expect(wrapper.text()).toContain("Failed");
+    expect(wrapper.find("li").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("fake source is down");
+    expect(wrapper.text()).not.toContain("Couldn't reach the source");
   });
 
   it("renders a source_error last_error shape as plain text", async () => {

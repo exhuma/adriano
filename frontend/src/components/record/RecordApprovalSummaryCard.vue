@@ -15,7 +15,7 @@ import DecideButtons from "@/components/DecideButtons.vue";
 import StatusChip from "@/components/StatusChip.vue";
 import type { ApprovalOut, DecisionSummaryOut } from "@/types/approval";
 import type { RecordKind, RecordState } from "@/types/records";
-import { approvalStateLabel, erratumStatusLabel } from "@/utils/labels";
+import { approvalDisplayLabel } from "@/utils/labels";
 
 const props = defineProps<{
   /** Approval state of the record's current content. */
@@ -44,12 +44,16 @@ const heading = computed(() =>
   props.recordKind === "erratum" ? "About this erratum" : "About this decision",
 );
 
-/** The one status shown in the sidebar; the single place a later
- *  display status (e.g. "Blocked") plugs in. */
+/** The one status shown in the sidebar, including the neutral
+ *  "Blocked" override when the content itself cannot be decided
+ *  (docs/ui-review R-02; see `approvalDisplayLabel`). */
 const statusLabel = computed(() =>
-  props.recordKind === "erratum"
-    ? erratumStatusLabel(props.approval.state, props.kind, props.recordRef)
-    : approvalStateLabel(props.approval.state, props.kind),
+  approvalDisplayLabel(
+    props.approval,
+    props.kind,
+    props.recordKind,
+    props.recordRef,
+  ),
 );
 </script>
 

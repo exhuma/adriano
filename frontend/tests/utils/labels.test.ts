@@ -6,9 +6,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  approvalDisplayLabel,
   approvalStateExplanation,
   approvalStateLabel,
   candidateBranchText,
+  decideBlockedLabel,
   decisionActionLabel,
   displayStatusLabel,
   divergenceLabel,
@@ -16,16 +18,28 @@ import {
   errataHeadingText,
   erratumStatusLabel,
   erratumTypeLabel,
+  issueCodeLabel,
   issueIndicatorLabel,
   pluralizeErrata,
+  pollProblemLabel,
   pollStatusLabel,
   recordStateLabel,
   searchApprovalStateLabel,
   searchErratumStatusLabel,
   searchRecordStateLabel,
+  validationIssueText,
 } from "@/utils/labels";
-import type { DivergenceKind, PolicyStatus } from "@/types/approval";
-import type { ApprovalStateCode, DisplayStatus, ErrataSummaryOut } from "@/types/records";
+import type {
+  DecideBlockedCode,
+  DivergenceKind,
+  PolicyStatus,
+} from "@/types/approval";
+import type {
+  ApprovalStateCode,
+  DisplayStatus,
+  ErrataSummaryOut,
+  IssueCode,
+} from "@/types/records";
 import type { PollStatus } from "@/types/sources";
 
 function errataSummary(overrides: Partial<ErrataSummaryOut> = {}): ErrataSummaryOut {
@@ -137,6 +151,20 @@ describe("approvalStateExplanation", () => {
     expect(
       approvalStateExplanation("policy_missing", "missing", "erratum"),
     ).toContain("No approval policy is configured");
+  });
+
+  it("overrides the explanation with the 'Blocked' reason when " +
+    "not approvable", () => {
+    expect(
+      approvalStateExplanation("pending", "configured", "decision", false),
+    ).toBe("This content can't be decided until its problems are fixed.");
+  });
+
+  it("stays the ordinary 'Awaiting review' when approvable defaults " +
+    "true", () => {
+    expect(approvalStateExplanation("pending", "configured")).toBe(
+      "Awaiting review.",
+    );
   });
 });
 
@@ -457,5 +485,160 @@ describe("errataHeadingText", () => {
 
   it("joins both halves when both counts are positive", () => {
     expect(errataHeadingText(1, 1)).toBe("Errata — 1 erratum · 1 proposed");
+  });
+});
+
+describe("decideBlockedLabel", () => {
+  const codes: DecideBlockedCode[] = [
+    "policy_missing",
+    "approval_not_required",
+    "not_eligible",
+    "not_approvable",
+    "self_approval",
+    "already_decided",
+    "anonymous",
+  ];
+
+  it.each(codes)("gives a non-empty message for every code: %s", (code) => {
+    expect(decideBlockedLabel(code)?.length).toBeGreaterThan(0);
+  });
+
+  it("gives the reader-facing 'not_eligible' line the short, muted " +
+    "wording", () => {
+    expect(decideBlockedLabel("not_eligible")).toBe(
+      "Only reviewers can approve this.",
+    );
+  });
+
+  it("returns null for null (the caller falls back to the raw reason)", () => {
+    expect(decideBlockedLabel(null)).toBeNull();
+  });
+});
+
+describe("issueCodeLabel", () => {
+  const codes: IssueCode[] = [
+    "bad_yaml",
+    "missing_frontmatter",
+    "missing_uuid",
+    "bad_uuid",
+    "bad_date",
+    "missing_date",
+    "unknown_field",
+    "bad_field_type",
+    "duplicate_uuid",
+    "missing_target",
+    "ambiguous_target",
+    "legacy_alias",
+    "legacy_signoff",
+    "corrects_on_non_erratum",
+    "erratum_without_target",
+    "bad_encoding",
+    "bad_erratum_type",
+    "erratum_missing_corrected_text",
+    "erratum_unknown_section_heading",
+    "erratum_duplicate_section",
+    "erratum_targets_itself",
+    "erratum_relationship_ignored",
+    "erratum_target_is_erratum",
+    "legacy_erratum_format",
+    "obsolete_kind_field",
+  ];
+
+  it.each(codes)("gives a non-empty headline for every code: %s", (code) => {
+    expect(issueCodeLabel(code).length).toBeGreaterThan(0);
+  });
+
+  it("gives every code a distinct headline", () => {
+    const headlines = new Set(codes.map((code) => issueCodeLabel(code)));
+    expect(headlines.size).toBe(codes.length);
+  });
+});
+
+describe("validationIssueText", () => {
+  it("prefixes the backend message with the code's plain-language " +
+    "headline", () => {
+    const text = validationIssueText(
+      "obsolete_kind_field",
+      "`kind` is no longer used: a document is an erratum when it has " +
+        "`erratum-for`. Remove `kind: decision`.",
+    );
+    expect(text).toContain("Remove `kind: decision`.");
+    expect(text.startsWith(issueCodeLabel("obsolete_kind_field"))).toBe(true);
+  });
+});
+
+describe("pollProblemLabel", () => {
+  const codes = [
+    "source_error",
+    "internal_error",
+    "projects_incomplete",
+    "listing_failed",
+    "listing_incomplete",
+    "fetch_failed",
+    "ownership_conflict",
+    "not_pollable",
+  ];
+
+  it.each(codes)(
+    "gives a non-empty headline for every known code: %s",
+    (code) => {
+      expect(pollProblemLabel(code)?.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("returns null for an unrecognised code", () => {
+    expect(pollProblemLabel("some_future_code")).toBeNull();
+  });
+
+  it("returns null for a missing code", () => {
+    expect(pollProblemLabel(undefined)).toBeNull();
+  });
+});
+
+describe("approvalDisplayLabel", () => {
+  it("shows the neutral 'Blocked' status when content is not " +
+    "approvable", () => {
+    const label = approvalDisplayLabel(
+      { state: "pending", approvable: false },
+      "published",
+    );
+    expect(label.text).toBe("Blocked");
+    expect(label.color).toBeUndefined();
+    expect(label.icon.length).toBeGreaterThan(0);
+  });
+
+  it("overrides 'Blocked' regardless of the underlying state", () => {
+    const states: ApprovalStateCode[] = ["pending", "accepted", "rejected"];
+    for (const state of states) {
+      expect(
+        approvalDisplayLabel({ state, approvable: false }, "published").text,
+      ).toBe("Blocked");
+    }
+  });
+
+  it("falls back to the ordinary decision label when approvable", () => {
+    const label = approvalDisplayLabel(
+      { state: "pending", approvable: true },
+      "published",
+    );
+    expect(label.text).toBe("Pending approval");
+  });
+
+  it("falls back to the ordinary erratum label when approvable", () => {
+    const label = approvalDisplayLabel(
+      { state: "accepted", approvable: true },
+      "published",
+      "erratum",
+    );
+    expect(label.text).toBe("Verified");
+  });
+
+  it("shows 'Blocked' for an unapprovable erratum too", () => {
+    const label = approvalDisplayLabel(
+      { state: "pending", approvable: false },
+      "published",
+      "erratum",
+    );
+    expect(label.text).toBe("Blocked");
   });
 });
