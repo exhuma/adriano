@@ -23,7 +23,6 @@ defineProps<{
   <v-card
     v-if="outboundLinks.length > 0"
     class="mb-3"
-    variant="outlined"
     density="compact"
   >
     <v-card-title class="text-subtitle-2">Related decisions</v-card-title>
@@ -51,7 +50,6 @@ defineProps<{
   <v-card
     v-if="inboundLinks.length > 0"
     class="mb-3"
-    variant="outlined"
     density="compact"
   >
     <v-card-title class="text-subtitle-2">Referenced by</v-card-title>

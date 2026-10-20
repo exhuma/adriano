@@ -65,7 +65,7 @@ defineProps<{
       {{ recordKind === "erratum" ? "About this erratum" : "About this decision" }}
     </h2>
 
-    <v-card class="mb-3" variant="outlined" density="compact">
+    <v-card class="mb-3" density="compact">
       <v-card-text class="d-flex align-center justify-space-between flex-wrap ga-2">
         <StatusChip
           v-if="recordKind === 'erratum'"

@@ -23,11 +23,14 @@ defineProps<{
 <template>
   <v-chip
     :color="color"
-    size="small"
-    variant="tonal"
     :aria-label="ariaLabel"
     :title="ariaLabel"
   >
+    <!-- size/variant come from the global VChip defaults
+         (plugins/vuetify.ts) instead of being restated here, so
+         every v-chip in the app -- this component's only current
+         caller included -- stays in sync automatically. -->
+
     <v-icon :icon="icon" start aria-hidden="true" />
     {{ text }}
   </v-chip>

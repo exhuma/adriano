@@ -13,7 +13,7 @@ defineProps<{
 </script>
 
 <template>
-  <v-card v-if="issues.length > 0" class="mb-4" variant="outlined">
+  <v-card v-if="issues.length > 0" class="mb-4">
     <v-card-title class="text-subtitle-1">Validation issues</v-card-title>
     <v-list density="compact">
       <v-list-item v-for="(issue, index) in issues" :key="index">

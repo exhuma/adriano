@@ -103,7 +103,7 @@ function policySummaryText(approval: ApprovalOut): string {
 </script>
 
 <template>
-  <v-card class="mb-4" variant="outlined">
+  <v-card class="mb-4">
     <v-card-title tag="h2" class="text-subtitle-1">Approval</v-card-title>
     <v-card-text>
       <StatusChip
@@ -128,6 +128,7 @@ function policySummaryText(approval: ApprovalOut): string {
           icon="mdi-content-copy"
           size="x-small"
           variant="text"
+          class="digest-copy-btn"
           :aria-label="copied ? 'Copied digest to clipboard' : 'Copy digest to clipboard'"
           @click="copyDigest"
         />
@@ -188,5 +189,13 @@ function policySummaryText(approval: ApprovalOut): string {
   display: flex;
   align-items: center;
   gap: 0.375rem;
+}
+
+/* docs/ui-review G-08: see the identical rule and justification in
+   ShortIdCopy.vue -- same x-small, colourless `variant="text"` icon
+   button, same too-faint default focus ring. */
+.digest-copy-btn:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 </style>

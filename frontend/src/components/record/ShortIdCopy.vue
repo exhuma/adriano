@@ -60,4 +60,15 @@ async function copy(): Promise<void> {
   align-items: center;
   gap: 0.125rem;
 }
+
+/* docs/ui-review G-08: Vuetify's own focus ring for a `variant="text"`
+   icon button draws `currentColor` at 25% opacity (see
+   `VBtn.css`'s `::after`), which the review measured at ~1.2:1 for
+   this x-small, colourless copy button -- no prop or default reaches
+   that opacity, so an explicit, opaque outline is the last resort
+   (ladder step 6), built from the theme's `primary` colour. */
+.short-id-copy :deep(.v-btn:focus-visible) {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
 </style>

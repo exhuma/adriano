@@ -38,7 +38,7 @@ const reportedLine = computed(() => {
 </script>
 
 <template>
-  <v-card class="mb-4" variant="outlined">
+  <v-card class="mb-4">
     <v-card-title tag="h2" class="text-subtitle-1">Erratum</v-card-title>
     <v-card-text>
       <!--

@@ -15,7 +15,7 @@ defineProps<{
 </script>
 
 <template>
-  <v-card v-if="siblings.length > 0" class="mb-3" variant="outlined" density="compact">
+  <v-card v-if="siblings.length > 0" class="mb-3" density="compact">
     <v-card-title class="text-subtitle-2">Other revisions</v-card-title>
     <v-list density="compact">
       <v-list-item v-for="sibling in siblings" :key="sibling.id">

@@ -22,7 +22,7 @@ const sourceUrlIsLink = computed(() => {
 </script>
 
 <template>
-  <v-card class="mb-3" variant="outlined" density="compact">
+  <v-card class="mb-3" density="compact">
     <v-card-title class="text-subtitle-2">Provenance</v-card-title>
     <v-list density="compact">
       <v-list-item>

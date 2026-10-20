@@ -44,7 +44,7 @@ defineProps<{
     </ul>
   </v-alert>
 
-  <v-card v-if="competingCandidates.length > 0" class="mb-4" variant="outlined">
+  <v-card v-if="competingCandidates.length > 0" class="mb-4">
     <v-card-title class="text-subtitle-1">
       <v-icon icon="mdi-source-branch" size="small" aria-hidden="true" class="mr-1" />
       Competing candidates

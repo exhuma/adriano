@@ -11,7 +11,7 @@ defineProps<{
 </script>
 
 <template>
-  <v-card v-if="entries.length > 0" class="mb-3" variant="outlined" density="compact">
+  <v-card v-if="entries.length > 0" class="mb-3" density="compact">
     <v-card-title class="text-subtitle-2">Legacy sign-off (unverified)</v-card-title>
     <v-card-text class="text-body-2 text-medium-emphasis">
       These values come from the legacy <code>signed-off-by</code> field in
