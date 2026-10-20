@@ -1,12 +1,17 @@
 <script setup lang="ts">
 /**
  * Record detail page header: title, state/kind/issue chips, the
- * provenance sentence distinguishing candidate from published, and
- * the accepted-candidate note. Purely presentational: all labels are
- * computed by the parent view from the loaded record. Obsoleted/
- * updated status moved to the prominent `RecordStatusBanners` below
- * this header (rfc-editor.org/info layout), so it is no longer a
- * small chip here.
+ * provenance sentence distinguishing candidate from published (with
+ * an inline errata link, R-04: the old full-sentence "has errata"
+ * banner is now a short link here instead), and the accepted-
+ * candidate note. Purely presentational: all labels are computed by
+ * the parent view from the loaded record. Obsoleted/updated status
+ * lives in the single lifecycle notice in `RecordStatusBanners`
+ * below this header (rfc-editor.org/info layout), not here. Chips
+ * are shown exactly as given: the caller only passes a non-`null`
+ * `recordKindLabel`/`recordTypeLabel` for a non-default state (R-05 --
+ * "Published" and "Decision" add nothing: published is the default
+ * lifecycle state, and the kind already shows in the sidebar).
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { RecordKind } from "@/types/records";
@@ -23,38 +28,49 @@ defineProps<{
   /** Whether the viewed record is a normal decision or an erratum;
    *  picks the accepted-candidate note's wording. */
   recordKind: RecordKind;
-  /** Candidate/published chip, or `null` to hide it. */
+  /** Candidate chip, or `null` to hide it (published is the default
+   *  lifecycle state, never shown as a chip, R-05). */
   recordKindLabel: StatusLabel | null;
-  /** Decision/erratum chip (from `metadata.record_kind`), or `null`
-   *  to hide it. */
+  /** Erratum chip, or `null` to hide it (decision is the default
+   *  record kind, already shown in the sidebar's Metadata card, so
+   *  it is never shown as a chip, R-05). */
   recordTypeLabel: StatusLabel | null;
   /** Validation issue-count chip, or `null` when there are none. */
   issueIndicator: StatusLabel | null;
   /** Sentence distinguishing candidate (with branch) from published. */
   provenanceSentence: string;
-  /** Whether to show the accepted-candidate note (a candidate whose
-   *  current content was accepted/verified). */
+  /** "N erratum(s)"/"N proposed errata" link text appended to the
+   *  metadata line as "… · <text> · View errata", or `null`/omitted
+   *  to hide it when the decision has no errata at all (R-04). */
+  errataLinkText?: string | null;
+  /** Whether to show the accepted-candidate note (works for both a
+   *  decision and an erratum; this component picks the wording). */
   showAcceptedCandidateNote: boolean;
 }>();
 </script>
 
 <template>
-  <header class="record-header">
-    <h1 id="record-heading" class="text-h5">{{ title }}</h1>
-    <div class="record-header-chips">
+  <header class="record-header d-flex flex-wrap align-center ga-3 mb-2">
+    <h1 id="record-heading" class="text-h5 mb-0">{{ title }}</h1>
+    <div class="d-flex flex-wrap align-center ga-2">
       <StatusChip v-if="recordKindLabel" v-bind="recordKindLabel" />
       <StatusChip v-if="recordTypeLabel" v-bind="recordTypeLabel" />
       <StatusChip v-if="issueIndicator" v-bind="issueIndicator" />
     </div>
   </header>
 
-  <p v-if="subtitle" class="text-body-2 text-medium-emphasis mb-1">
+  <p v-if="subtitle" class="text-body-2 text-medium-emphasis mt-0 mb-1">
     {{ subtitle }}
   </p>
 
-  <p class="text-body-2 text-medium-emphasis mb-2">{{ provenanceSentence }}</p>
+  <p class="text-body-2 text-medium-emphasis mt-0 mb-2">
+    {{ provenanceSentence }}
+    <template v-if="errataLinkText">
+      · {{ errataLinkText }} · <a href="#errata">View errata</a>
+    </template>
+  </p>
 
-  <p v-if="showAcceptedCandidateNote" class="text-body-2 mb-4">
+  <p v-if="showAcceptedCandidateNote" class="text-body-2 mt-0 mb-4">
     <v-icon icon="mdi-check-decagram" color="success" size="small" aria-hidden="true" />
     <template v-if="recordKind === 'erratum'">
       Verified — this correction applies once published.
@@ -65,19 +81,3 @@ defineProps<{
     </template>
   </p>
 </template>
-
-<style scoped>
-.record-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.record-header-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-}
-</style>

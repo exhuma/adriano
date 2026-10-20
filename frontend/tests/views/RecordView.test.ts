@@ -310,8 +310,9 @@ describe("RecordView status banners and layout", () => {
     vi.resetAllMocks();
   });
 
-  it("shows the obsoleted banner from an inbound obsoleted_by link", async () => {
+  it("shows the obsoleted lifecycle notice from the derived status and an inbound obsoleted_by link", async () => {
     const detail = baseDetail();
+    detail.status = "obsoleted";
     detail.inbound_links = [
       { link_type: "obsoleted_by", source_id: "33333333-3333-3333-3333-333333333333", source_title: "Use gRPC" },
     ];
@@ -323,8 +324,9 @@ describe("RecordView status banners and layout", () => {
     expect(wrapper.text()).toContain("Use gRPC");
   });
 
-  it("shows the updated banner from an inbound updated_by link", async () => {
+  it("shows the updated lifecycle notice from the derived status and an inbound updated_by link", async () => {
     const detail = baseDetail();
+    detail.status = "updated";
     detail.inbound_links = [
       { link_type: "updated_by", source_id: "33333333-3333-3333-3333-333333333333", source_title: "Use PostgreSQL v2" },
     ];
@@ -336,7 +338,7 @@ describe("RecordView status banners and layout", () => {
     expect(wrapper.text()).toContain("Use PostgreSQL v2");
   });
 
-  it("shows the has-errata notice with counts and a working #errata anchor", async () => {
+  it("shows the errata count as a header link, with a working #errata anchor below (R-04)", async () => {
     const detail = baseDetail();
     detail.errata_summary = {
       total: 1,
@@ -372,7 +374,10 @@ describe("RecordView status banners and layout", () => {
 
     const wrapper = await mountRecordView();
 
-    expect(wrapper.text()).toContain("This decision has 1 erratum (1 reported).");
+    const headerLink = wrapper.find("a[href='#errata']");
+    expect(headerLink.exists()).toBe(true);
+    expect(headerLink.text()).toBe("View errata");
+    expect(wrapper.text()).toContain("1 erratum");
     const anchorTarget = wrapper.find("#errata");
     expect(anchorTarget.exists()).toBe(true);
     expect(anchorTarget.text()).toContain("Reported");

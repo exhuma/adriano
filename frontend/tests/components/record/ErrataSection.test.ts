@@ -77,10 +77,10 @@ describe("ErrataSection", () => {
     });
     const wrapper = await mountSection([published, candidate]);
 
-    // Matches `RecordStatusBanners`' "has N errata" notice, which also
-    // counts published errata only -- the two headline counts must
-    // never contradict each other.
-    expect(wrapper.find("h2").text()).toBe("Errata (1) · 1 proposed");
+    // Matches `RecordHeader`'s errata link, which also counts
+    // published errata only -- the two headline counts must never
+    // contradict each other. Never a bare "(0)" (R-13).
+    expect(wrapper.find("h2").text()).toBe("Errata — 1 erratum · 1 proposed");
     const html = wrapper.html();
     expect(html.indexOf("aaaaaaaa")).toBeLessThan(html.indexOf("Proposed errata"));
     expect(html.indexOf("Proposed errata")).toBeLessThan(html.indexOf("bbbbbbbb"));

@@ -81,7 +81,7 @@ describe("ErratumBody", () => {
     expect(code.attributes("title")).toBe("33333333-3333-3333-3333-333333333333");
   });
 
-  it("shows its own type, section, and text blocks", async () => {
+  it("shows its own type, section, and text blocks when the target is unresolved", async () => {
     const wrapper = await mountBody(null);
 
     expect(wrapper.text()).toContain("Technical");
@@ -89,6 +89,20 @@ describe("ErratumBody", () => {
     expect(wrapper.text()).toContain("Reported by alice@example.com");
     expect(wrapper.text()).toContain("Original text — says:");
     expect(wrapper.text()).toContain("Corrected text — should say:");
+  });
+
+  it("omits its own 'Section: …' line when the header subtitle already shows it (R-11)", async () => {
+    const wrapper = await mountBody({
+      uuid: "11111111-1111-1111-1111-111111111111",
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Use PostgreSQL",
+      resolved: true,
+    });
+
+    expect(wrapper.text()).not.toContain("Section: Consequences");
+    // The rest of the meta line is unaffected.
+    expect(wrapper.text()).toContain("Technical");
+    expect(wrapper.text()).toContain("Reported by alice@example.com");
   });
 
   it("shows 'Content not indexed yet' instead of an empty card when erratum content is null", async () => {

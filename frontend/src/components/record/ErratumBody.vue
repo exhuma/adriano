@@ -53,9 +53,16 @@ const reportedLine = computed(() => {
       </p>
 
       <template v-if="erratum">
-        <div class="erratum-meta mb-3">
+        <div class="d-flex flex-wrap align-center ga-2 mb-3">
           <StatusChip v-bind="typeLabel" />
-          <span v-if="erratum.section" class="text-body-2">
+          <!--
+            Shown only when the header subtitle doesn't already say it
+            (R-11: "Section: …" must appear once). The header subtitle
+            only carries it for a resolved target -- see
+            `useRecordDetailView`'s `pageSubtitle`, which uses the same
+            `erratumFor.resolved` condition.
+          -->
+          <span v-if="erratum.section && !erratumFor?.resolved" class="text-body-2">
             Section: {{ erratum.section }}
           </span>
           <span v-if="reportedLine" class="text-body-2 text-medium-emphasis">
@@ -75,12 +82,3 @@ const reportedLine = computed(() => {
     </v-card-text>
   </v-card>
 </template>
-
-<style scoped>
-.erratum-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-</style>

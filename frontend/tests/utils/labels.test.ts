@@ -12,9 +12,12 @@ import {
   decisionActionLabel,
   displayStatusLabel,
   divergenceLabel,
+  errataHeaderLinkText,
+  errataHeadingText,
   erratumStatusLabel,
   erratumTypeLabel,
   issueIndicatorLabel,
+  pluralizeErrata,
   pollStatusLabel,
   recordStateLabel,
   searchApprovalStateLabel,
@@ -22,8 +25,12 @@ import {
   searchRecordStateLabel,
 } from "@/utils/labels";
 import type { DivergenceKind, PolicyStatus } from "@/types/approval";
-import type { ApprovalStateCode, DisplayStatus } from "@/types/records";
+import type { ApprovalStateCode, DisplayStatus, ErrataSummaryOut } from "@/types/records";
 import type { PollStatus } from "@/types/sources";
+
+function errataSummary(overrides: Partial<ErrataSummaryOut> = {}): ErrataSummaryOut {
+  return { total: 0, verified: 0, reported: 0, rejected: 0, changed: 0, proposed: 0, ...overrides };
+}
 
 describe("approvalStateLabel", () => {
   it("distinguishes accepted candidates from accepted published records", () => {
@@ -396,5 +403,59 @@ describe("searchErratumStatusLabel", () => {
     expect(searchErratumStatusLabel("changed_since_acceptance").color).toBe(
       "warning",
     );
+  });
+});
+
+describe("pluralizeErrata", () => {
+  it("is singular for exactly one", () => {
+    expect(pluralizeErrata(1)).toBe("erratum");
+  });
+
+  it("is plural for zero or more than one", () => {
+    expect(pluralizeErrata(0)).toBe("errata");
+    expect(pluralizeErrata(2)).toBe("errata");
+  });
+});
+
+describe("errataHeaderLinkText", () => {
+  it("is null when there are no errata at all", () => {
+    expect(errataHeaderLinkText(errataSummary())).toBeNull();
+  });
+
+  it("counts published errata, singular for one", () => {
+    expect(errataHeaderLinkText(errataSummary({ total: 1 }))).toBe("1 erratum");
+  });
+
+  it("counts published errata, plural for more than one", () => {
+    expect(errataHeaderLinkText(errataSummary({ total: 2 }))).toBe("2 errata");
+  });
+
+  it("falls back to the proposed count when nothing is published yet", () => {
+    expect(errataHeaderLinkText(errataSummary({ proposed: 1 }))).toBe(
+      "1 proposed erratum",
+    );
+    expect(errataHeaderLinkText(errataSummary({ proposed: 2 }))).toBe(
+      "2 proposed errata",
+    );
+  });
+
+  it("prefers the published count when both are present", () => {
+    expect(errataHeaderLinkText(errataSummary({ total: 1, proposed: 1 }))).toBe(
+      "1 erratum",
+    );
+  });
+});
+
+describe("errataHeadingText", () => {
+  it("never shows a bare '(0)' -- omits the published half when it is zero", () => {
+    expect(errataHeadingText(0, 1)).toBe("Errata — 1 proposed");
+  });
+
+  it("omits the proposed half when it is zero", () => {
+    expect(errataHeadingText(2, 0)).toBe("Errata — 2 errata");
+  });
+
+  it("joins both halves when both counts are positive", () => {
+    expect(errataHeadingText(1, 1)).toBe("Errata — 1 erratum · 1 proposed");
   });
 });

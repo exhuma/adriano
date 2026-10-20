@@ -2,9 +2,10 @@
  * Ensure the record page's prominent status banners render for each
  * independently optional case (rfc-editor.org/info reference design:
  * "This RFC is now obsolete, see RFC 9110" / "was updated, see RFC
- * 8615"): obsoleted, updated, has-errata (with counts), and -- on an
- * erratum page -- which decision it corrects (resolved or not) plus
- * the viewed erratum's own status.
+ * 8615"): a single lifecycle notice (obsoleted takes priority over
+ * updated, never the error colour, R-04), and -- on an erratum page
+ * -- which decision it corrects (resolved or not), without repeating
+ * its own approval-state chip (R-11).
  */
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { mount } from "@vue/test-utils";
@@ -12,26 +13,13 @@ import { describe, expect, it } from "vitest";
 
 import vuetify from "@/plugins/vuetify";
 import RecordStatusBanners from "@/components/record/RecordStatusBanners.vue";
-import type {
-  ApprovalStateCode,
-  ErrataSummaryOut,
-  ErratumForOut,
-  InboundLinkOut,
-  RecordState,
-} from "@/types/records";
-
-function emptySummary(): ErrataSummaryOut {
-  return { total: 0, verified: 0, reported: 0, rejected: 0, changed: 0, proposed: 0 };
-}
+import type { DisplayStatus, ErratumForOut, InboundLinkOut } from "@/types/records";
 
 async function mountBanners(props: {
+  status?: DisplayStatus;
   obsoletedBy?: InboundLinkOut[];
   updatedBy?: InboundLinkOut[];
-  errataSummary?: ErrataSummaryOut;
   erratumFor?: ErratumForOut | null;
-  erratumApprovalState?: ApprovalStateCode;
-  erratumKind?: RecordState;
-  erratumRef?: string;
 }) {
   const router: Router = createRouter({
     history: createMemoryHistory(),
@@ -43,13 +31,10 @@ async function mountBanners(props: {
   await router.push("/");
   const wrapper = mount(RecordStatusBanners, {
     props: {
+      status: props.status ?? "active",
       obsoletedBy: props.obsoletedBy ?? [],
       updatedBy: props.updatedBy ?? [],
-      errataSummary: props.errataSummary ?? emptySummary(),
       erratumFor: props.erratumFor ?? null,
-      erratumApprovalState: props.erratumApprovalState ?? "pending",
-      erratumKind: props.erratumKind ?? "published",
-      erratumRef: props.erratumRef,
     },
     global: { plugins: [router, vuetify] },
   });
@@ -57,14 +42,15 @@ async function mountBanners(props: {
 }
 
 describe("RecordStatusBanners", () => {
-  it("renders nothing when the record is plain, with no errata", async () => {
+  it("renders nothing for an active record with no erratum-for link", async () => {
     const wrapper = await mountBanners({});
 
     expect(wrapper.text().trim()).toBe("");
   });
 
-  it("shows the obsoleted banner with a link to each superseding decision", async () => {
+  it("shows the obsoleted lifecycle notice with a link to each superseding decision, never in the error colour", async () => {
     const wrapper = await mountBanners({
+      status: "obsoleted",
       obsoletedBy: [
         { link_type: "obsoleted_by", source_id: "aaa", source_title: "Use gRPC" },
       ],
@@ -73,10 +59,13 @@ describe("RecordStatusBanners", () => {
     expect(wrapper.text()).toContain("This decision is obsolete, see");
     const link = wrapper.find("a[href='/records/aaa']");
     expect(link.text()).toBe("Use gRPC");
+    const alert = wrapper.findComponent({ name: "VAlert" });
+    expect(alert.props("type")).not.toBe("error");
   });
 
-  it("shows the updated banner distinctly from the obsoleted banner", async () => {
+  it("shows the updated lifecycle notice distinctly from the obsoleted one", async () => {
     const wrapper = await mountBanners({
+      status: "updated",
       updatedBy: [
         { link_type: "updated_by", source_id: "bbb", source_title: "Use PostgreSQL v2" },
       ],
@@ -87,118 +76,22 @@ describe("RecordStatusBanners", () => {
     expect(wrapper.find("a[href='/records/bbb']").text()).toBe("Use PostgreSQL v2");
   });
 
-  it("shows the has-errata notice with the verified/reported counts", async () => {
+  it("prefers the obsoleted notice over the updated one when both link lists are present", async () => {
     const wrapper = await mountBanners({
-      errataSummary: {
-        total: 3,
-        verified: 2,
-        reported: 1,
-        rejected: 0,
-        changed: 0,
-        proposed: 0,
-      },
+      status: "obsoleted",
+      obsoletedBy: [
+        { link_type: "obsoleted_by", source_id: "aaa", source_title: "Use gRPC" },
+      ],
+      updatedBy: [
+        { link_type: "updated_by", source_id: "bbb", source_title: "Use PostgreSQL v2" },
+      ],
     });
 
-    expect(wrapper.text()).toContain(
-      "This decision has 3 errata (2 verified or not requiring review, 1 reported).",
-    );
-    expect(wrapper.find("a[href='#errata']").exists()).toBe(true);
+    expect(wrapper.text()).toContain("This decision is obsolete, see");
+    expect(wrapper.text()).not.toContain("was updated");
   });
 
-  it("uses the singular 'erratum' for a single published erratum", async () => {
-    const wrapper = await mountBanners({
-      errataSummary: {
-        total: 1,
-        verified: 0,
-        reported: 1,
-        rejected: 0,
-        changed: 0,
-        proposed: 0,
-      },
-    });
-
-    expect(wrapper.text()).toContain("This decision has 1 erratum (1 reported).");
-  });
-
-  it("spells 'changed since verification' and joins a proposed clause onto the same sentence", async () => {
-    const wrapper = await mountBanners({
-      errataSummary: {
-        total: 2,
-        verified: 0,
-        reported: 0,
-        rejected: 1,
-        changed: 1,
-        proposed: 1,
-      },
-    });
-
-    expect(wrapper.text()).toContain(
-      "This decision has 2 errata (1 changed since verification, 1 rejected); " +
-        "1 more is proposed.",
-    );
-    expect(wrapper.text()).not.toContain("0 verified");
-    expect(wrapper.text()).not.toContain("0 reported");
-  });
-
-  it("pluralizes the proposed clause for more than one proposed erratum", async () => {
-    const wrapper = await mountBanners({
-      errataSummary: {
-        total: 1,
-        verified: 1,
-        reported: 0,
-        rejected: 0,
-        changed: 0,
-        proposed: 2,
-      },
-    });
-
-    expect(wrapper.text()).toContain(
-      "This decision has 1 erratum (1 verified or not requiring review); " +
-        "2 more are proposed.",
-    );
-  });
-
-  it("shows a dedicated proposed-only sentence when nothing is published yet", async () => {
-    const wrapper = await mountBanners({
-      errataSummary: {
-        total: 0,
-        verified: 0,
-        reported: 0,
-        rejected: 0,
-        changed: 0,
-        proposed: 3,
-      },
-    });
-
-    expect(wrapper.text()).toContain(
-      "This decision has 3 proposed errata (not yet published).",
-    );
-  });
-
-  it("pluralizes a single proposed-only erratum", async () => {
-    const wrapper = await mountBanners({
-      errataSummary: {
-        total: 0,
-        verified: 0,
-        reported: 0,
-        rejected: 0,
-        changed: 0,
-        proposed: 1,
-      },
-    });
-
-    expect(wrapper.text()).toContain(
-      "This decision has 1 proposed erratum (not yet published).",
-    );
-  });
-
-  it("shows no errata notice when there are neither published nor proposed errata", async () => {
-    const wrapper = await mountBanners({ errataSummary: emptySummary() });
-
-    expect(wrapper.text()).not.toContain("errata");
-  });
-
-  it("shows a resolved erratum-for banner linking to the corrected decision, with the erratum's own status", async () => {
+  it("shows a resolved erratum-for banner linking to the corrected decision, without repeating its own status chip", async () => {
     const wrapper = await mountBanners({
       erratumFor: {
         uuid: "33333333-3333-3333-3333-333333333333",
@@ -206,13 +99,13 @@ describe("RecordStatusBanners", () => {
         title: "Use PostgreSQL",
         resolved: true,
       },
-      erratumApprovalState: "accepted",
-      erratumKind: "published",
     });
 
     expect(wrapper.text()).toContain("This is an erratum for");
     expect(wrapper.find("a[href='/records/ccc']").text()).toBe("Use PostgreSQL");
-    expect(wrapper.text()).toContain("Verified");
+    // R-11: the status already shows in the sidebar and the Approval
+    // card, so this banner must not render its own chip.
+    expect(wrapper.findComponent({ name: "StatusChip" }).exists()).toBe(false);
   });
 
   it("shows an unresolved erratum-for banner with the target's short UUID, full value reachable", async () => {
@@ -230,21 +123,5 @@ describe("RecordStatusBanners", () => {
     expect(wrapper.text()).not.toContain("33333333-3333-3333-3333-333333333333");
     const code = wrapper.find("code");
     expect(code.attributes("title")).toBe("33333333-3333-3333-3333-333333333333");
-  });
-
-  it("shows the viewed candidate erratum's 'Reported — Proposed' status, with its branch", async () => {
-    const wrapper = await mountBanners({
-      erratumFor: {
-        uuid: "33333333-3333-3333-3333-333333333333",
-        id: "ccc",
-        title: "Use PostgreSQL",
-        resolved: true,
-      },
-      erratumApprovalState: "pending",
-      erratumKind: "candidate",
-      erratumRef: "feature-x",
-    });
-
-    expect(wrapper.text()).toContain("Reported — Proposed (branch feature-x)");
   });
 });

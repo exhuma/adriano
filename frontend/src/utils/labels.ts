@@ -9,6 +9,7 @@ import type { DecisionAction, DivergenceKind, PolicyStatus } from "@/types/appro
 import type {
   ApprovalStateCode,
   DisplayStatus,
+  ErrataSummaryOut,
   ErratumType,
   IssueCountsOut,
   RecordKind,
@@ -258,6 +259,65 @@ export function erratumTypeLabel(type: ErratumType | null): StatusLabel {
     default:
       return { icon: "mdi-help-circle-outline", text: "Type not set" };
   }
+}
+
+/**
+ * Singular/plural noun for an erratum count ("1 erratum" vs. "2
+ * errata"). Shared by the header's errata link and the errata
+ * section heading, so the two never pick different wording for the
+ * same count.
+ *
+ * :param count: Number of errata.
+ * :returns: "erratum" for 1, otherwise "errata".
+ */
+export function pluralizeErrata(count: number): string {
+  return count === 1 ? "erratum" : "errata";
+}
+
+/**
+ * The record header metadata line's errata link text (e.g.
+ * "1 erratum" or "2 proposed errata"), replacing the old full-
+ * sentence "has N errata" banner with a short link (R-04: say each
+ * fact once -- the dedicated `ErrataSection` already covers the
+ * detail). Counts published errata when any are published; falls
+ * back to the proposed count when nothing is published yet, so the
+ * link never reads "0 errata".
+ *
+ * :param summary: Errata counts for this decision.
+ * :returns: The count phrase, or `null` when there are no errata at
+ *     all (published or proposed).
+ */
+export function errataHeaderLinkText(summary: ErrataSummaryOut): string | null {
+  if (summary.total > 0) {
+    return `${summary.total} ${pluralizeErrata(summary.total)}`;
+  }
+  if (summary.proposed > 0) {
+    return `${summary.proposed} proposed ${pluralizeErrata(summary.proposed)}`;
+  }
+  return null;
+}
+
+/**
+ * The errata section's heading text (e.g. "Errata — 2 errata ·
+ * 1 proposed", or "Errata — 1 proposed" when nothing is published
+ * yet). Never renders a bare "(0)" count (R-13): each half of the
+ * heading is omitted entirely, rather than shown as zero, when that
+ * half's count is zero.
+ *
+ * :param published: Count of published errata.
+ * :param proposed: Count of proposed (candidate) errata.
+ * :returns: The heading text. The caller only renders it when at
+ *     least one of the two counts is positive.
+ */
+export function errataHeadingText(published: number, proposed: number): string {
+  const parts: string[] = [];
+  if (published > 0) {
+    parts.push(`${published} ${pluralizeErrata(published)}`);
+  }
+  if (proposed > 0) {
+    parts.push(`${proposed} proposed`);
+  }
+  return `Errata — ${parts.join(" · ")}`;
 }
 
 /**

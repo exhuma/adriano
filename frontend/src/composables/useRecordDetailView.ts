@@ -13,6 +13,7 @@ import type { RecordDetail } from "@/types/records";
 import { forbiddenText, isForbidden } from "@/utils/apiErrors";
 import { freshnessBannerText, provenanceText } from "@/utils/freshness";
 import {
+  errataHeaderLinkText,
   issueIndicatorLabel,
   recordKindTypeLabel,
   recordStateLabel,
@@ -67,12 +68,17 @@ export interface RecordDetailView {
   issueCounts: Readonly<Ref<{ error: number; warning: number }>>;
   /** Validation issue-count chip, or `null` when there are none. */
   issueIndicator: Readonly<Ref<StatusLabel | null>>;
-  /** Published/candidate chip. */
+  /** Candidate chip, or `null` for published (the default state is
+   *  never shown as a chip, R-05). */
   recordKindLabel: Readonly<Ref<StatusLabel | null>>;
-  /** Decision/erratum chip, distinct from `recordKindLabel`. */
+  /** Erratum chip, or `null` for a plain decision (the default kind
+   *  is never shown as a chip, R-05), distinct from `recordKindLabel`. */
   recordTypeLabel: Readonly<Ref<StatusLabel | null>>;
   /** Sentence distinguishing candidate (with branch) from published. */
   provenanceSentence: Readonly<Ref<string>>;
+  /** The header's errata link text, or `null` when the decision has
+   *  no errata at all (R-04). */
+  errataLinkText: Readonly<Ref<string | null>>;
   /** The stale/failed freshness banner's text, or `null`. */
   freshnessBanner: Readonly<Ref<string | null>>;
   /** Whether to show the accepted-candidate note (works for both a
@@ -116,16 +122,22 @@ export function useRecordDetailView(
     detail.value ? issueIndicatorLabel(issueCounts.value) : null,
   );
 
+  /** `null` for published (the chip-visibility rule, R-05: a status
+   *  chip is shown only when it differs from the default). */
   const recordKindLabel = computed(() =>
-    detail.value
+    detail.value && detail.value.metadata.kind === "candidate"
       ? recordStateLabel(detail.value.metadata.kind, detail.value.provenance.ref)
       : null,
   );
 
   /** Decision/erratum chip, distinct from `recordKindLabel` above
-   *  (published/candidate). */
+   *  (published/candidate). `null` for a plain decision -- the
+   *  default record kind, already shown in the sidebar's Metadata
+   *  card (R-05). */
   const recordTypeLabel = computed(() =>
-    detail.value ? recordKindTypeLabel(detail.value.metadata.record_kind) : null,
+    detail.value && detail.value.metadata.record_kind === "erratum"
+      ? recordKindTypeLabel(detail.value.metadata.record_kind)
+      : null,
   );
 
   /** A clear sentence distinguishing a candidate (and its branch) from
@@ -135,6 +147,10 @@ export function useRecordDetailView(
     detail.value
       ? provenanceText(detail.value.metadata.kind, detail.value.provenance)
       : "",
+  );
+
+  const errataLinkText = computed(() =>
+    detail.value ? errataHeaderLinkText(detail.value.errata_summary) : null,
   );
 
   /** The stale/failed freshness banner's text, or `null` when no
@@ -202,6 +218,7 @@ export function useRecordDetailView(
     recordKindLabel,
     recordTypeLabel,
     provenanceSentence,
+    errataLinkText,
     freshnessBanner,
     showAcceptedCandidateNote,
     pageTitle,

@@ -224,3 +224,56 @@ describe("useRecordDetailView accepted-candidate note and link filters", () => {
     expect(view.updatedByLinks.value[0].source_id).toBe("bbb");
   });
 });
+
+describe("useRecordDetailView chip visibility (R-05) and errata link (R-04)", () => {
+  it("hides the record-kind chip for a published record (the default)", () => {
+    const { view } = mountView(
+      baseDetail({ metadata: { ...baseDetail().metadata, kind: "published" } }),
+    );
+
+    expect(view.recordKindLabel.value).toBeNull();
+  });
+
+  it("shows the candidate chip for a candidate record", () => {
+    const { view } = mountView(baseDetail());
+
+    expect(view.recordKindLabel.value?.text).toContain("Candidate");
+  });
+
+  it("hides the record-type chip for a plain decision (the default)", () => {
+    const { view } = mountView(baseDetail());
+
+    expect(view.recordTypeLabel.value).toBeNull();
+  });
+
+  it("shows the erratum chip for an erratum", () => {
+    const { view } = mountView(
+      baseDetail({ metadata: { ...baseDetail().metadata, record_kind: "erratum" } }),
+    );
+
+    expect(view.recordTypeLabel.value?.text).toBe("Erratum");
+  });
+
+  it("builds the header's errata link text from the published count", () => {
+    const { view } = mountView(
+      baseDetail({
+        errata_summary: {
+          total: 2,
+          verified: 1,
+          reported: 1,
+          rejected: 0,
+          changed: 0,
+          proposed: 0,
+        },
+      }),
+    );
+
+    expect(view.errataLinkText.value).toBe("2 errata");
+  });
+
+  it("is null when the decision has no errata at all", () => {
+    const { view } = mountView(baseDetail());
+
+    expect(view.errataLinkText.value).toBeNull();
+  });
+});

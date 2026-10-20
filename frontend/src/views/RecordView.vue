@@ -55,6 +55,7 @@ const {
   recordKindLabel,
   recordTypeLabel,
   provenanceSentence,
+  errataLinkText,
   freshnessBanner,
   showAcceptedCandidateNote,
   pageTitle,
@@ -144,6 +145,7 @@ async function onDigestChanged(): Promise<void> {
         :record-type-label="recordTypeLabel"
         :issue-indicator="issueIndicator"
         :provenance-sentence="provenanceSentence"
+        :errata-link-text="errataLinkText"
         :show-accepted-candidate-note="showAcceptedCandidateNote"
       />
 
@@ -152,13 +154,10 @@ async function onDigestChanged(): Promise<void> {
       </v-snackbar>
 
       <RecordStatusBanners
+        :status="detail.status"
         :obsoleted-by="obsoletedByLinks"
         :updated-by="updatedByLinks"
-        :errata-summary="detail.errata_summary"
         :erratum-for="detail.erratum_for"
-        :erratum-approval-state="detail.approval.state"
-        :erratum-kind="detail.metadata.kind"
-        :erratum-ref="detail.provenance.ref"
       />
 
       <RecordFreshnessBanner
@@ -174,6 +173,7 @@ async function onDigestChanged(): Promise<void> {
           <RecordDecisionCard
             v-if="detail.metadata.record_kind === 'decision'"
             :rendered-html="detail.rendered_html"
+            :title="detail.metadata.title"
           />
           <ErratumBody
             v-else
