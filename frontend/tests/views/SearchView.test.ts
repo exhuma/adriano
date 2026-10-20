@@ -78,6 +78,37 @@ describe("SearchView", () => {
     expect(clearButtons.length).toBeGreaterThan(0);
   });
 
+  it("renders the empty-state title as a heading", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/");
+
+    const heading = wrapper.find("h2");
+    expect(heading.exists()).toBe(true);
+    expect(heading.text()).toBe("No indexed records yet");
+  });
+
+  it("labels the no-matches action 'Clear search and filters' when a query is set, and 'Clear filters' otherwise (S-07)", async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const withQuery = await mountSearchView("/?q=nonexistent");
+    const queryAction = withQuery.wrapper
+      .findAll("button")
+      .find((btn) => btn.text().includes("Clear search and filters"));
+    expect(queryAction).toBeDefined();
+
+    const withoutQuery = await mountSearchView("/?source=central");
+    const filterOnlyAction = withoutQuery.wrapper
+      .findAll("button")
+      .find((btn) => btn.text() === "Clear filters");
+    expect(filterOnlyAction).toBeDefined();
+    expect(
+      withoutQuery.wrapper.text().includes("Clear search and filters"),
+    ).toBe(false);
+  });
+
   it("renders results with state and approval chips and an accessible count", async () => {
     const page: SearchPage = {
       items: [
@@ -112,6 +143,104 @@ describe("SearchView", () => {
     );
   });
 
+  it("hides the 'Published' chip (the default state) but shows 'Candidate' (S-02)", async () => {
+    const base: SearchPage["items"][number] = {
+      id: "22222222-2222-2222-2222-222222222222",
+      title: "Use Stripe for card payment processing",
+      source_id: "central",
+      project: "payments",
+      path: "doc/decisions/2023-02-01-stripe.md",
+      ref: "local",
+      kind: "published",
+      record_kind: "decision",
+      approval_state: "pending",
+      issue_counts: { error: 0, warning: 0 },
+      erratum_for_title: null,
+    };
+    searchRecords.mockResolvedValue({
+      items: [
+        base,
+        {
+          ...base,
+          id: "33333333-3333-3333-3333-333333333333",
+          kind: "candidate",
+          ref: "feature/payments-migration",
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+    });
+
+    const { wrapper } = await mountSearchView("/");
+
+    // Scoped to the results list: "Published" is also a static label
+    // on the (untouched) state filter toggle button elsewhere on the
+    // page.
+    const list = wrapper.find(".results-list");
+    expect(list.text()).not.toContain("Published");
+    expect(list.text()).toContain("Candidate");
+    // The branch is shown once, as plain text, never inside the chip.
+    expect(list.text()).toContain("Branch: feature/payments-migration");
+    const candidateChip = wrapper
+      .findAllComponents({ name: "StatusChip" })
+      .find((chip) => chip.props("text") === "Candidate");
+    expect(candidateChip?.props("text")).toBe("Candidate");
+  });
+
+  it("shows 'Pending approval' as a neutral (uncoloured) chip, and a non-default state in colour (decision 2)", async () => {
+    searchRecords.mockResolvedValue({
+      items: [
+        {
+          id: "66666666-6666-6666-6666-666666666666",
+          title: "Retire the legacy invoicing processor integration",
+          source_id: "central",
+          project: "payments",
+          path: "doc/decisions/2023-03-01-retire.md",
+          ref: "local",
+          kind: "published",
+          record_kind: "decision",
+          approval_state: "pending",
+          issue_counts: { error: 0, warning: 0 },
+          erratum_for_title: null,
+        },
+        {
+          id: "77777777-7777-7777-7777-777777777777",
+          title: "Adopt gRPC for internal APIs",
+          source_id: "central",
+          project: "platform",
+          path: "doc/decisions/2023-03-02-grpc.md",
+          ref: "local",
+          kind: "published",
+          record_kind: "decision",
+          approval_state: "changed_since_acceptance",
+          issue_counts: { error: 0, warning: 0 },
+          erratum_for_title: null,
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+    });
+
+    const { wrapper } = await mountSearchView("/");
+
+    const chips = wrapper.findAllComponents({ name: "StatusChip" });
+    const pendingChip = chips.find(
+      (chip) => chip.props("text") === "Pending approval",
+    );
+    expect(pendingChip).toBeDefined();
+    expect(pendingChip?.props("color")).toBeUndefined();
+
+    // Shown to 1-2 words, with the full meaning kept for assistive
+    // tech via the aria-label (the row link's accessible name must
+    // still convey the state).
+    const changedChip = chips.find((chip) => chip.props("text") === "Changed");
+    expect(changedChip).toBeDefined();
+    expect(changedChip?.props("color")).toBe("warning");
+    expect(changedChip?.props("ariaLabel")).toBe("Changed since acceptance");
+  });
+
   it("shows an erratum row leading with 'Erratum for <title>', the stored title as secondary, and the erratum status chip", async () => {
     const page: SearchPage = {
       items: [
@@ -144,7 +273,7 @@ describe("SearchView", () => {
     // ("Pending approval"), for the row's own approval chip.
     expect(wrapper.text()).toContain("Reported");
     expect(wrapper.text()).not.toContain("Pending approval");
-    const titleSpan = wrapper.find(".result-text span.text-subtitle-1");
+    const titleSpan = wrapper.find(".result-link span.text-subtitle-1");
     expect(titleSpan.text()).toBe("Erratum for Use PostgreSQL");
     expect(searchRecords).toHaveBeenCalledWith(
       expect.objectContaining({ record_type: "erratum" }),

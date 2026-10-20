@@ -33,11 +33,12 @@ import type {
 } from "@/types/records";
 import type { FacetsOut } from "@/types/sources";
 import {
-  approvalStateLabel,
-  erratumStatusLabel,
+  candidateBranchText,
   issueIndicatorLabel,
   recordKindTypeLabel,
-  recordStateLabel,
+  searchApprovalStateLabel,
+  searchErratumStatusLabel,
+  searchRecordStateLabel,
 } from "@/utils/labels";
 
 const PAGE_SIZE = 20;
@@ -190,6 +191,14 @@ function recordHref(item: SearchItem): string {
   return `/records/${item.id}`;
 }
 
+/** The no-matches empty state's clear-action label: "Clear search
+ *  and filters" once a query is set, since the action also clears
+ *  the free-text query and the plain "filters" wording under-states
+ *  that then (S-07); "Clear filters" otherwise. */
+const clearActionLabel = computed(() =>
+  committedParams.value.q ? "Clear search and filters" : "Clear filters",
+);
+
 /** The result row's primary title: for an erratum, "Erratum for
  *  <target>" leads (so two rows both stored as "Erratum: Decision"
  *  are distinguishable by their target), with the erratum's own
@@ -294,7 +303,9 @@ function rowTitle(item: SearchItem): string {
       </v-btn>
     </div>
 
-    <p class="sr-only" role="status" aria-live="polite">{{ resultSummary }}</p>
+    <p class="d-sr-only" role="status" aria-live="polite">
+      {{ resultSummary }}
+    </p>
 
     <div v-if="loadState === 'loading'">
       <LoadingState text="Searching the catalog…" />
@@ -331,7 +342,7 @@ function rowTitle(item: SearchItem): string {
             prepend-icon="mdi-filter-remove-outline"
             @click="clearFilters"
           >
-            Clear filters
+            {{ clearActionLabel }}
           </v-btn>
         </template>
       </EmptyState>
@@ -342,39 +353,50 @@ function rowTitle(item: SearchItem): string {
         </p>
 
         <!--
-          A plain flex layout, not `v-list-item`'s `#append` slot:
-          that slot reserves a fixed-width column for the chips which
-          squeezes (and mid-word-wraps) the title/subtitle text at
-          narrow viewports.
+          Title on its own line; source/project, short status and
+          issue chips share a left-aligned metadata line below it
+          (phases/11-ui-ux-updates.md Task 3, S-01: chips sat
+          1,100+ px from the title they describe). A plain flex
+          layout, not `v-list-item`'s `#append` slot, which reserves
+          a fixed-width column that squeezes (and mid-word-wraps) the
+          title at narrow viewports.
         -->
         <ul class="results-list">
           <li v-for="item in results.items" :key="item.id" class="result-row">
-            <router-link :to="recordHref(item)" class="result-link">
-              <div class="result-text">
-                <span class="text-subtitle-1">{{ rowTitle(item) }}</span>
-                <span
-                  v-if="item.record_kind === 'erratum'"
-                  class="text-body-2 text-medium-emphasis"
-                >
-                  {{ item.title }}
-                </span>
+            <router-link
+              :to="recordHref(item)"
+              class="result-link d-flex flex-column py-3 px-1
+                text-decoration-none"
+            >
+              <span class="text-subtitle-1">{{ rowTitle(item) }}</span>
+              <span
+                v-if="item.record_kind === 'erratum'"
+                class="text-body-2 text-medium-emphasis"
+              >
+                {{ item.title }}
+              </span>
+              <div class="d-flex flex-wrap align-center ga-2 mt-1">
                 <span class="text-body-2 text-medium-emphasis">
                   {{ item.source_id }} / {{ item.project }}
+                  <template v-if="candidateBranchText(item.kind, item.ref)">
+                    · {{ candidateBranchText(item.kind, item.ref) }}
+                  </template>
                 </span>
-              </div>
-              <div class="result-chips">
-                <StatusChip v-bind="recordStateLabel(item.kind, item.ref)" />
+                <StatusChip
+                  v-if="searchRecordStateLabel(item.kind)"
+                  v-bind="searchRecordStateLabel(item.kind)!"
+                />
                 <StatusChip
                   v-if="item.record_kind === 'erratum'"
                   v-bind="recordKindTypeLabel(item.record_kind)"
                 />
                 <StatusChip
                   v-if="item.record_kind === 'erratum'"
-                  v-bind="erratumStatusLabel(item.approval_state, item.kind, item.ref)"
+                  v-bind="searchErratumStatusLabel(item.approval_state)"
                 />
                 <StatusChip
                   v-else
-                  v-bind="approvalStateLabel(item.approval_state, item.kind)"
+                  v-bind="searchApprovalStateLabel(item.approval_state)"
                 />
                 <StatusChip
                   v-if="issueIndicatorLabel(item.issue_counts)"
@@ -417,52 +439,31 @@ function rowTitle(item: SearchItem): string {
 }
 
 .results-list {
+  /* No Vuetify utility removes a <ul>'s marker/indent or sets this
+     one-off top margin. */
   list-style: none;
   margin: 0.5rem 0 0;
   padding: 0;
 }
 
 .result-row + .result-row {
+  /* Divider between rows, in the theme's border token -- Vuetify has
+     no prop for an adjacent-sibling border on a plain <li>. */
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .result-link {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  padding: 0.75rem 0.25rem;
+  /* No Vuetify utility sets an anchor's text colour to "inherit from
+     context"; without this a router-link renders browser-default
+     link blue. */
   color: inherit;
-  text-decoration: none;
 }
 
 .result-link:hover,
 .result-link:focus-visible {
+  /* Hover/focus highlight at the theme's on-surface token, low
+     opacity -- Vuetify has no built-in hover treatment for a plain
+     router-link acting as a row. */
   background: rgba(var(--v-theme-on-surface), 0.04);
-}
-
-.result-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 12rem;
-  flex: 1 1 16rem;
-}
-
-.result-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  justify-content: flex-end;
-  flex: 0 1 auto;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
 }
 </style>

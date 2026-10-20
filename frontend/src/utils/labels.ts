@@ -20,10 +20,16 @@ import type { PollStatus } from "@/types/sources";
 export interface StatusLabel {
   /** Material Design Icons name. */
   icon: string;
-  /** Visible and accessible label text. */
+  /** Visible label text. */
   text: string;
   /** Vuetify theme colour token, or `undefined` for a neutral chip. */
   color?: string;
+  /**
+   * Full meaning announced to assistive tech when `text` has been
+   * shortened for space (`StatusChip`'s `ariaLabel` prop); falls
+   * back to `text` when omitted, so it stays optional here.
+   */
+  ariaLabel?: string;
 }
 
 /**
@@ -278,6 +284,146 @@ export function displayStatusLabel(status: DisplayStatus): StatusLabel {
       };
     default:
       return { icon: "mdi-help-circle-outline", text: status };
+  }
+}
+
+/**
+ * Describe a record's candidate/published state for a search result
+ * row.
+ *
+ * Unlike {@link recordStateLabel}, "Published" (the default lifecycle
+ * state) is hidden entirely rather than shown as a grey chip
+ * (phases/11-ui-ux-updates.md "Chip visibility rule": a status chip
+ * is shown only when it differs from the default), and a candidate's
+ * branch is left out of the chip text -- it is shown once as plain
+ * text instead ({@link candidateBranchText}), per S-05.
+ *
+ * :param kind: Lifecycle state of the record row.
+ * :returns: Icon, label text and colour for a candidate; `null` for
+ *     a published record (no chip).
+ */
+export function searchRecordStateLabel(kind: RecordState): StatusLabel | null {
+  if (kind === "published") {
+    return null;
+  }
+  return { icon: "mdi-source-branch", text: "Candidate", color: "info" };
+}
+
+/**
+ * The branch/ref shown once as secondary text in a search row's
+ * metadata line, for a candidate record (S-05: do not also repeat it
+ * inside a chip's text).
+ *
+ * :param kind: Lifecycle state of the record row.
+ * :param ref: Source ref (branch/label).
+ * :returns: `null` for a published record or a missing ref;
+ *     otherwise "Branch: <ref>".
+ */
+export function candidateBranchText(
+  kind: RecordState,
+  ref?: string,
+): string | null {
+  if (kind !== "candidate" || !ref) {
+    return null;
+  }
+  return `Branch: ${ref}`;
+}
+
+/**
+ * Describe a decision's approval state for a search result row.
+ *
+ * A search-row-specific sibling of {@link approvalStateLabel}: every
+ * chip stays to 1-2 words (the full wording moves to `ariaLabel`, so
+ * the row link's accessible name still states it in full), the
+ * candidate/published distinction is dropped (it already has its own
+ * chip, {@link searchRecordStateLabel}), and "pending" loses its
+ * colour -- phases/11-ui-ux-updates.md Decision 2: "Pending approval"
+ * stays visible on search rows but as neutral text; strong colour is
+ * reserved for issues (error/warning) and rejection.
+ *
+ * :param state: Approval state of the record's current content.
+ * :returns: Icon, label text, and colour (neutral chips omit it).
+ */
+export function searchApprovalStateLabel(
+  state: ApprovalStateCode,
+): StatusLabel {
+  switch (state) {
+    case "accepted":
+      return { icon: "mdi-check-decagram", text: "Accepted", color: "success" };
+    case "pending":
+      return { icon: "mdi-clock-outline", text: "Pending approval" };
+    case "rejected":
+      return { icon: "mdi-close-circle", text: "Rejected", color: "error" };
+    case "changed_since_acceptance":
+      return {
+        icon: "mdi-alert-circle",
+        text: "Changed",
+        color: "warning",
+        ariaLabel: "Changed since acceptance",
+      };
+    case "not_required":
+      return {
+        icon: "mdi-information-outline",
+        text: "Not required",
+        ariaLabel: "Approval not required",
+      };
+    case "policy_missing":
+      return {
+        icon: "mdi-help-circle-outline",
+        text: "No policy",
+        color: "warning",
+        ariaLabel: "Approval policy not configured",
+      };
+    default:
+      return { icon: "mdi-help-circle-outline", text: state };
+  }
+}
+
+/**
+ * Describe an erratum's approval state for a search result row.
+ *
+ * The search-row sibling of {@link erratumStatusLabel}: same 1-2 word
+ * and neutral-pending rules as {@link searchApprovalStateLabel}
+ * (RFC-style report/verify/reject wording), and the candidate
+ * "Proposed (branch …)" suffix is dropped -- it is covered by
+ * {@link searchRecordStateLabel} and {@link candidateBranchText}
+ * instead, so the branch is not repeated twice on one row (S-05).
+ *
+ * :param state: Approval state of the erratum's current content.
+ * :returns: Icon, label text, and colour (neutral chips omit it).
+ */
+export function searchErratumStatusLabel(
+  state: ApprovalStateCode,
+): StatusLabel {
+  switch (state) {
+    case "pending":
+      return { icon: "mdi-clock-outline", text: "Reported" };
+    case "policy_missing":
+      return {
+        icon: "mdi-clock-outline",
+        text: "Reported",
+        color: "warning",
+        ariaLabel: "Reported — approval policy not configured",
+      };
+    case "accepted":
+      return { icon: "mdi-check-decagram", text: "Verified", color: "success" };
+    case "rejected":
+      return { icon: "mdi-close-circle", text: "Rejected", color: "error" };
+    case "changed_since_acceptance":
+      return {
+        icon: "mdi-alert-circle",
+        text: "Changed",
+        color: "warning",
+        ariaLabel: "Changed since verification",
+      };
+    case "not_required":
+      return {
+        icon: "mdi-information-outline",
+        text: "Not required",
+        ariaLabel: "Published — no review required",
+      };
+    default:
+      return { icon: "mdi-help-circle-outline", text: state };
   }
 }
 

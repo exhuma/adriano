@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   approvalStateExplanation,
   approvalStateLabel,
+  candidateBranchText,
   decisionActionLabel,
   displayStatusLabel,
   divergenceLabel,
@@ -16,6 +17,9 @@ import {
   issueIndicatorLabel,
   pollStatusLabel,
   recordStateLabel,
+  searchApprovalStateLabel,
+  searchErratumStatusLabel,
+  searchRecordStateLabel,
 } from "@/utils/labels";
 import type { DivergenceKind, PolicyStatus } from "@/types/approval";
 import type { ApprovalStateCode, DisplayStatus } from "@/types/records";
@@ -282,5 +286,115 @@ describe("issueIndicatorLabel", () => {
     const label = issueIndicatorLabel({ error: 0, warning: 1 });
     expect(label?.text).toBe("1 warning");
     expect(label?.color).toBe("warning");
+  });
+});
+
+describe("searchRecordStateLabel", () => {
+  it("hides the chip for a published record (the default state)", () => {
+    expect(searchRecordStateLabel("published")).toBeNull();
+  });
+
+  it("shows a short, uncluttered 'Candidate' chip without the branch", () => {
+    const label = searchRecordStateLabel("candidate");
+    expect(label?.text).toBe("Candidate");
+    expect(label?.color).toBe("info");
+  });
+});
+
+describe("candidateBranchText", () => {
+  it("returns null for a published record", () => {
+    expect(candidateBranchText("published", "main")).toBeNull();
+  });
+
+  it("returns null for a candidate with no ref", () => {
+    expect(candidateBranchText("candidate", undefined)).toBeNull();
+  });
+
+  it("formats the branch once for a candidate with a ref", () => {
+    expect(candidateBranchText("candidate", "feature-x")).toBe(
+      "Branch: feature-x",
+    );
+  });
+});
+
+describe("searchApprovalStateLabel", () => {
+  it("keeps 'Pending approval' visible but strips its colour (decision 2)", () => {
+    const label = searchApprovalStateLabel("pending");
+    expect(label.text).toBe("Pending approval");
+    expect(label.color).toBeUndefined();
+  });
+
+  it("keeps strong colour for issues and rejection", () => {
+    expect(searchApprovalStateLabel("rejected").color).toBe("error");
+    expect(searchApprovalStateLabel("changed_since_acceptance").color).toBe(
+      "warning",
+    );
+    expect(searchApprovalStateLabel("policy_missing").color).toBe("warning");
+  });
+
+  it("drops the candidate/published suffix kept by approvalStateLabel", () => {
+    expect(searchApprovalStateLabel("accepted").text).toBe("Accepted");
+  });
+
+  it.each([
+    ["accepted", "Accepted"],
+    ["pending", "Pending approval"],
+    ["rejected", "Rejected"],
+    ["changed_since_acceptance", "Changed"],
+    ["not_required", "Not required"],
+    ["policy_missing", "No policy"],
+  ] as [ApprovalStateCode, string][])(
+    "keeps every chip's visible text to 1-2 words: %s -> %s",
+    (state, expected) => {
+      const label = searchApprovalStateLabel(state);
+      expect(label.text).toBe(expected);
+      expect(label.text.split(" ").length).toBeLessThanOrEqual(2);
+    },
+  );
+
+  it("carries the full meaning in ariaLabel whenever text is shortened", () => {
+    expect(searchApprovalStateLabel("changed_since_acceptance").ariaLabel).toBe(
+      "Changed since acceptance",
+    );
+    expect(searchApprovalStateLabel("not_required").ariaLabel).toBe(
+      "Approval not required",
+    );
+    expect(searchApprovalStateLabel("policy_missing").ariaLabel).toBe(
+      "Approval policy not configured",
+    );
+  });
+});
+
+describe("searchErratumStatusLabel", () => {
+  it("keeps 'Reported' (the erratum pending-equivalent) neutral", () => {
+    const label = searchErratumStatusLabel("pending");
+    expect(label.text).toBe("Reported");
+    expect(label.color).toBeUndefined();
+  });
+
+  it("drops the 'Proposed (branch …)' suffix kept by erratumStatusLabel", () => {
+    expect(searchErratumStatusLabel("accepted").text).toBe("Verified");
+  });
+
+  it.each([
+    ["pending", "Reported"],
+    ["accepted", "Verified"],
+    ["rejected", "Rejected"],
+    ["changed_since_acceptance", "Changed"],
+    ["not_required", "Not required"],
+  ] as [ApprovalStateCode, string][])(
+    "keeps every chip's visible text to 1-2 words: %s -> %s",
+    (state, expected) => {
+      const label = searchErratumStatusLabel(state);
+      expect(label.text).toBe(expected);
+      expect(label.text.split(" ").length).toBeLessThanOrEqual(2);
+    },
+  );
+
+  it("keeps strong colour for issues and rejection only", () => {
+    expect(searchErratumStatusLabel("rejected").color).toBe("error");
+    expect(searchErratumStatusLabel("changed_since_acceptance").color).toBe(
+      "warning",
+    );
   });
 });
