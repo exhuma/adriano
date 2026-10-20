@@ -67,6 +67,10 @@ to "Use Stripe for card payment processing".
 
 ![Legacy record: unverified sign-off, legacy alias warning, links](03-legacy-record-detail.png)
 
+(Re-shot after the Phase 10 record-page redesign below: status banners
+at the top, the document as the main column, everything else in an
+"About this decision" sidebar.)
+
 ## 4. An isolated invalid record (AC 3, 23)
 
 "Broken YAML frontmatter" has an unterminated quoted string in its
@@ -114,6 +118,21 @@ Searching for "Redis" now shows the pushed file as a distinct
 candidate row, with its branch as a chip and "Needs approval":
 
 ![Candidate visible in search after the CI push](05-candidate-after-push.png)
+
+**Pre-redesign screenshots below.** Steps 6–8, 10, 11 and 12c below
+were captured before the Phase 10 record-page redesign (status
+banners at the top, document as the main column, metadata in an
+"About this decision" sidebar; see `phases/10-ui-errata.md`) and still
+show the earlier single-column stack of cards. Reproducing them
+against the current layout would require re-running the push →
+accept → promote → edit → reject flow from a clean catalog, which this
+verification pass did not repeat; the data and interactions they
+illustrate (accept with digest confirmation, identical-content
+promotion, the diff panel, reject with confirmation, the reader's
+read-only view, the stale banner) are unchanged by Phase 10, only the
+layout chrome around them is. For an up-to-date record detail page see
+screenshot 03 above (re-shot) and the "Errata: report → verify"
+walk-through at the end of this page.
 
 ## 6. A reviewer accepts the candidate (AC 16, 22, 26)
 
@@ -262,6 +281,121 @@ closing on Escape with focus returned to that button.
 ![Search page at 390px width, collapsed app bar](13-mobile-search.png)
 
 ![The collapsed app-bar menu open, listing Catalog, Sources, backend status, and the signed-in user](13b-mobile-menu.png)
+
+## 14. Errata: report → verify (Phase 10)
+
+Phase 10 (`phases/10-ui-errata.md`) redesigned the record page
+(rfc-editor.org/info layout: status banners at the top, the document
+as the main column, metadata in an "About this decision"/"About this
+erratum" sidebar) and replaced the old `kind: erratum` + `corrects:`
+ADR shape with a dedicated erratum file format: its own frontmatter
+(`erratum-for`, `type`, `section`, `reported-by`, `date`) and a body
+split into "Original text", "Corrected text" and "Notes". An erratum
+goes through the same hash-bound accept/reject workflow as a decision,
+displayed with RFC-style vocabulary: pending = **Reported**, accepted
+= **Verified**, rejected = **Rejected**.
+
+Opening "Adopt gRPC for internal APIs" (obsoleted by a later decision,
+and the target of one published technical erratum) shows both facts as
+top banners, plus the new sidebar:
+
+![gRPC decision: obsolete banner and "has 1 erratum" banner, sidebar](p10-a-grpc-obsoleted-and-errata-banner.png)
+
+Scrolling to the errata section (`#errata`, linked from the banner)
+shows the erratum entry with its labelled, never-colour-only blocks:
+
+![Errata section: "Original text — says:" / "Corrected text — should say:"](p10-b-grpc-errata-section.png)
+
+Opening the erratum itself ("Open erratum") shows its own small page:
+an "Erratum for <decision>" banner, the erratum body, and an "About
+this erratum" sidebar:
+
+![The erratum's own page: banner, body, sidebar](p10-c-erratum-page.png)
+
+The same shape also covers **editorial** errata: "Use Stripe for card
+payment processing" carries a wording-only correction reported against
+its "Decision" section:
+
+![Stripe decision with its editorial erratum](p10-d-stripe-decision-erratum.png)
+
+An erratum candidate can be pushed from a branch exactly like a
+decision candidate, through the same push intake:
+
+```text
+$ export ADRIANO_PUSH_TOKEN_CENTRAL=<redacted>
+$ export ADRIANO_API_BASE_URL=http://localhost:8180
+
+$ samples/push-candidate.sh \
+    samples/candidates/2026-02-01-erratum-ledger-snapshot-cadence.md \
+    payments feature/erratum-ledger-snapshot-cadence central "" \
+    doc/decisions/errata/2026-02-01-erratum-ledger-snapshot-cadence.md
+PUT http://localhost:8180/api/v1/candidates (source=central project=payments ref=feature/erratum-ledger-snapshot-cadence uuid=201eeb83-8117-43c2-b429-aba67ee26f90)
+{"record_id":"d8d8ffe9-...","digest":"sha256-v1:30862be7475a...","created":false,"updated":false,"deduplicated":false,"issues":[],"catalog_path":"/records/d8d8ffe9-..."}
+```
+
+Before any decision is recorded, the target decision ("Adopt event
+sourcing for the ledger service") shows the proposed erratum as its
+own banner and its own group in the errata section, clearly separated
+from published errata:
+
+![Event-sourcing decision: "1 proposed erratum" banner](p10-e1-event-sourcing-proposed-banner.png)
+
+![Event-sourcing decision: "Proposed errata" group in the errata section](p10-e2-event-sourcing-proposed-errata-group.png)
+
+Signed in as a reviewer (role `adr-reviewer`), opening the erratum
+candidate's own page offers "Verify erratum" / "Reject erratum"
+(the same accept/reject dialog, RFC wording). Verifying asks for the
+same exact-digest confirmation as a decision:
+
+![Verify-erratum confirmation dialog, with the exact digest](p10-f1-verify-erratum-dialog.png)
+
+After confirming, the erratum records a "Verified — candidate" history
+entry, demonstrated here by the explanation sentence beneath the
+status chip ("This erratum was verified for this exact content.") and
+a confirmation snackbar; see "UI bugs found" below for a wording
+inconsistency observed in this exact screenshot:
+
+![Erratum candidate after verifying](p10-f2-verified-result.png)
+
+Search gained a **"Show"** filter (Decisions / Errata / Both, synced
+to the URL as `record_type`) next to the Published/Candidate toggle.
+Selecting "Errata" lists every erratum, published or candidate, each
+with an "Erratum for &lt;decision&gt;" line:
+
+![Search with Show=Errata: erratum rows](p10-g-search-show-errata.png)
+
+At a 390px mobile viewport the same gRPC decision page keeps the
+sidebar below the main column (not beside it) with no horizontal
+scrolling:
+
+![gRPC decision page at 390px width: sidebar stacked below the document](p10-h-mobile-390-grpc-decision.png)
+
+### UI bug found during this verification (not fixed; reported only)
+
+On an erratum's **own** detail page, the "Approval" card's status chip
+and the sidebar's approval-summary chip both use the generic
+decision vocabulary ("Pending approval" / "Accepted — candidate" /
+"Accepted — published") via `approvalStateLabel()`
+(`frontend/src/components/ApprovalCard.vue:100` and
+`frontend/src/components/record/RecordSidebar.vue:68`), while the
+explanation sentence directly beneath the chip on the same card
+correctly switches to the RFC "report/verify/reject" vocabulary via
+`approvalStateExplanation(..., recordKind)` (e.g. "This erratum is
+reported and awaits verification." / "This erratum was verified for
+this exact content."). A dedicated `erratumStatusLabel()` helper
+already exists in `frontend/src/utils/labels.ts` and is used
+correctly for the same erratum when it is listed on its *target*
+decision's errata section (`ErratumEntry.vue`, showing "Reported" /
+"Verified" / "Rejected" there) — but `ApprovalCard.vue` and
+`RecordSidebar.vue` never call it, even though both already receive
+`recordKind` as a prop (used there for the "Verify erratum"/"Reject
+erratum" button labels and the sidebar heading). Repro: open any
+erratum's own page (e.g. the gRPC erratum,
+`/records/2d4988c9-ab30-4105-ac2b-073e3fdb9070`, or the "ledger
+snapshot cadence" candidate used above) and compare the status chip's
+text ("Pending approval") against the sentence below it ("This
+erratum is reported and awaits verification.") — visible in
+`p10-c-erratum-page.png` and `p10-f2-verified-result.png` above.
 
 ## Known limitations observed during this walk-through
 
