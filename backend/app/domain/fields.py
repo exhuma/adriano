@@ -8,13 +8,14 @@ never raise for bad content. They are used by
 
 Public API: :data:`ISO_DATE_RE`, :data:`UUID_RE`, :func:`parse_uuid`,
 :func:`parse_uuid_list`, :func:`parse_iso_date`, :func:`parse_date`,
-:func:`parse_text`, :func:`parse_text_list`.
+:func:`parse_text`, :func:`parse_erratum_type`, :func:`parse_text_list`.
 """
 
 import datetime
 import re
 import uuid
 
+from app.domain.errata import ErratumType
 from app.domain.issues import Issue, IssueCode, error
 
 #: Accepted spelling of dates: ``YYYY-MM-DD``.
@@ -160,6 +161,27 @@ def parse_text(value: object, field: str) -> tuple[str | None, Issue | None]:
     if isinstance(value, str) and value.strip():
         return value.strip(), None
     return None, _type_issue(field, "a non-empty text", value)
+
+
+def parse_erratum_type(
+    value: object, field: str
+) -> tuple[ErratumType | None, Issue | None]:
+    """
+    Validate an erratum ``type`` value (case-insensitive).
+
+    :param value: The loaded value.
+    :param field: Field name used in the message.
+    :returns: The type and ``None``, or ``None`` and a
+        ``bad_erratum_type`` issue.
+    """
+    text = value.strip().lower() if isinstance(value, str) else None
+    if text in ErratumType:
+        return ErratumType(text), None
+    choices = ", ".join(kind.value for kind in ErratumType)
+    return None, error(
+        IssueCode.BAD_ERRATUM_TYPE,
+        f"`{field}` must be one of {choices}; got {shown(value)}",
+    )
 
 
 def parse_text_list(

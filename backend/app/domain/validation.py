@@ -5,8 +5,15 @@ Validation of a loaded frontmatter mapping against the record schema.
 mappings (``deprecates`` -> ``obsoletes``, ``signed-off-by`` -> legacy
 sign-off) and collects issues in a stable order. It never raises.
 
-Public API: :data:`KNOWN_FIELDS`, :class:`FieldValues`,
-:func:`parse_fields`.
+A document is an erratum if and only if its frontmatter has
+``erratum-for``. Errata use ``type``, ``section``, ``reported-by`` and
+``date`` instead of ``decision-date``; those fields on a decision are
+reported as unknown. The retired erratum shape (``kind: erratum`` with
+``corrects:``) yields ``legacy_erratum_format`` and creates no link.
+
+Public API: :data:`KNOWN_FIELDS`, :data:`DECISION_FIELDS`,
+:data:`ERRATUM_FIELDS`, :data:`LEGACY_ERRATUM_FIELDS`,
+:class:`FieldValues`, :func:`parse_fields`.
 """
 
 import datetime
@@ -15,22 +22,36 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from app.domain import fields as fv
+from app.domain.errata import ErratumHeader
 from app.domain.issues import Issue, IssueCode, error, warning
-from app.domain.values import Links, RecordKind
+from app.domain.values import Links
+
+_COMMON_FIELDS = frozenset(
+    {"uuid", "title", "updates", "obsoletes", "deprecates", "signed-off-by"}
+)
+
+#: Frontmatter fields understood on a decision.
+DECISION_FIELDS = _COMMON_FIELDS | {"decision-date"}
+
+#: Frontmatter fields understood on an erratum.
+ERRATUM_FIELDS = _COMMON_FIELDS | {
+    "erratum-for",
+    "type",
+    "section",
+    "reported-by",
+    "date",
+}
 
 #: Frontmatter fields understood by the catalog.
-KNOWN_FIELDS = frozenset(
-    {
-        "uuid",
-        "title",
-        "decision-date",
-        "kind",
-        "updates",
-        "obsoletes",
-        "corrects",
-        "deprecates",
-        "signed-off-by",
-    }
+KNOWN_FIELDS = DECISION_FIELDS | ERRATUM_FIELDS
+
+#: Fields of the retired erratum shape (``legacy_erratum_format``).
+LEGACY_ERRATUM_FIELDS = frozenset({"kind", "corrects"})
+
+_LEGACY_ERRATUM_MESSAGE = (
+    "`kind: erratum` / `corrects:` is no longer supported; errata use "
+    "`erratum-for: <uuid>` with `type`, and body sections 'Original "
+    "text' / 'Corrected text' / 'Notes' (see docs/schema.md)"
 )
 
 
@@ -41,8 +62,9 @@ class FieldValues:
 
     :param adr_uuid: Record UUID, ``None`` if missing or invalid.
     :param title: Explicit title, if valid.
-    :param decision_date: Authored decision date, if valid.
-    :param record_kind: Record kind (default decision).
+    :param decision_date: Authored decision date (the report ``date``
+        for an erratum), if valid.
+    :param erratum: Erratum frontmatter, ``None`` for a decision.
     :param links: Outbound links; empty when there is no valid UUID.
     :param legacy_signoff: Legacy ``signed-off-by`` entries.
     :param issues: Issues in a stable order.
@@ -51,7 +73,7 @@ class FieldValues:
     adr_uuid: uuid.UUID | None
     title: str | None
     decision_date: datetime.date | None
-    record_kind: RecordKind
+    erratum: ErratumHeader | None
     links: Links
     legacy_signoff: tuple[str, ...]
     issues: tuple[Issue, ...]
@@ -61,9 +83,9 @@ class FieldValues:
         """
         Build the values used when the frontmatter could not be read.
 
-        :returns: Values with no UUID, no links and the default kind.
+        :returns: Values for a decision with no UUID and no links.
         """
-        return cls(None, None, None, RecordKind.DECISION, Links(), (), ())
+        return cls(None, None, None, None, Links(), (), ())
 
 
 def _single[T](
@@ -155,28 +177,6 @@ def _date_field(
     return None
 
 
-def _kind_field(data: Mapping[str, object], issues: list[Issue]) -> RecordKind:
-    """
-    Validate ``kind``, defaulting to a decision.
-
-    :param data: Frontmatter fields.
-    :param issues: Issue list to append to.
-    :returns: The record kind.
-    """
-    value = data.get("kind")
-    if value is None:
-        return RecordKind.DECISION
-    if isinstance(value, str) and value.strip() in RecordKind:
-        return RecordKind(value.strip())
-    issues.append(
-        error(
-            IssueCode.BAD_FIELD_TYPE,
-            f"`kind` must be one of decision, erratum; got {fv.shown(value)}",
-        )
-    )
-    return RecordKind.DECISION
-
-
 def _obsoletes(
     data: Mapping[str, object], issues: list[Issue]
 ) -> tuple[uuid.UUID, ...]:
@@ -200,36 +200,67 @@ def _obsoletes(
     return obsoletes + tuple(t for t in legacy if t not in obsoletes)
 
 
-def _corrects(
-    data: Mapping[str, object], kind: RecordKind, issues: list[Issue]
+def _erratum_header(
+    data: Mapping[str, object], issues: list[Issue]
+) -> ErratumHeader:
+    """
+    Validate ``type``, ``section``, ``reported-by`` and ``date``.
+
+    :param data: Frontmatter fields of an erratum.
+    :param issues: Issue list to append to.
+    :returns: The validated erratum frontmatter.
+    """
+    if data.get("type") is None:
+        issues.append(
+            error(
+                IssueCode.BAD_ERRATUM_TYPE,
+                "`type` is required for errata; use technical or editorial",
+            )
+        )
+        kind = None
+    else:
+        kind = _single(data, "type", fv.parse_erratum_type, issues)
+    return ErratumHeader(
+        type=kind,
+        section=_single(data, "section", fv.parse_text, issues),
+        reported_by=_single(data, "reported-by", fv.parse_text, issues),
+        reported_date=_single(data, "date", fv.parse_date, issues),
+    )
+
+
+def _erratum_target(
+    data: Mapping[str, object], issues: list[Issue]
 ) -> uuid.UUID | None:
     """
-    Validate ``corrects`` against the record kind.
+    Validate ``erratum-for``, the UUID of the corrected decision.
 
-    :param data: Frontmatter fields.
-    :param kind: The validated record kind.
+    :param data: Frontmatter fields of an erratum.
     :param issues: Issue list to append to.
     :returns: The corrected decision UUID, or ``None``.
     """
-    corrects = _single(data, "corrects", fv.parse_uuid, issues)
-    if kind is RecordKind.ERRATUM and corrects is None:
+    target = _single(data, "erratum-for", fv.parse_uuid, issues)
+    if target is None:
         issues.append(
             error(
                 IssueCode.ERRATUM_WITHOUT_TARGET,
-                "erratum records must name the corrected decision's UUID "
-                "in `corrects`",
+                "`erratum-for` must be the UUID of the decision this "
+                "erratum corrects; the erratum is not linked until it is",
             )
         )
-    if kind is not RecordKind.ERRATUM and data.get("corrects") is not None:
+    return target
+
+
+def _legacy_erratum(data: Mapping[str, object], issues: list[Issue]) -> None:
+    """
+    Reject the retired ``kind: erratum`` / ``corrects:`` shape.
+
+    :param data: Frontmatter fields.
+    :param issues: Issue list to append to.
+    """
+    if LEGACY_ERRATUM_FIELDS.intersection(data):
         issues.append(
-            error(
-                IssueCode.CORRECTS_ON_NON_ERRATUM,
-                "`corrects` is only allowed with `kind: erratum`; the link "
-                "is ignored",
-            )
+            error(IssueCode.LEGACY_ERRATUM_FORMAT, _LEGACY_ERRATUM_MESSAGE)
         )
-        return None
-    return corrects
 
 
 def _signoff(
@@ -258,20 +289,35 @@ def _signoff(
     return values
 
 
-def _unknown_fields(data: Mapping[str, object]) -> list[Issue]:
+_UNKNOWN_HINTS = {
+    "decision-date": "; errata use `date` for the report date",
+    **{
+        name: "; it is only used by errata (with `erratum-for`)"
+        for name in ERRATUM_FIELDS - DECISION_FIELDS
+    },
+}
+
+
+def _unknown_fields(
+    data: Mapping[str, object], is_erratum: bool
+) -> list[Issue]:
     """
-    Report fields the catalog does not understand.
+    Report fields the catalog does not understand for this record kind.
+
+    Legacy erratum fields are reported by :func:`_legacy_erratum`.
 
     :param data: Frontmatter fields.
+    :param is_erratum: Whether the record is an erratum.
     :returns: One warning per unknown field.
     """
+    allowed = ERRATUM_FIELDS if is_erratum else DECISION_FIELDS
     return [
         warning(
             IssueCode.UNKNOWN_FIELD,
-            f"unknown field `{name}` is ignored",
+            f"unknown field `{name}` is ignored{_UNKNOWN_HINTS.get(name, '')}",
         )
         for name in data
-        if name not in KNOWN_FIELDS
+        if name not in allowed and name not in LEGACY_ERRATUM_FIELDS
     ]
 
 
@@ -288,20 +334,28 @@ def parse_fields(
     issues: list[Issue] = []
     adr_uuid = _uuid_field(data, issues)
     title = _single(data, "title", fv.parse_text, issues)
-    decision_date = _date_field(data, inferred, issues)
-    kind = _kind_field(data, issues)
+    is_erratum = "erratum-for" in data
+    if is_erratum:
+        erratum = _erratum_header(data, issues)
+        decision_date = erratum.reported_date
+        corrects = _erratum_target(data, issues)
+    else:
+        erratum = None
+        decision_date = _date_field(data, inferred, issues)
+        corrects = None
+    _legacy_erratum(data, issues)
     links = Links(
         updates=_uuid_list(data, "updates", issues),
         obsoletes=_obsoletes(data, issues),
-        corrects=_corrects(data, kind, issues),
+        corrects=corrects,
     )
     signoff = _signoff(data, issues)
-    issues.extend(_unknown_fields(data))
+    issues.extend(_unknown_fields(data, is_erratum))
     return FieldValues(
         adr_uuid=adr_uuid,
         title=title,
         decision_date=decision_date,
-        record_kind=kind,
+        erratum=erratum,
         links=links if adr_uuid is not None else Links(),
         legacy_signoff=signoff,
         issues=tuple(issues),

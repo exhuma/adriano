@@ -20,7 +20,9 @@ never resolves a link to itself or to another revision of itself.
 From the resolved links the index derives, for one record:
 
 - inbound links: ``updated_by`` / ``obsoleted_by``;
-- errata: erratum records whose ``corrects`` resolves to the record;
+- errata: erratum records whose ``corrects`` link (authored as
+  ``erratum-for``) resolves to the record. The erratum's own outbound
+  ``corrects`` link resolves like any other link;
 - display status: ``obsoleted`` if anything obsoletes it, else
   ``updated`` if anything updates it, else ``active``;
 - ``duplicate_uuid`` issues: an error when another *published* file of

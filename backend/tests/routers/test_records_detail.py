@@ -78,8 +78,8 @@ def test_erratum_is_listed_on_the_corrected_record(
             content=adr(
                 U5,
                 title="Correction",
-                body="Fixing a typo.",
-                extra=f"kind: erratum\ncorrects: {U3}\n",
+                body="## Corrected text\n\nFixing a typo.",
+                extra=f"erratum-for: {U3}\ntype: editorial\n",
             ),
         )
 

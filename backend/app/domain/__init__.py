@@ -9,6 +9,7 @@ no HTTP client and no filesystem access. Modules:
 - :mod:`app.domain.frontmatter` -- YAML frontmatter splitting and loading.
 - :mod:`app.domain.records` -- ADR parsing, validation, title/date
   derivation and record identity.
+- :mod:`app.domain.errata` -- erratum content and body-section parser.
 - :mod:`app.domain.relationships` -- link resolution, inbound links,
   errata, derived display status and duplicate UUID detection.
 - :mod:`app.domain.approval` -- approval policy, approval-state

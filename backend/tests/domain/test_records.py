@@ -265,44 +265,42 @@ def test_title_fallbacks(
     assert (record.title, record.title_source) == (title, source)
 
 
-def test_erratum_with_corrects() -> None:
-    """Ensure an erratum records the decision it corrects."""
+LEGACY_SHAPES = [
+    f"kind: erratum\ncorrects: {UUID_B}\n",
+    "kind: erratum\n",
+    f"corrects: {UUID_B}\n",
+    "kind: memo\n",
+]
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    LEGACY_SHAPES,
+    ids=["kind-and-corrects", "kind-only", "corrects-only", "other-kind"],
+)
+def test_legacy_erratum_shape_is_rejected(legacy: str) -> None:
+    """Ensure ``kind`` / ``corrects`` yield one legacy-format error."""
+    raw = doc(f"uuid: {UUID_A}\ndecision-date: 2024-12-24\n{legacy}")
+
+    record = parse_record(raw, filename=NAME)
+
+    assert codes(record.issues) == [IssueCode.LEGACY_ERRATUM_FORMAT]
+    issue = record.issues[0]
+    assert issue.severity is Severity.ERROR
+    assert "erratum-for" in issue.message
+    assert "docs/schema.md" in issue.message
+
+
+def test_legacy_erratum_is_a_decision_without_link() -> None:
+    """Ensure a legacy erratum is treated as a decision and not linked."""
     raw = doc(f"uuid: {UUID_A}\nkind: erratum\ncorrects: {UUID_B}\n")
 
     record = parse_record(raw, filename=NAME)
 
-    assert record.record_kind is RecordKind.ERRATUM
-    assert record.links.corrects == uuid.UUID(UUID_B)
-    assert IssueCode.ERRATUM_WITHOUT_TARGET not in codes(record.issues)
-
-
-def test_erratum_without_target_is_an_error() -> None:
-    """Ensure an erratum without ``corrects`` is reported."""
-    raw = doc(f"uuid: {UUID_A}\nkind: erratum\n")
-
-    record = parse_record(raw, filename=NAME)
-
-    assert IssueCode.ERRATUM_WITHOUT_TARGET in codes(record.issues)
-
-
-def test_corrects_on_decision_is_ignored_and_reported() -> None:
-    """Ensure ``corrects`` on a normal decision is dropped with an error."""
-    raw = doc(f"uuid: {UUID_A}\ncorrects: {UUID_B}\n")
-
-    record = parse_record(raw, filename=NAME)
-
-    assert IssueCode.CORRECTS_ON_NON_ERRATUM in codes(record.issues)
-    assert record.links.corrects is None
-
-
-def test_bad_kind_defaults_to_decision() -> None:
-    """Ensure an unknown ``kind`` is reported and treated as a decision."""
-    raw = doc(f"uuid: {UUID_A}\nkind: memo\n")
-
-    record = parse_record(raw, filename=NAME)
-
-    assert IssueCode.BAD_FIELD_TYPE in codes(record.issues)
     assert record.record_kind is RecordKind.DECISION
+    assert record.erratum is None
+    assert record.links.corrects is None
+    assert record.metadata["corrects"] == UUID_B
 
 
 def test_bad_link_entry_is_dropped() -> None:

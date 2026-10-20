@@ -37,9 +37,15 @@ class IssueCode(StrEnum):
     AMBIGUOUS_TARGET = "ambiguous_target"
     LEGACY_ALIAS = "legacy_alias"
     LEGACY_SIGNOFF = "legacy_signoff"
+    #: Retired: no longer emitted (``corrects`` is now a legacy field).
+    #: Kept so issues stored by earlier versions still decode.
     CORRECTS_ON_NON_ERRATUM = "corrects_on_non_erratum"
     ERRATUM_WITHOUT_TARGET = "erratum_without_target"
     BAD_ENCODING = "bad_encoding"
+    BAD_ERRATUM_TYPE = "bad_erratum_type"
+    ERRATUM_MISSING_CORRECTED_TEXT = "erratum_missing_corrected_text"
+    ERRATUM_UNKNOWN_SECTION_HEADING = "erratum_unknown_section_heading"
+    LEGACY_ERRATUM_FORMAT = "legacy_erratum_format"
 
 
 @dataclass(frozen=True, slots=True)

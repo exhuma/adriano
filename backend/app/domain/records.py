@@ -17,9 +17,16 @@ Field handling (see ``docs/schema.md``):
   never substituted silently: it is exposed as
   :attr:`ParsedRecord.inferred_date` and flagged by
   :attr:`ParsedRecord.decision_date_inferred`.
-- ``kind`` -- ``decision`` (default) or ``erratum``.
-- ``updates`` / ``obsoletes`` -- lists of UUIDs; ``corrects`` -- one
-  UUID, erratum records only.
+- ``erratum-for`` -- makes the document an erratum of the decision with
+  that UUID (stored as the internal ``corrects`` link). Errata also use
+  ``type`` (required), ``section``, ``reported-by`` and ``date`` (the
+  report date, exposed like ``decision-date``), and their body is
+  parsed into :attr:`ParsedRecord.erratum` (:mod:`app.domain.errata`).
+  Without an explicit ``title`` an erratum is titled "Erratum:
+  <section>", else "Erratum: <humanised filename slug>".
+- ``kind`` / ``corrects`` -- the retired erratum shape; rejected with
+  ``legacy_erratum_format`` and the file is treated as a decision.
+- ``updates`` / ``obsoletes`` -- lists of UUIDs.
 - ``deprecates`` -- legacy alias merged into ``obsoletes`` (warning).
 - ``signed-off-by`` -- legacy, exposed as
   :attr:`ParsedRecord.legacy_signoff` for display as "Legacy sign-off
@@ -34,6 +41,7 @@ Public API:
 - :data:`ADR_FILENAME_RE`, :data:`KNOWN_FIELDS`
 - :class:`RecordKind`, :class:`TitleSource`, :class:`LinkType`,
   :class:`Links`, :class:`Identity`, :class:`ParsedRecord`
+- :class:`ErratumContent`, :class:`ErratumType`
 - :func:`is_adr_filename`, :func:`filename_date`, :func:`derive_title`,
   :func:`record_key`, :func:`parse_record`
 """
@@ -42,6 +50,7 @@ import datetime
 import uuid
 from dataclasses import dataclass
 
+from app.domain.errata import ErratumContent, ErratumType, build_erratum
 from app.domain.frontmatter import (
     JsonValue,
     json_safe,
@@ -53,6 +62,7 @@ from app.domain.issues import Issue, IssueCode, error, has_errors
 from app.domain.titles import (
     ADR_FILENAME_RE,
     derive_title,
+    erratum_title,
     filename_date,
     is_adr_filename,
 )
@@ -69,6 +79,8 @@ from app.domain.values import (
 __all__ = [
     "ADR_FILENAME_RE",
     "KNOWN_FIELDS",
+    "ErratumContent",
+    "ErratumType",
     "Identity",
     "LinkType",
     "Links",
@@ -92,14 +104,15 @@ class ParsedRecord:
     :param metadata: Raw frontmatter as JSON-serialisable values.
     :param title: Display title.
     :param title_source: Where :attr:`title` came from.
-    :param decision_date: Authored ``decision-date``, if valid.
+    :param decision_date: Authored ``decision-date`` (``date`` for an
+        erratum), if valid.
     :param inferred_date: Date taken from the filename, if any.
-    :param record_kind: Decision or erratum.
     :param links: Validated outbound links (empty without a valid UUID).
     :param adr_uuid: Authored record UUID, or ``None`` if missing/invalid.
     :param legacy_signoff: Unverified legacy ``signed-off-by`` values.
     :param issues: Validation issues in a stable order.
     :param encoding_ok: ``False`` if the bytes were not valid UTF-8.
+    :param erratum: Erratum content, ``None`` for a decision.
     """
 
     body: str
@@ -108,12 +121,23 @@ class ParsedRecord:
     title_source: TitleSource
     decision_date: datetime.date | None
     inferred_date: datetime.date | None
-    record_kind: RecordKind
     links: Links
     adr_uuid: uuid.UUID | None
     legacy_signoff: tuple[str, ...]
     issues: tuple[Issue, ...]
     encoding_ok: bool = True
+    erratum: ErratumContent | None = None
+
+    @property
+    def record_kind(self) -> RecordKind:
+        """
+        Tell whether this is a decision or an erratum.
+
+        :returns: :attr:`RecordKind.ERRATUM` iff :attr:`erratum` is set.
+        """
+        if self.erratum is None:
+            return RecordKind.DECISION
+        return RecordKind.ERRATUM
 
     @property
     def decision_date_inferred(self) -> bool:
@@ -231,6 +255,40 @@ def _frontmatter_fields(
     return loaded.fields, split.body, loaded.issue
 
 
+def _erratum(
+    parsed: FieldValues, body: str, issues: list[Issue]
+) -> ErratumContent | None:
+    """
+    Parse the erratum body when the frontmatter declares an erratum.
+
+    :param parsed: Validated frontmatter.
+    :param body: Markdown body.
+    :param issues: Issue list to append the body issues to.
+    :returns: The erratum content, or ``None`` for a decision.
+    """
+    if parsed.erratum is None:
+        return None
+    content, found = build_erratum(parsed.erratum, body)
+    issues.extend(found)
+    return content
+
+
+def _title(
+    parsed: FieldValues, body: str, filename: str
+) -> tuple[str, TitleSource]:
+    """
+    Choose the display title for a decision or an erratum.
+
+    :param parsed: Validated frontmatter.
+    :param body: Markdown body.
+    :param filename: File name or repository path.
+    :returns: The title and where it came from.
+    """
+    if parsed.erratum is not None and parsed.title is None:
+        return erratum_title(parsed.erratum.section, filename)
+    return derive_title(parsed.title, body, filename)
+
+
 def parse_record(raw: bytes, *, filename: str) -> ParsedRecord:
     """
     Parse and validate one ADR file. Never raises for content problems.
@@ -249,7 +307,8 @@ def parse_record(raw: bytes, *, filename: str) -> ParsedRecord:
         issues.extend(parsed.issues)
     else:
         parsed = FieldValues.empty()
-    title, title_source = derive_title(parsed.title, body, filename)
+    erratum = _erratum(parsed, body, issues)
+    title, title_source = _title(parsed, body, filename)
     return ParsedRecord(
         body=body,
         metadata={name: json_safe(value) for name, value in data.items()},
@@ -257,10 +316,10 @@ def parse_record(raw: bytes, *, filename: str) -> ParsedRecord:
         title_source=title_source,
         decision_date=parsed.decision_date,
         inferred_date=inferred,
-        record_kind=parsed.record_kind,
         links=parsed.links,
         adr_uuid=parsed.adr_uuid,
         legacy_signoff=parsed.legacy_signoff,
         issues=tuple(issues),
         encoding_ok=encoding_issue is None,
+        erratum=erratum,
     )

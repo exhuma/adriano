@@ -20,7 +20,7 @@ Realism, kept deliberately small:
 - a share of records link ``updates``/``obsoletes`` to an earlier
   record (by UUID, catalog-wide, matching how
   :mod:`app.services.record_relationships` resolves links); a smaller
-  share are ``erratum`` records that ``corrects`` an earlier one;
+  share are errata (``erratum-for``) correcting an earlier one;
 - a share use the legacy ``deprecates`` alias or a legacy
   ``signed-off-by`` list;
 - a share carry one deliberate validation issue (missing ``uuid``, a
@@ -135,7 +135,7 @@ def _link_fields(
     :returns: Extra frontmatter fields (empty when none apply).
     """
     if previous and rng.random() < ERRATUM_RATIO:
-        return {"kind": "erratum", "corrects": str(rng.choice(previous))}
+        return {"erratum-for": str(rng.choice(previous)), "type": "technical"}
     if previous and rng.random() < LINK_RATIO:
         target = str(rng.choice(previous))
         if rng.random() < 0.5:
@@ -186,6 +186,8 @@ def _document_fields(
         "decision-date": decision_date.isoformat(),
     }
     fields.update(_link_fields(rng, previous))
+    if "erratum-for" in fields:
+        fields["date"] = fields.pop("decision-date")
     if rng.random() < LEGACY_SIGNOFF_RATIO:
         fields["signed-off-by"] = text.signoff_emails(rng)
     if rng.random() < ISSUE_RATIO:
@@ -235,7 +237,11 @@ def _published_document(
         title=title,
         previous=previous,
     )
-    content = _render(fields, text.body(rng))
+    body = text.body(rng)
+    if "erratum-for" in fields:
+        # Minimal erratum shape; Task 4 of phase 10 owns the real errata.
+        body = "## Corrected text\n\n" + body.replace("## ", "### ")
+    content = _render(fields, body)
     slug = text.slug(title)
     filename = f"{decision_date.isoformat()}-{slug}-{index:05d}.md"
     kept_uuid = adr_uuid if "uuid" in fields else None

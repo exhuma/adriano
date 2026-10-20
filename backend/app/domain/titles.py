@@ -2,7 +2,7 @@
 ADR file names, filename dates and display-title derivation.
 
 Public API: :data:`ADR_FILENAME_RE`, :func:`is_adr_filename`,
-:func:`filename_date`, :func:`derive_title`.
+:func:`filename_date`, :func:`derive_title`, :func:`erratum_title`.
 """
 
 import datetime
@@ -105,3 +105,19 @@ def derive_title(
     if heading:
         return heading, TitleSource.H1
     return _humanise_filename(filename), TitleSource.FILENAME
+
+
+def erratum_title(
+    section: str | None, filename: str
+) -> tuple[str, TitleSource]:
+    """
+    Build the fallback title of an erratum without an explicit title.
+
+    :param section: Validated ``section`` field, if any.
+    :param filename: File name or repository path.
+    :returns: ``"Erratum: <section>"`` (from the frontmatter), else
+        ``"Erratum: <humanised filename slug>"``.
+    """
+    if section:
+        return f"Erratum: {section}", TitleSource.FRONTMATTER
+    return f"Erratum: {_humanise_filename(filename)}", TitleSource.FILENAME
