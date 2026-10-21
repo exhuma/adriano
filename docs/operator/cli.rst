@@ -7,8 +7,8 @@ Run it as a one-off command next to the running stack:
 
 .. code-block:: sh
 
-   docker compose exec backend adriano <command>          # running backend
-   docker compose run --rm --no-deps backend adriano <command>  # new container
+   docker compose exec adriano adriano <command>          # running backend
+   docker compose run --rm --no-deps adriano adriano <command>  # new container
 
 It uses the same environment and catalog file as the backend.
 

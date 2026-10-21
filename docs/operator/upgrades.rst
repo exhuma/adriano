@@ -17,7 +17,7 @@ Upgrade steps
 
    .. code-block:: sh
 
-      docker compose run --rm --no-deps backend adriano check-config
+      docker compose run --rm --no-deps adriano adriano check-config
 
 #. Pause the poll schedule.
 #. Apply the update:

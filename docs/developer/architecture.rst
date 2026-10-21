@@ -26,7 +26,7 @@ and runs an approval workflow on top of that copy.
      ci["CI pipeline"]
      idp["OIDC identity provider"]
      subgraph adriano["Adriano"]
-       spa["Frontend<br/>nginx + Vue SPA"]
+       spa["Frontend<br/>Vue SPA, served by the API"]
        api["Backend API<br/>FastAPI, stateless"]
        poll["Polling<br/>CLI job or operator trigger"]
      end
@@ -36,7 +36,7 @@ and runs an approval workflow on top of that copy.
 
      reader -- "loads the app, calls /api" --> spa
      reader -- "signs in: Auth Code + PKCE" --> idp
-     spa -- "proxies /api and /healthz" --> api
+     spa -- "same-origin /api calls" --> api
      api -- "fetches discovery and JWKS" --> idp
      ci -- "pushes candidates with a push token" --> api
      operator -- "schedules or triggers" --> poll
@@ -74,12 +74,10 @@ PostgreSQL
    Holds everything Adriano knows: registrations, record rows,
    immutable content snapshots, decision events and intake runs.
 
-In the bundled ``docker-compose.yml`` stack the frontend's nginx is the
-only published entry point.
-It serves the SPA and proxies ``/api/``, ``/healthz`` and ``/auth/dev/``
-to the backend, which is not published itself.
-A one-shot ``migrate`` service runs ``alembic upgrade head`` before the
-backend starts.
+In the bundled ``docker-compose.yml`` stack the single ``adriano``
+container is the only published entry point.
+It serves the SPA and the API from one process and applies the
+migrations when it starts.
 
 Concern map and layering
 ------------------------

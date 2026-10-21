@@ -83,7 +83,7 @@ Collect them with your container platform's log driver:
 
 .. code-block:: sh
 
-   docker compose logs -f backend
+   docker compose logs -f adriano
 
 Secret values (tokens, passwords) are never logged;
 messages name the environment variable instead.

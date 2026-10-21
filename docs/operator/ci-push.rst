@@ -31,7 +31,7 @@ Setting up a registration for pushes
 
       echo "ADRIANO_PUSH_TOKEN_PLATFORM=$(openssl rand -hex 32)" >> .env
 
-#. Recreate the backend: ``docker compose up -d backend``.
+#. Recreate the backend: ``docker compose up -d adriano``.
 #. Check with ``adriano check-config``: there must be no warning
    ``push token env var ... is not set``.
 #. Store the same token as a masked, protected CI variable in the

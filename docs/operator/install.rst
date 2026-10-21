@@ -147,7 +147,7 @@ Validate the catalog file before the first start
 
 .. code-block:: sh
 
-   docker compose run --rm --no-deps backend adriano check-config
+   docker compose run --rm --no-deps adriano adriano check-config
 
 Fix every line marked ``error`` before you continue.
 
@@ -166,7 +166,7 @@ Bring-up
 
    .. code-block:: sh
 
-      docker compose exec backend adriano poll
+      docker compose exec adriano adriano poll
 
    Each registration prints one line with its status and counts.
    See :doc:`polling` for what ``partial`` and ``failed`` mean.

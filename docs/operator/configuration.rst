@@ -343,7 +343,7 @@ You choose those names; by convention they start with
   Adding a source never needs a change to ``docker-compose.yml``.
 - They are read once at start-up.
   After changing or rotating one, recreate the backend
-  (``docker compose up -d backend``; a plain restart keeps the old
+  (``docker compose up -d adriano``; a plain restart keeps the old
   values).
 - A missing GitLab token disables only that source;
   a missing push token makes that source refuse every push.

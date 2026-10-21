@@ -77,7 +77,7 @@ choice.
 Mind its expiry date: when the token expires or is revoked, polls of
 this registration fail (HTTP 401 or 403 from GitLab) and its records
 are marked as possibly out of date until you replace the token and
-recreate the backend (``docker compose up -d backend``).
+recreate the backend (``docker compose up -d adriano``).
 
 What Adriano does with the projects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

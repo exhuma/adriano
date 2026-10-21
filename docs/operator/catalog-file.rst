@@ -9,7 +9,7 @@ The catalog file (``catalog.yaml``) says three things:
 
 It is read once, when the backend starts.
 After editing it, validate it, then restart the backend
-(``docker compose restart backend``).
+(``docker compose restart adriano``).
 Scheduled polls read it again on every run.
 
 A complete example
@@ -61,7 +61,7 @@ Run the check after every change, before restarting:
 
 .. code-block:: sh
 
-   docker compose run --rm --no-deps backend adriano check-config
+   docker compose run --rm --no-deps adriano adriano check-config
 
 It needs no database.
 It prints every source with its state, the approval policy, the

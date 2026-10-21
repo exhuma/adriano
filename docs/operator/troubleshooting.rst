@@ -6,7 +6,7 @@ Start with two commands; they explain most problems:
 .. code-block:: sh
 
    curl -fsS https://adriano.example.com/healthz
-   docker compose run --rm --no-deps backend adriano check-config
+   docker compose run --rm --no-deps adriano adriano check-config
 
 Each entry below gives the symptom, the likely cause and what to
 check.

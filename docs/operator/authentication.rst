@@ -180,7 +180,7 @@ Run these checks after every deployment and after every change to
 
    .. code-block:: sh
 
-      docker compose logs backend | grep -i 'dev'
+      docker compose logs adriano | grep -i 'dev'
 
 #. The sign-in page offers no "Dev sign-in" button.
    The production web image never contains it, whatever the
@@ -189,4 +189,4 @@ Run these checks after every deployment and after every change to
 
 To turn it off, remove both variables from ``.env`` (and from the
 shell environment and the backend environment file), then recreate
-the backend with ``docker compose up -d backend``.
+the backend with ``docker compose up -d adriano``.

@@ -23,7 +23,7 @@ cron on the Docker host
 
 .. code-block:: text
 
-   */15 * * * * docker compose -f /opt/adriano/docker-compose.yml exec -T backend adriano poll >> /var/log/adriano-poll.log 2>&1
+   */15 * * * * docker compose -f /opt/adriano/docker-compose.yml exec -T adriano adriano poll >> /var/log/adriano-poll.log 2>&1
 
 ``-T`` is needed because cron has no terminal.
 
@@ -41,7 +41,7 @@ Polling one registration
 
 .. code-block:: sh
 
-   docker compose exec backend adriano poll --source gitlab-platform
+   docker compose exec adriano adriano poll --source gitlab-platform
 
 Exit codes
 ~~~~~~~~~~
