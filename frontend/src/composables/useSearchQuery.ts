@@ -69,8 +69,7 @@ export function readRecordType(value: unknown): RecordTypeFilter {
 }
 
 /** The sort used when `sort` is omitted: `relevance` when a query is
- *  set, else `title` (phases/11-ui-ux-updates.md decision 4;
- *  DECISIONS.md "HTTP API"). The backend applies the same default,
+ *  set, else `title`. The backend applies the same default,
  *  so omitting `sort` from the URL/request when it equals this never
  *  changes what is actually requested. */
 export function defaultSort(hasQuery: boolean): SearchSort {
@@ -82,7 +81,7 @@ export function defaultSort(hasQuery: boolean): SearchSort {
  *
  * An unknown or missing value falls back to {@link defaultSort}, and
  * `"relevance"` without a query gracefully falls back to `"title"`
- * (DECISIONS.md: "relevance without q falls back to title") -- so a
+ * ("relevance without q falls back to title") -- so a
  * stale or hand-edited URL (`sort=relevance` after `q` was removed)
  * never selects an option the sort `v-select` doesn't offer, exactly
  * like {@link readRecordType} does for `record_type`.

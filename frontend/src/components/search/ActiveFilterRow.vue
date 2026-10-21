@@ -7,9 +7,7 @@
  * active, their order, and their label/icon/colour is decided by
  * `utils/activeFilters.ts` (a plain TypeScript module, per
  * `module-interaction-core`); this component only renders whatever
- * it is handed. Extracted from `SearchView.vue`
- * (phases/11-ui-ux-updates.md Task 16, P11-R-17 --
- * `module-code-structure-limits`' 500-line module limit).
+ * it is handed. Extracted from `SearchView.vue`.
  *
  * P11-R-05: the "Clear filters" action clears only the filters this
  * row's chips represent -- never the free-text query or the sort

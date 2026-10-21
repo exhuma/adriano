@@ -2,9 +2,7 @@
 /**
  * Desktop app-bar user menu: the activator button shows the
  * signed-in display name, and the menu holds the theme choice and
- * sign-out (`phases/11-ui-ux-updates.md` Task 2, closing G-04/A-01's
- * "always-on chrome" finding for the former bare name + Sign-out
- * button pair). `v-menu`'s activator slot already applies
+ * sign-out. `v-menu`'s activator slot already applies
  * `aria-haspopup`/`aria-expanded` to the bound button, so none of
  * that is repeated here.
  */

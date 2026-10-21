@@ -1,7 +1,6 @@
 /**
  * Pure (Vue- and Vuetify-free) model of the search page's active
- * filter modes (phases/11-ui-ux-updates.md Task 4, docs/ui-review
- * S-04). Per the quartermaster `module-vue-vuetify` "mode indicators"
+ * filter modes. Per the quartermaster `module-vue-vuetify` "mode indicators"
  * rules, the decision of *which* filter modes are active, their
  * fixed display order, and their full "what's in effect" text lives
  * here with no framework import, so it can be unit-tested without
@@ -15,7 +14,7 @@
  * "show it continuously while active"), so a redundant "Search:
  * ⟨text⟩" chip would restate, not add, information. `sort` is not a
  * filter mode either (it reorders, rather than narrows, the result
- * set) and gets no chip, per phases/11-ui-ux-updates.md Task 4.
+ * set) and gets no chip.
  */
 import type { RecordState, RecordTypeFilter } from "@/types/records";
 
@@ -68,7 +67,7 @@ export interface ActiveFilterChip {
 
 /** Fixed display order of filter modes (module-vue-vuetify
  *  "mode indicators": "one shared, ordered treatment"), matching the
- *  order docs/ui-review/README.md's S-04 fix lists them in. */
+ *  order the filter bar presents them in. */
 const ORDER: readonly FilterKey[] = [
   "needsApproval",
   "source",

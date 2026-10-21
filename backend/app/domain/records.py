@@ -6,7 +6,7 @@ ADR record parsing, validation, title/date derivation and identity.
 problem becomes an :class:`~app.domain.issues.Issue` and the record stays
 storable and browseable.
 
-Field handling (see ``docs/schema.md``):
+Field handling (see ``docs/developer/domain/schema.rst``):
 
 - ``uuid`` -- required; canonical hyphenated UUID. Without a valid UUID
   the record is keyed by its source location (:func:`record_key`), its

@@ -1,6 +1,6 @@
 /**
  * Ensure validation-issue messages wrap in full instead of being cut
- * at one line (docs/ui-review R-09), that the severity is announced
+ * at one line, that the severity is announced
  * to assistive tech, that the card title is a section heading
  * (G-05), and that the static list is not a tab stop (G-10).
  */

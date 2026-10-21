@@ -4,8 +4,8 @@
  * reloads, actually drives the live Vuetify theme (not just its own
  * state), and keeps working -- in memory, for the rest of the
  * session -- when `localStorage` throws on read or on write
- * (private browsing, disabled storage, quota; DECISIONS.md "Phase 11
- * updates": the stored choice is a convenience, never a
+ * (private browsing, disabled storage, quota; the stored choice is a
+ * convenience, never a
  * requirement).
  */
 import { mount, type VueWrapper } from "@vue/test-utils";

@@ -52,7 +52,7 @@ from app.sources.port import (
 )
 from app.validation_messages import describe_validation_error
 
-#: Source types of Product Phase 1 (see ``phases/DECISIONS.md``).
+#: Source types supported by the catalog.
 SUPPORTED_TYPES = ("filesystem", "gitlab")
 
 

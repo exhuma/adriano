@@ -4,7 +4,7 @@
  * title via `DecisionDialog`, and the state explanation), while a
  * normal decision keeps the plain Accept/Reject wording; that focus
  * returns to the button that opened the decision dialog; that the
- * card's titles are headings (docs/ui-review G-05); that content
+ * card's titles are headings; that content
  * which cannot be decided shows the neutral "Blocked" status instead
  * of "Pending approval" (R-02); and that the "why you can't decide"
  * line uses plain-language copy for the blocker code, muted for a

@@ -3,8 +3,7 @@
  * derives the `source`/`project` filter dropdown options from them,
  * narrowing the project list to the current source when one is
  * selected. Extracted from `SearchView.vue`
- * (phases/11-ui-ux-updates.md Task 16, P11-R-17 --
- * `module-code-structure-limits`' 500-line module limit) along a
+ * along a
  * natural seam: "load facets and keep the filter options/selection
  * consistent with them" is one cohesive responsibility, independent
  * of fetching search results for the committed query.

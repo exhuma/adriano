@@ -163,7 +163,7 @@ tasks:
       corpus into it via `adriano seed-synthetic` (default 20,000
       records / 100 projects; override with e.g.
       `task bench:seed -- --records 2000 --projects 100`). See
-      bench/catalog.bench.yaml and docs/benchmark.md.
+      bench/catalog.bench.yaml and docs/developer/performance.rst.
     cmds:
       - task: db:reset
       - task: migrate
@@ -175,8 +175,7 @@ tasks:
 
   bench:
     desc: >-
-      End-to-end search/browse latency benchmark (SPEC.md "Phase 1
-      acceptance", P95 target): `task bench:seed` (20,000 records /
+      End-to-end search/browse latency benchmark (P95 target): `task bench:seed` (20,000 records /
       100 projects), start the backend (uvicorn, 4 workers like the
       container default, port 8100, dev auth with a throwaway
       secret, ADRIANO_CONFIG_FILE=bench/catalog.bench.yaml), run
@@ -187,7 +186,7 @@ tasks:
       yourself, then `task bench -- --requests 500`, since this task
       always reseeds the default 20,000/100 size). Results:
       bench-results.json plus the table on stdout. See
-      docs/benchmark.md.
+      docs/developer/performance.rst.
     cmds:
       # A plain shell call (not `task: bench:seed`), so this task's
       # own CLI_ARGS (meant for bench.py below) are not also passed
@@ -221,6 +220,23 @@ tasks:
         uv run --project backend python backend/bench/bench.py \
           --base-url http://localhost:8100 --out bench-results.json \
           {{.CLI_ARGS}}
+
+  docs:
+    desc: >-
+      Build the Sphinx documentation site into docs/_build/html
+      (warnings are errors, like in CI).
+    cmds:
+      - >-
+        uv run --project backend --group docs
+        sphinx-build -W -b html docs docs/_build/html
+
+  docs:serve:
+    desc: >-
+      Build the documentation, then serve it on
+      http://localhost:8765 (8000 is often taken).
+    deps: [docs]
+    cmds:
+      - python3 -m http.server 8765 --directory docs/_build/html
 
   lint:
     desc: Lint and format-check the backend and the frontend.
@@ -366,7 +382,7 @@ tasks:
         echo '    --sub alice --roles admin'
         echo
         echo "Push a candidate (CI push demo; see samples/push-" \
-          "candidate.sh and docs/operator.md):"
+          "candidate.sh and docs/operator/ci-push.rst):"
         echo "  export ADRIANO_PUSH_TOKEN_CENTRAL=\$(grep" \
           "ADRIANO_PUSH_TOKEN_CENTRAL .env.demo | cut -d= -f2)"
         echo "  ADRIANO_API_BASE_URL=http://localhost:${port} \\"
@@ -379,8 +395,8 @@ tasks:
   demo:
     desc: >-
       Build and start the full containerised demo stack (dev auth
-      ENABLED for this local demo only; see docs/operator.md "Dev
-      auth must be unset in prod"), wait for health, run an initial
+      ENABLED for this local demo only; see
+      docs/operator/authentication.rst), wait for health, run an initial
       poll, and print how to sign in / push candidates.
     cmds:
       - task: demo:env

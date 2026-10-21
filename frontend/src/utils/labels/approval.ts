@@ -79,8 +79,7 @@ export function approvalStateLabel(
  * Explain a record's approval state in one reader-facing sentence,
  * distinguishing an unconfigured/invalid policy from an ordinary
  * pending review so a missing configuration is never mistaken for a
- * reviewer delay (SPEC.md "Independent approval and sign-off
- * workflow"). When the content itself cannot be decided (a content
+ * reviewer delay. When the content itself cannot be decided (a content
  * problem, not a policy or reviewer one -- R-02), this overrides the
  * ordinary "Awaiting review" wording, matching the "Blocked" chip
  * from {@link approvalDisplayLabel}.
@@ -225,8 +224,8 @@ export function approvalDisplayLabel(
 
 /**
  * Plain-language message for every stable reason the caller cannot
- * decide a record now (`ApprovalOut.decide_blocked_code`;
- * docs/ui-review R-10). Replaces the raw `decide_blocked_reason`
+ * decide a record now (`ApprovalOut.decide_blocked_code`). Replaces the raw
+ * `decide_blocked_reason`
  * text ("not a reviewer: the approval policy lists neither this
  * user nor any of their roles") that used to be shown verbatim.
  *

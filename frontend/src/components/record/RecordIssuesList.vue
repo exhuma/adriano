@@ -3,10 +3,10 @@
  * Record detail page's validation-issues card: lists stored issues
  * by severity, with the severity announced to assistive tech even
  * though it is also conveyed by icon colour. Messages wrap in full
- * instead of being cut at one line (docs/ui-review R-09), and the
+ * instead of being cut at one line, and the
  * static list is not a tab stop (G-10). Each message is prefixed
  * with a plain-language headline for its stable issue code
- * (docs/ui-review R-10) -- the backend's own message is kept in
+ * -- the backend's own message is kept in
  * full afterwards, so no per-instance detail (field name, value,
  * target) is lost.
  */

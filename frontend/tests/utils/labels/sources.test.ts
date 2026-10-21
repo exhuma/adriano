@@ -32,8 +32,8 @@ describe("pollStatusLabel", () => {
   );
 
   it("shifts icon and colour, but not text, for a stale non-failed " +
-    "status (docs/ui-review O-01: staleness is secondary text, not a " +
-    "second chip or a suffix on this one)", () => {
+    "status (staleness is secondary text, not a second chip or a " +
+    "suffix on this one)", () => {
     const label = pollStatusLabel("ok", true);
     expect(label.text).toBe("OK");
     expect(label.color).toBe("warning");

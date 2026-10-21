@@ -6,22 +6,20 @@
  * (not a sidebar-sized relationship list) -- see `RecordView`'s
  * `#errata` section. Heading level and list typography come from
  * `RecordSidebar`'s scoped defaults. The lists are not tab stops
- * themselves (docs/ui-review G-10); their links are. A target's raw
+ * themselves; their links are. A target's raw
  * UUID (an unresolved link has no record to show a title for) is
- * shown short with copy, never as full running text (docs/ui-review
- * R-12, module-ux-principles "Technical identifiers"). The caller
+ * shown short with copy, never as full running text. The caller
  * (`useRecordDetailView`'s `sidebarInboundLinks`) already removes
  * whichever inbound link the page's lifecycle notice currently
  * states, so "Referenced by" never repeats that fact (P11-R-21).
- * docs/ui-review "New issues" #1 (Task 14 re-verification, Phase 11
- * Task 16 follow-up): each link got `d-inline-block py-1` so its own
+ * each link got `d-inline-block py-1` so its own
  * clickable box is >=24px tall -- `.v-list-item-subtitle`'s
  * `line-height: 1rem` left the link only as tall as its 16px text
  * line (measured 186x16). The link stays a real `<a>`/`router-link`
  * in the list's own tab order (only the `<v-list>` itself is
  * `tabindex="-1"`, G-10), so no accessible name or focus order
  * changed.
- * docs/ui-review "New issues" #2 (same follow-up): each link also
+ * each link also
  * had no colour class, so it rendered in the browser's own link
  * colour instead of the theme (4.14:1 in dark). `text-primary` fixes
  * that, but `.v-list-item-subtitle` renders at

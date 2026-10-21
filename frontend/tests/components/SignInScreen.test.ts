@@ -2,7 +2,7 @@
  * Ensure the signed-out screen offers only the sign-in methods that
  * are actually available, never renders the dev-login entry point
  * when the dev-auth gate is off, and gives every available sign-in
- * action the primary colour (docs/ui-review A-01).
+ * action the primary colour.
  */
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
@@ -45,7 +45,7 @@ describe("SignInScreen", () => {
     expect(wrapper.text()).toContain("No sign-in method is available");
   });
 
-  it("gives both sign-in actions the primary colour (docs/ui-review A-01)", () => {
+  it("gives both sign-in actions the primary colour", () => {
     const wrapper = mount(SignInScreen, {
       props: { oidcAvailable: true, devAuthAvailable: true },
       global: { plugins: [vuetify] },

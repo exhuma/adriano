@@ -28,8 +28,8 @@ Design decisions worth recording for later phases:
   index build at ~780 ms per detail request, of which ~630 ms was
   spent fetching and converting all 20,000 rows to
   :class:`~app.domain.relationships.RecordSummary` in Python -- the
-  Postgres scan itself took ~80 ms (see ``docs/benchmark.md``
-  "Detail endpoint optimisation"). Since this one request only ever
+  Postgres scan itself took ~80 ms (see
+  ``docs/developer/performance.rst``). Since this one request only ever
   looks at *one* record's view of the index, :meth:`~app.storage.port.
   CatalogStore.list_relationship_candidates` fetches only the published
   rows that can possibly affect that view (sharing the record's UUID,

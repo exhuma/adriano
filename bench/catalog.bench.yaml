@@ -1,5 +1,5 @@
-# Benchmark catalog configuration (phase 09 Task 1, SPEC.md "Phase 1
-# acceptance" P95 target and criterion 25).
+# Benchmark catalog configuration (see
+# docs/developer/performance.rst).
 #
 # `task bench` points ADRIANO_CONFIG_FILE at this file, seeds a
 # deterministic synthetic ADR corpus into it with

@@ -4,7 +4,7 @@
  * `signed-off-by` text from the document itself, explicitly not a
  * substitute for the approval workflow. Heading level comes from
  * `RecordSidebar`'s scoped defaults; the list is static content, so
- * it is not a tab stop (docs/ui-review G-10).
+ * it is not a tab stop.
  */
 defineProps<{
   /** Unverified legacy `signed-off-by` entries from the document. */

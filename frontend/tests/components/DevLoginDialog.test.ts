@@ -1,11 +1,11 @@
 /**
  * Ensure the dev-login dialog's role presets come from the catalog
- * (docs/ui-review D-04) and fill the roles field, none are shown while
+ * and fill the roles field, none are shown while
  * loading or after a failed fetch (manual entry keeps working),
  * Cancel closes without signing in, a successful/failed submission
  * is handled (`module-dev-auth-bypass`, module-ux-principles "UI
  * modes": Cancel never mutates state), and the dialog has an
- * accessible name (docs/ui-review D-01).
+ * accessible name.
  *
  * `v-dialog` teleports its content to `document.body` (outside the
  * mounted wrapper's own DOM subtree), so interactive elements inside

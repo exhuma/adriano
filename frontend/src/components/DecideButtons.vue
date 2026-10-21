@@ -3,7 +3,7 @@
  * Accept/Reject (or "Verify erratum"/"Reject erratum") buttons plus
  * the `DecisionDialog` they open. Shared by the main column's
  * `ApprovalCard` and the sidebar's `RecordApprovalSummaryCard`
- * (docs/ui-review R-01) so both places use one implementation of the
+ * so both places use one implementation of the
  * open-dialog and focus-return handling. Each instance owns its own
  * dialog; `v-dialog` is modal, so the other instance's buttons cannot
  * be reached while one dialog is open and two dialogs are never open
@@ -21,7 +21,7 @@ defineProps<{
   /** Decision or erratum; picks the button and dialog wording. */
   recordKind: RecordKind;
   /** Title of the record being decided, passed straight through to
-   *  the dialog so it can name the record (docs/ui-review D-02). */
+   *  the dialog so it can name the record. */
   recordTitle: string;
   /** The exact digest being decided. */
   digest: string;

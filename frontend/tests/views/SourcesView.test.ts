@@ -3,8 +3,8 @@
  * `operate` permission (otherwise a short explanation), that a
  * successful poll shows a snackbar and refreshes the status a few
  * times, and that poll/list errors (403/404/409) are shown with
- * actionable text. Also covers the docs/ui-review O-01/O-02/O-03/O-04
- * fixes: one status chip per row with staleness as secondary text, a
+ * actionable text. Also covers: one status chip per row with staleness as
+ * secondary text, a
  * default-size "Poll now", the problem/recovery sub-row, the
  * tooltip/screen-reader-accessible absolute dates, and the "Only
  * operators…" hint sitting below the table rather than above it.

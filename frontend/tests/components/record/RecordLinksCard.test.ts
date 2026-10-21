@@ -2,8 +2,7 @@
  * Ensure outbound/inbound links never show a full raw UUID as
  * primary content: a resolved link uses its title; an unresolved or
  * untitled target shows a short UUID with the full value reachable
- * via tooltip and copy-to-clipboard (docs/ui-review R-12,
- * module-ux-principles "Technical identifiers").
+ * via tooltip and copy-to-clipboard.
  */
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -161,8 +160,7 @@ describe("RecordLinksCard", () => {
     expect(wrapper.text()).not.toContain(sourceId);
   });
 
-  // docs/ui-review "New issues" #1 and #2 (Task 14 re-verification,
-  // Phase 11 Task 16 follow-up): a resolved outbound link's own box
+  // a resolved outbound link's own box
   // must be >=24px tall (`d-inline-block py-1`) and theme-coloured
   // (`text-primary`), with its `v-list-item-subtitle` ancestor's
   // medium-emphasis opacity reset to 1 so that colour is not

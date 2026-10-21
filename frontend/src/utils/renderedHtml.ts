@@ -1,7 +1,7 @@
 /**
  * Pure helpers for the record page's server-rendered Markdown HTML.
- * `renderedHtml` is sanitized server-side with `nh3` before storage
- * (see DECISIONS.md "Record schema"), so building a DOM from it to
+ * `renderedHtml` is sanitized server-side with `nh3` before storage, so
+ * building a DOM from it to
  * inspect and trim its leading heading is exactly as safe as the
  * `v-html` render that already trusts the same string.
  */

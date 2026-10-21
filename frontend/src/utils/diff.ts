@@ -67,7 +67,7 @@ export interface KnownDigests {
 
 /**
  * Whether the page knows any revision other than the current one, so
- * a diff has something to compare against (docs/ui-review R-08: the
+ * a diff has something to compare against (the
  * Diff card is hidden otherwise). Mirrors the server's default base
  * (last decided digest other than the current one, else the previous
  * digest) and also counts siblings and competing candidates, which

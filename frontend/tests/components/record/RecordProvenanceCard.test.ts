@@ -1,7 +1,7 @@
 /**
  * Ensure the provenance card wraps long values instead of cutting
- * them with an ellipsis, offers a copy button for the full file path
- * (docs/ui-review R-09), and is not itself a tab stop (G-10). The
+ * them with an ellipsis, offers a copy button for the full file path, and is
+ * not itself a tab stop (G-10). The
  * card relies on `RecordSidebar`'s scoped `v-defaults-provider` for
  * the `lines: false` clamp override (P11-R-20), so these tests mount
  * it inside the same scoped defaults, matching production.

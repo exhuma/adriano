@@ -29,8 +29,8 @@ export interface StatusLabel {
  * invalid encoding (`ApprovalOut.approvable === false`). The icon is
  * error-ish (an alert glyph) but the chip carries no colour: text
  * and icon carry the meaning, not an error-red fill
- * (phases/11-ui-ux-updates.md: "a neutral chip with an error-ish
- * icon [...] not the error colour as the only signal"). Shared by
+ * (a neutral chip with an error-ish icon, never the error colour as
+ * the only signal). Shared by
  * `approval.ts` and `search.ts`, which both apply this override.
  */
 export const BLOCKED_STATUS_LABEL: StatusLabel = {

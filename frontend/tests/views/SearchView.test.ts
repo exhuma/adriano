@@ -145,7 +145,7 @@ describe("SearchView", () => {
     expect(wrapper.text()).toContain("1 warning");
     // Two `role="status"` regions exist now: the active-filter row
     // (empty here -- no filter is active) and the result-count live
-    // region (phases/11-ui-ux-updates.md Task 4, S-04).
+    // region.
     const statusRegions = wrapper.findAll('[role="status"]');
     const countRegion = statusRegions.find((region) =>
       region.text().includes("Showing"),

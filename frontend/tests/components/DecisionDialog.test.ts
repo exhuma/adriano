@@ -1,8 +1,8 @@
 /**
  * Ensure the decide dialog never submits on Cancel/Escape, requires
  * an explicit confirmation to reject, caps the comment counter at
- * 2000 characters, has an accessible name naming the record
- * (docs/ui-review D-01/D-02), and shows the digest short by default
+ * 2000 characters, has an accessible name naming the record, and shows the
+ * digest short by default
  * with the exact value reachable behind a "Show full digest"
  * disclosure (R-12) so a reviewer can still verify it.
  *

@@ -62,7 +62,8 @@ LEGACY_ERRATUM_FIELDS = frozenset({"kind", "corrects"})
 _LEGACY_ERRATUM_MESSAGE = (
     "`kind: erratum` / `corrects:` is no longer supported; errata use "
     "`erratum-for: <uuid>` with `type`, and body sections 'Original "
-    "text' / 'Corrected text' / 'Notes' (see docs/schema.md)"
+    "text' / 'Corrected text' / 'Notes' "
+    "(see docs/developer/domain/schema.rst)"
 )
 
 _OBSOLETE_KIND_MESSAGE = (

@@ -90,7 +90,7 @@ FALLBACK_POLICY_VERSION = 1
 _SAFE_DB_HINTS = ("dev", "test", "bench", "synthetic")
 
 #: Exact database names considered safe (the ephemeral dev/test
-#: database of ``task db:up``, see ``phases/DECISIONS.md``), in
+#: database of ``task db:up``), in
 #: addition to any name containing a :data:`_SAFE_DB_HINTS` fragment.
 _SAFE_DB_NAMES = frozenset({"adriano"})
 

@@ -1,8 +1,8 @@
 /**
  * Singleton theme-preference state: light/dark/system, persisted in
  * `localStorage` (module-vue-vuetify "State management" -- no
- * Pinia). The product owner's decision (`DECISIONS.md` "Phase 11
- * updates") treats the stored choice as a convenience only, so every
+ * Pinia). The product owner's decision treats the stored choice as a
+ * convenience only, so every
  * access is wrapped in `try`/`catch`: a blocked, full, or disabled
  * store must never prevent switching themes, it just means the
  * choice is not remembered for next time.
@@ -10,10 +10,8 @@
  * Vuetify's own `defaultTheme: "system"` (`plugins/vuetify.ts`)
  * already follows `prefers-color-scheme` for the "system" value, so
  * this composable only has to remember *which* of the three choices
- * is in effect and apply it through `useTheme().change(...)`
- * (docs/ui-review G-06); the user menu (Task 2,
- * `phases/11-ui-ux-updates.md`) is the only planned caller of
- * `setPreference`.
+ * is in effect and apply it through `useTheme().change(...)`;
+ * the user menu is the only planned caller of `setPreference`.
  *
  * `App.vue`'s own `setup()` calls this composable once, for its
  * apply-on-mount side effect alone (P11-R-01): the previous only

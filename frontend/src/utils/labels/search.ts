@@ -17,8 +17,8 @@ import type { StatusLabel } from "./shared";
  *
  * Unlike {@link import("./records").recordStateLabel}, "Published"
  * (the default lifecycle state) is hidden entirely rather than shown
- * as a grey chip (phases/11-ui-ux-updates.md "Chip visibility rule":
- * a status chip is shown only when it differs from the default), and
+ * as a grey chip (a status chip is shown only when it differs from the
+ * default), and
  * a candidate's branch is left out of the chip text -- it is shown
  * once as plain text instead ({@link candidateBranchText}), per S-05.
  *
@@ -62,7 +62,7 @@ export function candidateBranchText(
  * link's accessible name still states it in full), the
  * candidate/published distinction is dropped (it already has its own
  * chip, {@link searchRecordStateLabel}), and "pending" loses its
- * colour -- phases/11-ui-ux-updates.md Decision 2: "Pending approval"
+ * colour -- "Pending approval"
  * stays visible on search rows but as neutral text; strong colour is
  * reserved for issues (error/warning) and rejection.
  *

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The record sidebar's first card (docs/ui-review R-01, R-06): the
+ * The record sidebar's first card: the
  * sidebar's own `h2`, the one-line approval status, a link to the
  * main column's full approval card, and -- when the caller can
  * decide -- the Accept/Reject buttons (`DecideButtons`, shared with
@@ -29,7 +29,7 @@ const props = defineProps<{
   /** Record id, for the decision dialog's submission. */
   recordId: string;
   /** Title of the record being decided, passed to the decision
-   *  dialog so it names the record (docs/ui-review D-02). */
+   *  dialog so it names the record. */
   recordTitle: string;
   /** Branch/ref of the content, for the candidate erratum chip. */
   recordRef: string;
@@ -51,7 +51,7 @@ const heading = computed(() =>
 
 /** The one status shown in the sidebar, including the neutral
  *  "Blocked" override when the content itself cannot be decided
- *  (docs/ui-review R-02; see `approvalDisplayLabel`). */
+ *  (see `approvalDisplayLabel`). */
 const statusLabel = computed(() =>
   approvalDisplayLabel(
     props.approval,

@@ -4,7 +4,7 @@
  * than document body (rfc-editor.org/info layout: the document is
  * the main column, metadata moves to the side). Its first card holds
  * the sidebar heading, the approval status and -- for reviewers --
- * the Accept/Reject buttons (docs/ui-review R-01). At `md` and up
+ * the Accept/Reject buttons. At `md` and up
  * only that first card is sticky below the app bar (P11-R-13); the
  * info cards below it flow with the page like the main column, so
  * the sidebar can never grow taller than the viewport the way a
@@ -54,7 +54,7 @@ defineProps<{
   /** Record id, for the sidebar's decision dialog. */
   recordId: string;
   /** Title of the record being decided, passed to the decision
-   *  dialog so it names the record (docs/ui-review D-02). */
+   *  dialog so it names the record. */
   recordTitle: string;
   /** Approval state of the record's current content (status chip,
    *  `can_decide`, digest to decide). */
@@ -93,7 +93,7 @@ const { mdAndUp } = useDisplay();
 /**
  * Scoped defaults for the info cards under the sidebar `h2` (ladder
  * step 3): card titles are `h3` headings at the sidebar card-title
- * size (docs/ui-review G-05, DECISIONS.md type scale; `ma-0`
+ * size (`ma-0`
  * restates the global card-title default this object replaces); list
  * rows are label/value pairs whose label (`VListItemTitle`) reads
  * below the card title and above its value, which Vuetify's own list

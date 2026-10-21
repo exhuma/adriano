@@ -2,9 +2,8 @@
 /**
  * The search page's filter bar: source/project/state/record-type
  * selectors, the sort control, and the "needs approval" switch,
- * extracted from `SearchView.vue` (phases/11-ui-ux-updates.md Task
- * 16, P11-R-17 -- `module-code-structure-limits`' 500-line module
- * limit) along a natural seam: everything here is a pure, stateless
+ * extracted from `SearchView.vue` along a natural seam: everything here is a
+ * pure, stateless
  * filter-bar control, bound to its caller's refs via `v-model:*`.
  * Facet data (`sourceOptions`/`projectOptions`), the sort options
  * list, and the API fetch all stay in `SearchView.vue`, which owns
@@ -94,7 +93,7 @@ const needsApproval = computed({
 
 /**
  * One shared control density for the whole filter bar
- * (phases/11-ui-ux-updates.md Task 4, S-03: "use one density for the
+ * ("use one density for the
  * whole bar so every control shares a top line") -- a
  * `<v-defaults-provider>` (ladder step 3) rather than a global
  * default, since only this one region needs it.

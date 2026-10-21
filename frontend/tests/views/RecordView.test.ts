@@ -2,7 +2,7 @@
  * Ensure the record page shows Accept/Reject controls only when the
  * caller `can_decide`, and otherwise shows the server's
  * `decide_blocked_reason` as visible text rather than a silently
- * disabled control (SPEC.md acceptance criteria 3, 19).
+ * disabled control.
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
@@ -168,7 +168,7 @@ describe("RecordView approval controls", () => {
     expect(buttons).not.toContain("Accept");
     expect(buttons).not.toContain("Reject");
     // The raw backend reason is replaced with plain-language copy
-    // for the stable blocker code (docs/ui-review R-10; Task 8).
+    // for the stable blocker code.
     expect(wrapper.text()).toContain("Sign in as a reviewer to decide this.");
     expect(wrapper.text()).not.toContain("sign in as a reviewer to decide");
   });

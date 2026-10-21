@@ -11,7 +11,7 @@ existing ``decision_event_append_only()`` function (it raises with
 refused as well.
 
 The table owner (and any superuser) can still disable or drop the
-trigger; see docs/operator.md ("Database role") for running the app
+trigger; see docs/operator/backup-restore.rst for running the app
 with a non-owner role.
 
 Revision ID: 0002_no_truncate_decisions

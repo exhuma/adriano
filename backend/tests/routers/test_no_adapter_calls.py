@@ -1,8 +1,9 @@
 """
 Ensure normal browse/search requests never construct a source adapter.
 
-``phases/DECISIONS.md`` ("HTTP API") requires that read routes use only
-the storage port. Every source adapter is built inside a registration's
+``docs/developer/decisions/0004-reads-from-local-index.rst``
+requires that read routes use only the storage port. Every source
+adapter is built inside a registration's
 ``SourceBinding.open_adapter`` context, which constructs a
 :class:`~app.sources.filesystem.FilesystemAdapter` or a
 :class:`~app.sources.gitlab.GitLabAdapter` (plus its HTTP client).

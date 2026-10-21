@@ -1,7 +1,7 @@
 /**
  * Ensure the sidebar's approval summary card shows the neutral
  * "Blocked" status instead of "Pending approval" when the record's
- * content cannot be decided (docs/ui-review R-02), for both a
+ * content cannot be decided, for both a
  * decision and an erratum, and that Accept/Reject only render when
  * `can_decide` is true.
  */

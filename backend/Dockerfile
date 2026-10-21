@@ -9,10 +9,9 @@
 #
 # HEALTHCHECK: the stack kit's deployment guidance treats healthcheck
 # stanzas as opt-in, added only by a dedicated observability kit. This
-# project's SPEC.md acceptance criterion 27 ("container health checks
-# ... are documented") requires one, so this is a deliberate,
-# documented deviation from that default -- see docs/operator.md
-# "Health checks".
+# project requires documented container health checks, so this is a
+# deliberate, documented deviation from that default -- see
+# docs/operator/health-and-logging.rst.
 
 FROM python:3.14-slim AS build
 
@@ -50,9 +49,8 @@ COPY --from=build --chown=adriano:adriano /app/alembic.ini /app/alembic.ini
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 # The legacy application ran 5 Uvicorn workers in its container
-# entrypoint (see SPEC.md "Legacy application behavior"); this image
-# defaults to 4 and makes the worker count configurable -- documented
-# in docs/operator.md.
+# entrypoint; this image defaults to 4 and makes the worker count
+# configurable -- documented in docs/operator/configuration.rst.
 ENV ADRIANO_WORKERS=4
 
 USER adriano

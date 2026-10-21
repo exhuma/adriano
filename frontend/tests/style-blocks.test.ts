@@ -1,10 +1,10 @@
 /**
  * Guard against undocumented or hard-coded-colour custom CSS creeping
- * back into `<style>` blocks (docs/ui-review G-11;
- * phases/11-ui-ux-updates.md "Vuetify first", ladder step 6: "every
- * rule carries a one-line comment explaining why steps 1-5 could not
- * express it", and "no hex, rgb or named colours outside
- * plugins/vuetify.ts"). For every `<style>` block under `src/`, this
+ * back into `<style>` blocks
+ * (Vuetify first, ladder step 6: "every rule carries a one-line
+ * comment explaining why steps 1-5 could not express it", and "no
+ * hex, rgb or named colours outside plugins/vuetify.ts"). For every `<style>`
+ * block under `src/`, this
  * scans each top-level CSS rule and fails the suite if:
  *
  *  - the rule contains a hex (`#abc`, `#aabbcc`, ...) colour literal,

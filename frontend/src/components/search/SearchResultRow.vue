@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * One search-result row: title on line 1, source/project, short
- * status and issue chips on line 2 (phases/11-ui-ux-updates.md Task
- * 3, S-01). Extracted from `SearchView.vue` (Task 16, P11-R-17 --
+ * status and issue chips on line 2. Extracted from `SearchView.vue` (Task 16,
+ * P11-R-17 --
  * `module-code-structure-limits`' 500-line module limit) along a
  * natural seam: everything a row needs to render itself comes from
  * its own `item`, so this is a pure, self-contained component

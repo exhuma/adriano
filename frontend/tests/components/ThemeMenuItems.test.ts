@@ -3,8 +3,7 @@
  * accessible names, expose the active preference through
  * `role="menuitemradio"` + `aria-checked` (P11-R-14, a radio-group
  * semantics that a plain `aria-current` cannot express), and call
- * `setPreference` with the clicked choice
- * (`phases/11-ui-ux-updates.md` Task 2, decision 6).
+ * `setPreference` with the clicked choice.
  */
 import { mount } from "@vue/test-utils";
 import { ref } from "vue";

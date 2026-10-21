@@ -3,7 +3,7 @@
  * freshness/stale banner. Kept separate from `labels.ts` (icon/text
  * chips) because these return full sentences whose wording depends
  * on record kind, poll outcome and intake, not just an enum value
- * (SPEC.md criterion 21: never claim a candidate or a push-only
+ * (never claim a candidate or a push-only
  * registration "may not be the current published revision", and
  * never say content "could not be refreshed" when it is merely old).
  */

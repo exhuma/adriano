@@ -288,7 +288,7 @@ def test_legacy_erratum_shape_is_rejected(legacy: str) -> None:
     issue = record.issues[0]
     assert issue.severity is Severity.ERROR
     assert "erratum-for" in issue.message
-    assert "docs/schema.md" in issue.message
+    assert "docs/developer/domain/schema.rst" in issue.message
 
 
 def test_legacy_erratum_is_a_decision_without_link() -> None:

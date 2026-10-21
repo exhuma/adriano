@@ -152,8 +152,7 @@ export function useRecordDetailView(
   );
 
   /** A clear sentence distinguishing a candidate (and its branch) from
-   *  a published record (SPEC.md "UI requirements": distinguish
-   *  candidate from published everywhere). */
+   *  a published record, everywhere. */
   const provenanceSentence = computed(() =>
     detail.value
       ? provenanceText(detail.value.metadata.kind, detail.value.provenance)
@@ -179,7 +178,7 @@ export function useRecordDetailView(
 
   /** Shown for an accepted candidate of either kind: acceptance
    *  already guides implementation before publication for a
-   *  decision (SPEC.md "Independent approval and sign-off workflow"),
+   *  decision,
    *  or means "verified, pending publication" for an erratum. */
   const showAcceptedCandidateNote = computed(
     () =>
