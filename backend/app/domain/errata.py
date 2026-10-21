@@ -2,8 +2,9 @@
 Erratum content: value types and the Markdown body parser.
 
 An erratum is a separate Markdown file whose frontmatter names the
-corrected decision in ``erratum-for`` (see ``docs/schema.md``). Its body
-is split on ATX H2 headings into three sections:
+corrected decision in ``erratum-for`` (see
+``docs/developer/domain/schema.rst``). Its body is split on ATX H2
+headings into three sections:
 
 - ``## Original text`` -- the text as written in the decision (optional,
   e.g. for pure additions);

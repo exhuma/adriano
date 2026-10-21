@@ -18,8 +18,7 @@
  * approval-state chip, which the sidebar and the Approval card
  * already show (R-11). Purely presentational: the parent computes
  * every prop from the loaded record detail.
- * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
- * Task 16 follow-up): both notices' `router-link`s had no colour
+ * both notices' `router-link`s had no colour
  * class, so each rendered in the browser's own link colour instead
  * of the theme (4.14:1 in dark). `text-primary` fixes both; it stays
  * >=4.5:1 against the warning/info tonal tint these alerts paint

@@ -7,7 +7,7 @@ stdlib + httpx only, besides minting a dev token in-process through
 given ``ADRIANO_DEV_SHARED_SECRET`` in the environment -- when
 ``--token`` is not given. Run against a backend already started by
 ``task bench`` (see ``Taskfile.yml``) or by hand; see
-``docs/benchmark.md`` for the full method and results.
+``docs/developer/performance.rst`` for the full method and results.
 
 Scenarios, each run for ``--requests`` after a ``--warmup`` of
 discarded requests, at every concurrency in ``--concurrency``:

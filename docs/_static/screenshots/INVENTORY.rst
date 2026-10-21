@@ -372,9 +372,8 @@ No screenshot exists for these; recapture them if a guide needs them:
   desktop (only partly visible in the review shots).
 - Backend degraded or offline status chip in the app bar.
 - Not-found page and auth-blocking screen (access denied).
-- Empty search result ("no results") in the current UI; only the
-  old pre-fix shot ``docs/ui-review/05-search-no-results.png`` exists
-  and it is not kept.
+- Empty search result ("no results") in the current UI; only an
+  old pre-fix shot existed and it was not kept.
 - Sources page as a reader (the note about who can poll).
 - A source with status "partial" and a multi-item problem list.
 - Light-theme search with sort set to "Recently changed".

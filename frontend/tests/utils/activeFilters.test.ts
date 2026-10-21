@@ -1,8 +1,7 @@
 /**
  * Ensure the active-filter module computes the right chips, in the
  * right order, for every filter combination, and that the free-text
- * query and the sort order never produce a chip of their own
- * (phases/11-ui-ux-updates.md Task 4, docs/ui-review S-04).
+ * query and the sort order never produce a chip of their own.
  */
 import { describe, expect, it } from "vitest";
 

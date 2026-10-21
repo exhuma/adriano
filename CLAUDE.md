@@ -37,4 +37,4 @@ mechanisms, in this order:
 
 Custom scoped CSS is the last resort. It may use only theme variables, and
 each rule needs a comment saying why Vuetify could not express it. See
-`phases/11-ui-ux-updates.md`, "Vuetify first".
+`docs/developer/decisions/0017-vuetify-first.rst`.

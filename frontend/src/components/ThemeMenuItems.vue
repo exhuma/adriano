@@ -3,7 +3,7 @@
  * Light/dark/system theme-choice items for inclusion inside a
  * `v-list` that is itself inside a `v-menu`. Shared between the
  * desktop `UserMenu` and the collapsed mobile `AppBarMenu`
- * (`phases/11-ui-ux-updates.md` Task 2, decision 6) so there is one
+ * so there is one
  * implementation of the theme switcher rather than two copies
  * drifting apart.
  *

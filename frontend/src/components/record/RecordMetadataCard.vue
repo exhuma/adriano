@@ -5,7 +5,7 @@
  * module-ux-principles "Technical identifiers"), decision date, and
  * record kind. Heading level and list typography come from
  * `RecordSidebar`'s scoped defaults; the list is static content, so
- * it is not a tab stop (docs/ui-review G-10).
+ * it is not a tab stop.
  */
 import { computed } from "vue";
 

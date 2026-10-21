@@ -7,8 +7,7 @@
  * running) falls back to the committed snapshot `frontend/openapi.json`
  * so the generator still works offline/in CI. When the live fetch
  * succeeds, the snapshot is refreshed so it stays in sync and is
- * committed alongside the generated types (see DECISIONS.md "HTTP
- * API").
+ * committed alongside the generated types.
  */
 import { writeFile, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

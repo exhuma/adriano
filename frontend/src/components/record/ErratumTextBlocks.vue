@@ -5,7 +5,7 @@
  * `ErratumBody.vue` (an erratum's own page). One of the few places in
  * the app that use `v-html` (the other is `RecordDecisionCard.vue`),
  * because every HTML field here is sanitized server-side at ingest
- * time with `nh3` before storage (see DECISIONS.md "Record schema").
+ * time with `nh3` before storage.
  * Each block is labelled and set off with a border, so the original
  * and corrected text are never distinguished by colour alone
  * (module-ux-principles "Do not rely on color alone"). The original
@@ -116,8 +116,7 @@ defineProps<{
   margin-top: 0;
 }
 
-/* docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
-   Task 16 follow-up): same reasoning as `RecordDecisionCard.vue`'s
+/* same reasoning as `RecordDecisionCard.vue`'s
    `.rendered-markdown :deep(a)` -- a markdown link here has no
    class hook, so it rendered in the browser's own link colour
    instead of the theme. `primary` clears 4.5:1 on `surface` in both

@@ -8,7 +8,7 @@
  * large, edge-anchored target instead of several cramped ones).
  * Mirrors the desktop app bar's `UserMenu` contents (theme choice +
  * sign-out) so the two never drift into duplicate or conflicting
- * controls (`phases/11-ui-ux-updates.md` Task 2).
+ * controls.
  *
  * Pure: everything it shows comes from props, and the only side
  * effect it causes is emitting `signOut` for the parent to handle --
@@ -28,7 +28,7 @@ defineProps<{
   /** Backend status row to render (icon, label, theme colour), or
    *  `null` to omit it -- the backend is healthy, which is the
    *  default state and carries no information worth a row
-   *  (docs/ui-review G-04, decision 1). */
+   * . */
   health: { icon: string; text: string; color?: string } | null;
   /** Signed-in user's display name, or `null` when signed out. */
   userDisplay: string | null;

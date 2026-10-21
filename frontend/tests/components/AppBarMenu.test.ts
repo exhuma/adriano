@@ -2,8 +2,7 @@
  * Ensure the collapsed mobile app-bar menu: lists nav in order, only
  * shows the backend-status row when given one (decision 1: hidden
  * while healthy), merges the shared theme choice alongside sign-out
- * without duplicating controls, and emits `signOut`
- * (`phases/11-ui-ux-updates.md` Task 2).
+ * without duplicating controls, and emits `signOut`.
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -6,8 +6,7 @@
  * content, each a separate concern that can occur independently.
  * A competing candidate whose content cannot be decided shows the
  * neutral "Blocked" status (R-02, `approvalDisplayLabel`).
- * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
- * Task 16 follow-up): both `router-link`s had no colour class, so
+ * both `router-link`s had no colour class, so
  * each rendered in the browser's own link colour instead of the
  * theme; `text-primary` fixes both (verified >=4.5:1 against the
  * warning tonal tint and against plain `surface`,

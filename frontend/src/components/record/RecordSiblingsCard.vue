@@ -5,8 +5,7 @@
  * approval-state chip ("Blocked" when that row's content cannot be
  * decided, R-02). Heading level comes from `RecordSidebar`'s
  * scoped defaults; the list is not a tab stop itself (G-10).
- * docs/ui-review "New issues" #1 (Task 14 re-verification, Phase 11
- * Task 16 follow-up): the link gets `d-inline-block py-1` so its own
+ * the link gets `d-inline-block py-1` so its own
  * clickable box is >=24px tall (it was only as tall as its text
  * line). It stays a real `router-link` in the list's own tab order.
  * "New issues" #2 (same follow-up): the link also had no colour

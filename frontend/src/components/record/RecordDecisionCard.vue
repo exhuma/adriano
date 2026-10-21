@@ -4,7 +4,7 @@
  * document body for an ordinary decision. One of the few places in
  * the app that use `v-html` (the other is `ErratumTextBlocks.vue`),
  * because `renderedHtml` is sanitized server-side at ingest time with
- * `nh3` before storage (see DECISIONS.md "Record schema"). An erratum
+ * `nh3` before storage. An erratum
  * uses the dedicated `ErratumBody.vue` instead of this card. No
  * separate card title (R-03): the page's own `h1`, in `RecordHeader`,
  * already carries the title, and a leading markdown `h1` that repeats
@@ -64,7 +64,7 @@ const bodyHtml = computed(() => stripLeadingTitleHeading(props.renderedHtml, pro
  * resort (ladder step 6). Sized so markdown content headings stay
  * below the page h1 (`text-headline-medium`, 28px) and the card
  * h2 section headings elsewhere on the page (`text-title-large`,
- * 22px) -- docs/ui-review G-05: h1/h2 land at the title-large size so
+ * 22px) -- h1/h2 land at the title-large size so
  * a markdown h2 like "Context" reads as a real section heading
  * without outweighing the page title; h3 at title-medium; h4-h6 at
  * title-small. Margins give the sections and paragraphs/lists a
@@ -111,8 +111,7 @@ const bodyHtml = computed(() => stripLeadingTitleHeading(props.renderedHtml, pro
   margin-top: 0;
 }
 
-/* docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
-   Task 16 follow-up): a markdown link has no class hook either
+/* a markdown link has no class hook either
    (same reasoning as the heading rules above), so it rendered in
    the browser's own link colour instead of the theme (4.14:1 in
    dark). `primary` clears 4.5:1 on this card's plain `surface`

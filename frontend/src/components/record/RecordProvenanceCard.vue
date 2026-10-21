@@ -3,7 +3,7 @@
  * Record detail page's provenance card: source/project, path and
  * ref, source location link, and freshness (last indexed time).
  * Long values wrap rather than ending in an ellipsis, and the path
- * has a copy button (docs/ui-review R-09). The path and its copy
+ * has a copy button. The path and its copy
  * button sit in a `d-flex align-start ga-1` row, with the path text
  * in a `text-break flex-1-1` span, so the button never wraps onto
  * its own line below the path (P11-R-20). Heading level and list

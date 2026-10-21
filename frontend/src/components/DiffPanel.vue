@@ -213,7 +213,7 @@ watch([fromDigest, toDigest], load);
 </template>
 
 <style scoped>
-/* MD3's type scale (DECISIONS.md Phase 11 mapping) has no 13px role;
+/* MD3's type scale has no 13px role;
    this diff view's monospace size/line-height predates that ladder
    and keeping the exact value avoids changing the diff's established
    density. Browser `<pre>` already renders monospace, so no

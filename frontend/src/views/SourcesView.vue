@@ -10,7 +10,7 @@
  * "Write recovery messages for humans"). The same permission gates
  * the problem/recovery sub-row's content (env-var names, recovery
  * steps -- `SourceProblemCell`'s `canOperate` prop): a reader sees
- * status and dates only (phases/11-ui-ux-updates.md decision 3).
+ * status and dates only.
  */
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { useDisplay } from "vuetify";
@@ -83,14 +83,14 @@ interface SourceRow {
   pollable: boolean;
   statusLabel: StatusLabel;
   /** Secondary staleness note shown next to the status chip, or
-   *  `null` -- never a second chip (docs/ui-review O-01). */
+   *  `null` -- never a second chip. */
   staleText: string | null;
   lastAttempt: { relative: string; absolute: string } | null;
   lastSuccess: { relative: string; absolute: string } | null;
   problem: SourceProblemDisplay;
   hint: string | null;
   /** Whether this row has operator-relevant problem/recovery detail
-   *  to show as a full-width sub-row (docs/ui-review O-03). */
+   *  to show as a full-width sub-row. */
   hasProblemDetail: boolean;
 }
 
@@ -253,7 +253,7 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
 // own columns; Type/Intake/Published ref fold into Registration below
 // `sm` (P11-R-11); Action is an operator's own column. Used as the
 // problem sub-row's `colspan` so it always spans every visible column
-// (docs/ui-review O-03).
+//.
 const columnCount = computed(
   () => 4 + (smAndDown.value ? 0 : 3) + (canOperate.value ? 1 : 0),
 );
@@ -364,8 +364,6 @@ const columnCount = computed(
                 </td>
                 <td>
                   <!--
-                    docs/ui-review "New issues" #3 (Task 14
-                    re-verification, Phase 11 Task 16 follow-up):
                     `d-inline-block py-1` so this focusable tooltip
                     trigger's own box is >=24px tall (it measured
                     82x16, as tall as its text line only).
@@ -423,7 +421,7 @@ const columnCount = computed(
                 </td>
               </tr>
               <!-- Problem & recovery as a full-width sub-row, not a
-                   ninth column (docs/ui-review O-03): at 200% zoom the
+                   ninth column: at 200% zoom the
                    table no longer has to grow a dedicated, far-right
                    column to show it -- the detail a failing source's
                    operator needs most sits directly under that row

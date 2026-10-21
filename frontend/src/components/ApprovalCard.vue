@@ -50,7 +50,7 @@ const props = defineProps<{
   /** Record id, for the decision dialog's submission. */
   recordId: string;
   /** Title of the record being decided, passed to the decision
-   *  dialog so it names the record (docs/ui-review D-02). */
+   *  dialog so it names the record. */
   recordTitle: string;
   /** Branch/ref of the record's content, shown in the candidate
    *  erratum chip's "Proposed (branch …)" suffix; omitted falls back

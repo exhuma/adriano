@@ -129,8 +129,7 @@ const healthChip = computed(() => {
   }
 });
 
-/** Product owner decision 1 (`DECISIONS.md` "Phase 11 updates";
- *  docs/ui-review G-04): the backend being healthy is the default,
+/** The backend being healthy is the default,
  *  uninformative state, so the chip is hidden for it -- and for the
  *  transient "checking" state on first load, which is neither
  *  "degraded" nor "offline" and would otherwise flash before the
@@ -154,7 +153,7 @@ async function handleSignOut(): Promise<void> {
 
     <v-app-bar :elevation="1">
       <!--
-        docs/ui-review G-02/G-03: wrap the bar's contents in a
+        wrap the bar's contents in a
         v-container with the same max-width default as `v-main`'s
         container below, so the brand, nav, and right-hand cluster
         align with the page content's edges instead of hugging the
@@ -187,8 +186,8 @@ async function handleSignOut(): Promise<void> {
           meaning moves to `aria-label`/`title` so it is never lost.
           Colour is "info", not "warning": a dev login is a deliberate,
           reversible mode, not a fault, so it should not read as an
-          alarm (docs/ui-review G-04; module-ux-principles "UI modes"
-          colour rule) -- "info" still reaches 4.5:1 as chip text in
+          alarm (module-ux-principles "UI modes" colour rule) -- "info"
+          still reaches 4.5:1 as chip text in
           both themes (`tests/plugins/vuetify.test.ts`).
         -->
         <span
@@ -220,7 +219,7 @@ async function handleSignOut(): Promise<void> {
           </router-link>
 
           <!--
-            docs/ui-review G-04, decision 1: the chip only carries
+            the chip only carries
             information when the backend is not OK, so the wrapper
             (and its `role=status` region) stays in the DOM but is
             empty while healthy, and gains the chip -- announced via
@@ -334,7 +333,7 @@ async function handleSignOut(): Promise<void> {
 </style>
 
 <style>
-/* docs/ui-review G-08 (P11-R-04): Vuetify's own focus-visible styling
+/* Vuetify's own focus-visible styling
    does not draw a visible ring for a plain `v-btn` (any variant),
    `v-list-item` (nav links, menu items), a chip's close affordance,
    or a clickable chip -- only a `variant="text"` icon button

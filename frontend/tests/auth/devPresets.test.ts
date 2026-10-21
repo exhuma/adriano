@@ -1,6 +1,6 @@
 /**
  * Ensure dev sign-in presets are derived from the catalog's role
- * names (docs/ui-review D-04): Reader is read-only, Reviewer adds a
+ * names: Reader is read-only, Reviewer adds a
  * read role to a reviewer role unless that role already reads,
  * Operator needs `operate` (preferring a role that is not a reviewer
  * role), and unsatisfiable presets are left out.

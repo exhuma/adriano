@@ -19,18 +19,13 @@ frontend/dist/
 # Editors / OS
 .DS_Store
 
-# Demo artifacts: later phases may generate large screenshots for
-# manual review. Keep small, intentionally committed documentation
-# screenshots (e.g. under docs/) out of this pattern by naming such
-# directories explicitly here when they are introduced.
-
 # Sphinx build output
 docs/_build/
 
 # Task runner checksum state (frontend:install sources/generates)
 .task/
 
-# `task bench` output (see docs/benchmark.md)
+# `task bench` output (see docs/developer/performance.rst)
 /bench-results.json
 
 # Local catalog configuration (copy of catalog.example.yaml / catalog.demo.yaml)

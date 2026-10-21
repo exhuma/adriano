@@ -59,8 +59,7 @@ describe("RecordSiblingsCard", () => {
     expect(wrapper.text()).not.toContain("Pending approval");
   });
 
-  // docs/ui-review "New issues" #1 and #2 (Task 14 re-verification,
-  // Phase 11 Task 16 follow-up): the link's own box must be >=24px
+  // the link's own box must be >=24px
   // tall (`d-inline-block py-1`, since it was only as tall as its
   // text line), and theme-coloured instead of the browser default
   // (`text-primary`).

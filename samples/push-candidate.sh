@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Push one ADR Markdown file to adriano as a candidate, the way a CI job
-# pushes a candidate from a feature branch (see docs/operator.md "CI push
-# example" and SPEC.md's push-intake requirements).
+# pushes a candidate from a feature branch (see
+# docs/operator/ci-push.rst).
 #
 # Usage:
 #   samples/push-candidate.sh <file.md> <project> <ref> [source_id] \
@@ -21,7 +21,7 @@
 #     samples/candidates/2026-01-05-use-redis-for-caching.md \
 #     platform feature/redis-cache
 #
-# Example (erratum candidate demo, see docs/examples/README.md):
+# Example (erratum candidate demo, see docs/operator/ci-push.rst):
 #   export ADRIANO_PUSH_TOKEN_CENTRAL=<token from .env.demo>
 #   samples/push-candidate.sh \
 #     samples/candidates/2026-02-01-erratum-ledger-snapshot-cadence.md \

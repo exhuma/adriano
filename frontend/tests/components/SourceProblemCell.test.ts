@@ -2,8 +2,8 @@
  * Ensure the Sources-table problem cell renders each display kind
  * correctly, with the dash fallback when there is nothing to show;
  * that a recognised poll-problem code gets a plain-language headline
- * while the backend's own message stays as secondary "Details" text
- * (docs/ui-review R-10); and that operator-only detail (env-var
+ * while the backend's own message stays as secondary "Details" text; and that
+ * operator-only detail (env-var
  * names, recovery steps) is hidden from a reader entirely (decision
  * 3, Task 8).
  */

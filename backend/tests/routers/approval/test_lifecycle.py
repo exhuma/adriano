@@ -4,7 +4,7 @@ The governance loop end to end: push -> accept -> publish -> edit.
 A candidate is pushed and accepted; the identical file (with CRLF line
 endings and a BOM) is then written into the polled filesystem tree and
 polled through the operator route; later the file is edited and polled
-again. Covers criteria 13, 16-20; diff behaviour per DECISIONS.md.
+again. Covers criteria 13, 16-20; diff behaviour per the approval domain docs.
 """
 
 import uuid

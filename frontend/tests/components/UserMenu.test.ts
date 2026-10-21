@@ -1,7 +1,7 @@
 /**
  * Ensure the desktop user menu shows the display name on its
  * activator, holds the theme choice and sign-out inside the menu,
- * and emits `signOut` (`phases/11-ui-ux-updates.md` Task 2).
+ * and emits `signOut`.
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -26,8 +26,8 @@ Commands:
   errors.
 
 Scheduling is external (cron, Kubernetes CronJob); see
-``phases/DECISIONS.md``. This module only phrases results; the work is
-done by :mod:`app.services`.
+``docs/developer/decisions/0008-external-poll-job.rst``. This module
+only phrases results; the work is done by :mod:`app.services`.
 
 Public API: :func:`main`, :func:`run`.
 """

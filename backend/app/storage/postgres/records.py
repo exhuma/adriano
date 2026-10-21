@@ -380,8 +380,8 @@ def list_relationship_candidates(
     has no index), but only the rows that match are sent to the
     client and turned into :class:`RecordSummary` objects, which is
     where the cost of :func:`list_relationship_summaries` actually
-    goes at catalog scale (see ``docs/benchmark.md`` "Detail endpoint
-    optimisation"). The result, combined with
+    goes at catalog scale (see
+    ``docs/developer/performance.rst``). The result, combined with
     :meth:`~app.storage.port.CatalogStore.list_identity_siblings`, is
     exactly the summary set :func:`list_relationship_summaries` would
     have narrowed :class:`RelationshipIndex` to for this one record's

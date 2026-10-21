@@ -7,8 +7,7 @@
  * (`text-h5`, `text-subtitle-1`, `text-subtitle-2`, `text-body-1`,
  * `text-body-2`, `text-caption`, `text-overline`) are not defined at
  * all, so a component that still uses one renders at the browser's
- * unstyled default instead of the app's type scale (docs/ui-review
- * G-05, R-07; mapping documented in `phases/DECISIONS.md` Phase 11).
+ * unstyled default instead of the app's type scale.
  * This scans every `.vue`/`.ts` file under `src/` for those literal
  * class names and fails if any remain.
  */

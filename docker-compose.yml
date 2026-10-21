@@ -1,5 +1,5 @@
 # adriano deployment stack: db -> migrate (one-shot) -> backend ->
-# frontend. See docs/operator.md for the full configuration reference,
+# frontend. See docs/operator/configuration.rst for every setting,
 # and README.md / Taskfile.yml (`task demo`) for a one-command local
 # demo. Do not confuse this stack with the ephemeral dev/test database
 # started by `task db:up` (container `adriano-db`, host port 55432):
@@ -53,7 +53,8 @@ services:
     # Catalog-referenced secrets (the env var NAMES catalog.yaml points
     # at: ADRIANO_GITLAB_TOKEN_*, ADRIANO_PUSH_TOKEN_*, ...) come from
     # this optional file, so a new registration needs no edit here.
-    # Default: ./.env (the operator's file, see docs/operator.md);
+    # Default: ./.env (the operator's file, see
+    # docs/operator/install.rst);
     # `task demo` points it at the generated .env.demo. Precedence:
     # the `environment:` entries below override the same names from
     # this file.
@@ -78,12 +79,12 @@ services:
     volumes:
       # Read-only: the filesystem source and the demo catalog config.
       # Point ADRIANO_CATALOG_FILE_HOST at your own catalog.yaml for a
-      # non-demo deployment (see docs/operator.md "Configuration").
+      # non-demo deployment (see docs/operator/catalog-file.rst).
       - ${ADRIANO_CATALOG_FILE_HOST:-./catalog.demo.yaml}:/app/catalog.yaml:ro
       # Only catalog.demo.yaml reads this (its filesystem source root
       # is samples/adr-root). A real deployment mounts its own
       # filesystem source trees instead, e.g. in a
-      # docker-compose.override.yml (see docs/operator.md).
+      # docker-compose.override.yml (see docs/operator/sources.rst).
       - ./samples:/app/samples:ro
     depends_on:
       migrate:
@@ -118,7 +119,7 @@ services:
     ports:
       # Host 8000 and 8080 are commonly already in use on a dev
       # machine; this stack publishes on 8180 instead (documented in
-      # README.md / docs/operator.md).
+      # README.md / docs/operator/install.rst).
       - "${ADRIANO_FRONTEND_PORT:-8180}:8080"
 
 volumes:

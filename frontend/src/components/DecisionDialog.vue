@@ -31,15 +31,14 @@ const props = defineProps<{
    *  erratum; switches to the "Verify/Reject erratum" wording. */
   recordKind: RecordKind;
   /** Title of the record being decided, named in the dialog's own
-   *  heading (docs/ui-review D-02) so a reviewer can see which
+   *  heading so a reviewer can see which
    *  record they are about to accept/reject without reading the
    *  digest. The caller (`DecideButtons`) passes through whatever
    *  the page shows as that record's title. */
   recordTitle: string;
   /** The exact digest being decided. Shown short by default with a
    *  copy button, and in full behind a disclosure, so the reviewer
-   *  can still verify it is the content they reviewed (docs/ui-review
-   *  R-12). */
+   *  can still verify it is the content they reviewed. */
   digest: string;
 }>();
 
@@ -63,8 +62,8 @@ const digestExpanded = ref(false);
 
 /** Id of the heading, referenced by the dialog's own
  *  `aria-labelledby` so assistive tech announces it as the dialog's
- *  accessible name instead of an unnamed "dialog" (docs/ui-review
- *  D-01). `useId()` keeps it unique even with two `DecideButtons`
+ *  accessible name instead of an unnamed "dialog". `useId()` keeps it unique
+ *  even with two `DecideButtons`
  *  instances (sidebar and main column) mounted at once. */
 const titleId = useId();
 /** Id of the full-digest disclosure region, referenced by the
@@ -84,7 +83,7 @@ const actionLabel = computed(() => {
  *  mistaken for deciding the decision it corrects. The title itself
  *  (`dialogTitle`) names the record directly instead (D-02). */
 const subjectNoun = computed(() => (isErratum.value ? "erratum" : "content"));
-/** "Reject “Adopt gRPC for internal APIs”?" (docs/ui-review D-02):
+/** "Reject “Adopt gRPC for internal APIs”?":
  *  the dialog's own heading, so the record being decided is visible
  *  without reading the digest below. */
 const dialogTitle = computed(

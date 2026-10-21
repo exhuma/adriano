@@ -27,11 +27,11 @@ import type { ThemeDefinition } from "vuetify";
  * from the previous values so the colour, as text, reaches at least
  * 4.5:1 against both the opaque `surface` colour and that 12% tint
  * composited over `surface` -- checked mechanically for every pair,
- * in both themes, by `tests/plugins/vuetify.test.ts` (docs/ui-review
- * G-01). No component currently paints these colours as a solid fill
+ * in both themes, by `tests/plugins/vuetify.test.ts`. No component currently
+ * paints these colours as a solid fill
  * (`variant="flat"/"elevated"`) -- only `variant="tonal"` text/icons
  * and `variant="outlined"` button text/borders -- so no separate
- * bright-fill semantic key is needed per `phases/11-ui-ux-updates.md`
+ * bright-fill semantic key is needed per the Vuetify-first ladder
  * Task 1; add one (ladder step 1) if a later task introduces a
  * filled use that needs the brighter hue back.
  */
@@ -41,9 +41,9 @@ export const light: ThemeDefinition = {
     primary: "#1867C0",
     secondary: "#5CBBF6",
     error: "#B00020",
-    // Was #FB8C00: 2.1:1 on its own 12% tint (docs/ui-review G-01).
+    // Was #FB8C00: 2.1:1 on its own 12% tint.
     warning: "#9B5600",
-    // Was #0288D1: 3.9:1 as alert text (docs/ui-review G-01).
+    // Was #0288D1: 3.9:1 as alert text.
     info: "#026CA7",
     // Was #2E7D32: 4.4:1 on its own 12% tint at 12px (G-01).
     success: "#2B762F",
@@ -87,7 +87,7 @@ export const dark: ThemeDefinition = {
 
 export default createVuetify({
   theme: {
-    // Follow the OS by default (docs/ui-review G-06); the
+    // Follow the OS by default; the
     // `useThemePreference` composable and the user menu (Task 2)
     // override it at runtime via `useTheme().change(...)`, which
     // accepts "system" as well as a theme name.
@@ -98,7 +98,7 @@ export default createVuetify({
     VProgressLinear: {
       color: "primary",
     },
-    // docs/ui-review G-05: card titles that are real headings
+    // card titles that are real headings
     // (`tag="h2"`/`"h3"`) keep the browser's heading margins, which
     // Vuetify's reset does not zero, adding ~16px above and below
     // inside the card. `class` defaults merge with a call site's own
@@ -107,7 +107,7 @@ export default createVuetify({
     VCardTitle: {
       class: "ma-0",
     },
-    // docs/ui-review G-07: one card style everywhere -- flat with a
+    // one card style everywhere -- flat with a
     // low-emphasis border from the theme's default
     // `border-color`/`border-opacity` (12% black in light, 12% white
     // in dark) instead of `variant="outlined"`, whose border is
@@ -116,7 +116,7 @@ export default createVuetify({
       variant: "flat",
       border: true,
     },
-    // docs/ui-review G-01 (chip prominence) and G-09: `StatusChip`
+    // Chip prominence: `StatusChip`
     // (the app's only direct `v-chip` user) now gets its look from
     // here instead of hard-coded props, so every call site -- and
     // any future one -- inherits it automatically.
@@ -124,7 +124,7 @@ export default createVuetify({
       variant: "tonal",
       size: "small",
     },
-    // docs/ui-review G-09: no empty `role="alert"` message slot when
+    // no empty `role="alert"` message slot when
     // a field has no hint/validation. Fields that set
     // `hint`/`persistent-hint`, or that get a validation error, still
     // show it -- "auto" keeps the details slot whenever there is a
@@ -135,7 +135,7 @@ export default createVuetify({
     VSelect: {
       hideDetails: "auto",
     },
-    // docs/ui-review G-02/G-03: one page width for every route.
+    // one page width for every route.
     // Task 2 wires the app bar into the same container (`App.vue`)
     // and dropped `meta.wide`/`.container--wide`.
     VContainer: {

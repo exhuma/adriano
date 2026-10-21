@@ -4,8 +4,8 @@
  * the document body itself, which stays in the main column
  * (rfc-editor.org/info layout: metadata to the side, the document in
  * the middle); that its first card carries the sidebar heading, the
- * status and -- only when the caller can decide -- Accept/Reject
- * (docs/ui-review R-01); that card titles are real headings under
+ * status and -- only when the caller can decide -- Accept/Reject; that card
+ * titles are real headings under
  * the sidebar `h2` (G-05); and that static lists are not tab stops
  * (G-10).
  */

@@ -12,7 +12,7 @@
  *
  * The filter bar, the active-filter chip row, and one result row are
  * each their own component (`SearchFilterBar`, `ActiveFilterRow`,
- * `SearchResultRow`; phases/11-ui-ux-updates.md Task 16, P11-R-17),
+ * `SearchResultRow`),
  * so this view owns the page's data flow -- the committed query, the
  * fetch, and the active-filter chips -- while each extracted
  * component owns only how its own slice renders.
@@ -111,7 +111,7 @@ const committedParams = computed<SearchParams>(() => {
   const normalizedRecordType = readRecordType(query.record_type);
   const rawQ = typeof query.q === "string" ? query.q : undefined;
   // Mirror `useSearchQuery`'s `sort` computed: `relevance` without a
-  // query gracefully falls back to `title` (DECISIONS.md), so a
+  // query gracefully falls back to `title`, so a
   // stale or hand-edited URL never sends a meaningless sort.
   const normalizedSort = readSort(query.sort, Boolean(rawQ));
   const pageRaw = typeof query.page === "string" ? Number.parseInt(query.page, 10) : 1;
@@ -147,8 +147,7 @@ const hasActiveFilters = computed(
  * refs -- every filter but `q` already applies immediately (no
  * debounce), so the live refs and the committed/URL state agree by
  * the time a user can see a chip. `sort` is excluded: it reorders,
- * not narrows, the results, so it gets no chip
- * (phases/11-ui-ux-updates.md Task 4). `q` is excluded too -- see
+ * not narrows, the results, so it gets no chip. `q` is excluded too -- see
  * `activeFilterChips`'s own doc comment for why the search field
  * itself is that mode's continuous indicator.
  */

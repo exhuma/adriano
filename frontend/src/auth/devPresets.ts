@@ -1,6 +1,6 @@
 /**
  * Dev sign-in role presets derived from the loaded catalog's role
- * names (`GET /auth/dev/roles`; docs/ui-review D-04).
+ * names (`GET /auth/dev/roles`).
  *
  * Pure functions only. Like `src/auth/devAuth.ts`, this module is
  * reachable only through the dynamically-imported `DevLoginDialog`,

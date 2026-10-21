@@ -2,7 +2,7 @@
  * Validation-issue view-model helpers: the record page's error/
  * warning count indicator, and plain-language headlines for every
  * stable issue code, composed with the backend's own per-instance
- * message (docs/ui-review R-10, Task 8). Split from the former
+ * message. Split from the former
  * `utils/labels.ts` by domain (module-code-structure-limits); see
  * `index.ts`.
  */
@@ -39,7 +39,7 @@ export function issueIndicatorLabel(
 
 /**
  * Plain-language headline for a stable validation issue code
- * (`IssueOut.code`; docs/ui-review R-10, Task 8). The backend's own
+ * (`IssueOut.code`). The backend's own
  * `message` is kept in full alongside it ({@link validationIssueText}
  * composes the two) -- these headlines summarise *what kind* of
  * problem the code is, while the per-instance detail (which field,

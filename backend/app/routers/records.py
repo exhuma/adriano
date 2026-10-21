@@ -8,7 +8,7 @@ storage provider (:func:`app.composition.get_store_provider`) and the
 catalog configuration loaded at startup
 (:func:`app.composition.get_catalog_runtime`) -- never a source
 adapter, so normal browse/search requests make no source calls (see
-``phases/DECISIONS.md``, "HTTP API").
+``docs/developer/decisions/0004-reads-from-local-index.rst``).
 """
 
 import datetime

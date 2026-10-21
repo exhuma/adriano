@@ -14,8 +14,8 @@ import type { StatusLabel } from "./shared";
 /**
  * Describe a registration's last poll outcome for display.
  *
- * Staleness is *not* folded into this chip's text (docs/ui-review
- * O-01: a stale, disabled registration used to render "Disabled
+ * Staleness is *not* folded into this chip's text (a stale, disabled
+ * registration used to render "Disabled
  * (stale)" here, plus a second, fully redundant "Disabled" chip
  * derived from the raw `enabled` flag next to it -- two chips for
  * one state). The icon and colour still shift to the stale pair so
@@ -56,7 +56,7 @@ export function pollStatusLabel(
 
 /**
  * Secondary, muted text reporting staleness next to a registration's
- * status chip (docs/ui-review O-01), instead of a second chip or a
+ * status chip, instead of a second chip or a
  * suffix folded into the status chip's own text.
  *
  * :param status: Outcome of the latest poll.
@@ -94,8 +94,8 @@ const POLL_PROBLEM_HEADLINES: Record<string, string> = {
 };
 
 /**
- * Plain-language headline for a poll-problem code (docs/ui-review
- * R-10, Task 8). The backend's own message, which is kept alongside
+ * Plain-language headline for a poll-problem code. The backend's own message,
+ * which is kept alongside
  * it as secondary "Details" text by the caller, carries the
  * per-instance specifics (which project, which file, the underlying
  * source error).
@@ -113,7 +113,7 @@ export function pollProblemLabel(code: string | undefined): string | null {
 
 /**
  * Plain-language headline for every stable source configuration
- * error code (`SourceOut.config_error_code`; docs/ui-review R-10).
+ * error code (`SourceOut.config_error_code`).
  * The backend's own `config_error` text is kept alongside it by the
  * caller as secondary "Details" text: it carries the per-instance
  * specifics (which field, which env var name), which are never
@@ -222,7 +222,7 @@ const GENERIC_SOURCE_TYPE_HINTS: Record<string, string> = {
 /**
  * A concrete next step for the operator, tailored to the specific
  * problem rather than one generic per-source-type sentence
- * (docs/ui-review R-10; Batch B/A4 follow-up). Codes that carry no
+ * Codes that carry no
  * useful specific advice (an unrecognised code, a `text`-kind problem
  * with none at all) fall back to the source type, same as before.
  *

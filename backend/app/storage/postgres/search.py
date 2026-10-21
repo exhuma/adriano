@@ -22,7 +22,8 @@ function on a fixture set.
 
 Rules 3/4 join ``decision_event`` on identity and digest directly: the
 unique constraint ``uq_decision_event_identity_digest`` (one formal
-decision per content hash, see ``phases/DECISIONS.md``) guarantees at
+decision per content hash, see
+``docs/developer/decisions/0006-content-digest-approval.rst``) guarantees at
 most one event, so that event *is* the domain's "latest event for the
 current digest" and the join never duplicates a record row. Rule 5
 is an ``EXISTS`` over the identity's accepted events, which
@@ -32,7 +33,7 @@ when many rows are evaluated and as per-row probes of
 page. This replaced two correlated ``ORDER BY ... LIMIT 1`` subqueries
 that ran ~20,000 index probes per statement at 20,000 records and
 whose cost estimate pushed PostgreSQL into ~0.4-0.8 s of JIT
-compilation per statement (see ``docs/benchmark.md``); the new
+compilation per statement (see ``docs/developer/performance.rst``); the new
 statements cost far below ``jit_above_cost``, so JIT stays off without
 any setting.
 

@@ -7,8 +7,7 @@
  * behind the text, under this app's `variant="tonal"` convention
  * (see `plugins/vuetify.ts`'s theme comment and
  * `vuetify/lib/styles/tools/_variant.sass`'s `activated-opacity`).
- * Checked for both the light and the dark theme (docs/ui-review
- * G-01, G-06).
+ * Checked for both the light and the dark theme.
  */
 import { describe, expect, it } from "vitest";
 
@@ -171,8 +170,7 @@ describe("medium-emphasis text contrast (P11-R-03)", () => {
 });
 
 /**
- * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
- * Task 16 follow-up): a plain `<a>` or an unstyled `router-link`
+ * a plain `<a>` or an unstyled `router-link`
  * (e.g. `RecordLinksCard.vue`'s sidebar relationship links, the
  * "View errata" anchor, and server-rendered markdown links) carried
  * no colour of its own, so the browser painted its built-in link
@@ -187,8 +185,7 @@ describe("medium-emphasis text contrast (P11-R-03)", () => {
  * in both themes, so the fix cannot regress if either colour
  * changes later.
  */
-describe("theme primary colour as link text " +
-  "(docs/ui-review New issues #2)", () => {
+describe("theme primary colour as link text", () => {
   for (const [themeName, definition] of [
     ["light", light],
     ["dark", dark],

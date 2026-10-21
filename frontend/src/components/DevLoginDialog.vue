@@ -5,7 +5,7 @@
  * Reviewer, Operator) come from the loaded catalog via
  * `GET /auth/dev/roles` (see `src/auth/devPresets.ts`); presets the
  * catalog cannot satisfy are not shown, and the roles field can
- * always be typed by hand (docs/ui-review D-04). Only ever rendered when
+ * always be typed by hand. Only ever rendered when
  * `devAuthEnabled` is true (`src/config.ts`) -- the parent is
  * responsible for that gate so this component never has to repeat
  * it.
@@ -72,8 +72,7 @@ async function refreshPresets(): Promise<void> {
 
 /** Id of the heading, referenced by the dialog's own
  *  `aria-labelledby` so assistive tech announces it as the dialog's
- *  accessible name instead of an unnamed "dialog" (docs/ui-review
- *  D-01). */
+ *  accessible name instead of an unnamed "dialog". */
 const titleId = useId();
 
 /** Reset the form whenever the dialog is reopened, so a previous
