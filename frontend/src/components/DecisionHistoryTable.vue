@@ -33,7 +33,7 @@ function provenanceText(event: DecisionSummaryOut): string {
 
 <template>
   <v-table v-if="history.length > 0" density="compact" class="history-table">
-    <caption class="sr-only">Decision history, oldest first</caption>
+    <caption class="d-sr-only">Decision history, oldest first</caption>
     <thead>
       <tr>
         <th scope="col">Action</th>
@@ -85,17 +85,12 @@ function provenanceText(event: DecisionSummaryOut): string {
 </template>
 
 <style scoped>
+/* Vuetify's own `text-wrap` utility class would have to repeat on
+   every one of this table's 12 header/data cells (no table-level prop
+   sets it); this free-text comment/provenance table must never clip,
+   so one scoped rule covers every cell instead. */
 .history-table :deep(td),
 .history-table :deep(th) {
   white-space: normal;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
 }
 </style>

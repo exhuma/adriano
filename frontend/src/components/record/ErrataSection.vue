@@ -47,8 +47,8 @@ const heading = computed(() =>
 </template>
 
 <style scoped>
+/* No Vuetify utility removes a <ul>'s marker. */
 .erratum-list {
-  /* No Vuetify utility removes list markers. */
   list-style: none;
 }
 </style>

@@ -3,8 +3,16 @@
 </script>
 
 <template>
-  <section aria-labelledby="not-found-heading" class="not-found">
-    <v-icon icon="mdi-compass-off-outline" size="48" color="medium-emphasis" />
+  <section
+    aria-labelledby="not-found-heading"
+    class="not-found d-flex flex-column align-center text-center py-12 px-4"
+  >
+    <v-icon
+      icon="mdi-compass-off-outline"
+      size="48"
+      color="medium-emphasis"
+      aria-hidden="true"
+    />
     <h1
       id="not-found-heading"
       class="text-headline-medium font-weight-medium mt-2"
@@ -20,12 +28,3 @@
   </section>
 </template>
 
-<style scoped>
-.not-found {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 3rem 1rem;
-  text-align: center;
-}
-</style>

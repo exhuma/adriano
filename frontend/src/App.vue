@@ -138,7 +138,10 @@ async function handleSignOut(): Promise<void> {
 
 <template>
   <v-app>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <a
+      class="skip-link position-absolute left-0 py-2 px-4"
+      href="#main-content"
+    >Skip to main content</a>
 
     <v-app-bar :elevation="1">
       <!--
@@ -197,7 +200,7 @@ async function handleSignOut(): Promise<void> {
           <router-link
             v-if="hasConfigProblem"
             to="/sources"
-            class="mr-4 config-warning-link"
+            class="mr-4 text-decoration-none"
             aria-label="Configuration issue detected; go to Sources for details"
           >
             <StatusChip
@@ -304,21 +307,21 @@ async function handleSignOut(): Promise<void> {
 </template>
 
 <style scoped>
+/* Skip-link reveal-on-focus pattern: Vuetify has no utility for an
+   off-screen offset that flips to visible on :focus (position, left
+   offset and padding move to utility classes above), and no bg- or
+   text-on- utility classes exist in main.css for an arbitrary
+   semantic colour pair, so the theme-token background/text colours
+   stay here too (vuetify-theming kit allows rgb(var(--v-theme-*)) in
+   scoped CSS). */
 .skip-link {
-  position: absolute;
   top: -40px;
-  left: 0;
+  z-index: 100;
   background: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));
-  padding: 0.5rem 1rem;
-  z-index: 100;
 }
 
 .skip-link:focus {
   top: 0;
-}
-
-.config-warning-link {
-  text-decoration: none;
 }
 </style>

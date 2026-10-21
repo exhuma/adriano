@@ -183,7 +183,7 @@ async function submit(): Promise<void> {
           </v-btn>
           <v-expand-transition>
             <p v-show="digestExpanded" :id="digestDisclosureId" class="mb-4">
-              <code class="digest-full">{{ digest }}</code>
+              <code class="text-break">{{ digest }}</code>
             </p>
           </v-expand-transition>
 
@@ -258,9 +258,3 @@ async function submit(): Promise<void> {
   </v-dialog>
 </template>
 
-<style scoped>
-.digest-full {
-  overflow-wrap: break-word;
-  word-break: break-all;
-}
-</style>

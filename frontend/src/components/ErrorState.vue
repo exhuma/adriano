@@ -18,8 +18,17 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="error-state" role="alert">
-    <v-icon icon="mdi-alert-circle-outline" size="48" color="error" />
+  <div
+    class="error-state d-flex flex-column align-center text-center
+      py-10 px-4"
+    role="alert"
+  >
+    <v-icon
+      icon="mdi-alert-circle-outline"
+      size="48"
+      color="error"
+      aria-hidden="true"
+    />
     <p class="text-title-large mt-2">{{ title }}</p>
     <p v-if="text" class="text-body-medium text-medium-emphasis">{{ text }}</p>
     <v-btn
@@ -34,12 +43,3 @@ defineEmits<{
   </div>
 </template>
 
-<style scoped>
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2.5rem 1rem;
-  text-align: center;
-}
-</style>

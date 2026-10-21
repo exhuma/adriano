@@ -25,7 +25,12 @@ defineEmits<{
     aria-labelledby="sign-in-heading"
     class="sign-in d-flex flex-column align-center text-center py-14 px-4"
   >
-    <v-icon icon="mdi-shield-lock-outline" size="48" color="medium-emphasis" />
+    <v-icon
+      icon="mdi-shield-lock-outline"
+      size="48"
+      color="medium-emphasis"
+      aria-hidden="true"
+    />
     <h1
       id="sign-in-heading"
       class="text-headline-medium font-weight-medium mt-2"

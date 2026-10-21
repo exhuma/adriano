@@ -16,8 +16,17 @@ defineProps<{
 </script>
 
 <template>
-  <div class="auth-blocking" role="alert">
-    <v-icon icon="mdi-shield-alert-outline" size="48" color="error" />
+  <div
+    class="auth-blocking d-flex flex-column align-center text-center
+      py-14 px-4 mx-auto"
+    role="alert"
+  >
+    <v-icon
+      icon="mdi-shield-alert-outline"
+      size="48"
+      color="error"
+      aria-hidden="true"
+    />
     <h1 class="text-headline-medium font-weight-medium mt-2">{{ title }}</h1>
     <p class="text-body-medium mt-2">{{ text }}</p>
     <div v-if="$slots.actions" class="mt-4">
@@ -27,13 +36,10 @@ defineProps<{
 </template>
 
 <style scoped>
+/* Vuetify has no utility class for an arbitrary max-width value (same
+   limitation noted in SignInScreen.vue); layout, padding, and
+   centering move to utility classes above. */
 .auth-blocking {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 3.5rem 1rem;
-  text-align: center;
   max-width: 32rem;
-  margin: 0 auto;
 }
 </style>

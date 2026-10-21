@@ -31,9 +31,17 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section aria-labelledby="callback-heading" class="callback">
+  <section
+    aria-labelledby="callback-heading"
+    class="callback d-flex flex-column align-center text-center py-12 px-4"
+  >
     <template v-if="errorText">
-      <v-icon icon="mdi-alert-circle-outline" size="48" color="error" />
+      <v-icon
+        icon="mdi-alert-circle-outline"
+        size="48"
+        color="error"
+        aria-hidden="true"
+      />
       <h1
         id="callback-heading"
         class="text-headline-medium font-weight-medium mt-2"
@@ -57,12 +65,3 @@ onMounted(async () => {
   </section>
 </template>
 
-<style scoped>
-.callback {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 3rem 1rem;
-  text-align: center;
-}
-</style>

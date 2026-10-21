@@ -54,8 +54,8 @@ const reportedLine = computed(() => {
 </script>
 
 <template>
-  <li class="erratum-entry">
-    <div class="erratum-entry-header">
+  <li class="border rounded py-3 px-4">
+    <div class="d-flex flex-wrap align-center ga-2 mb-2">
       <StatusChip v-bind="statusLabel" />
       <StatusChip v-bind="typeLabel" />
       <span v-if="erratum.section" class="text-body-medium">
@@ -79,7 +79,7 @@ const reportedLine = computed(() => {
       </v-btn>
     </div>
 
-    <div v-show="expanded" :id="bodyId" class="erratum-entry-body">
+    <div v-show="expanded" :id="bodyId" class="mt-2">
       <p
         v-if="!erratum.has_content"
         class="text-body-medium text-medium-emphasis"
@@ -97,22 +97,3 @@ const reportedLine = computed(() => {
   </li>
 </template>
 
-<style scoped>
-.erratum-entry {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 4px;
-  padding: 0.75rem 1rem;
-}
-
-.erratum-entry-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.erratum-entry-body {
-  margin-top: 0.5rem;
-}
-</style>

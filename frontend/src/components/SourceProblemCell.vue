@@ -46,7 +46,7 @@ defineProps<{
       <span class="text-label-large d-block">Problem</span>
       {{ problem.text }}
     </p>
-    <ul v-else-if="problem.kind === 'list'" class="problem-list">
+    <ul v-else-if="problem.kind === 'list'" class="ma-0 ps-4">
       <li v-for="(item, index) in problem.items" :key="index" class="text-body-medium">
         {{ pollProblemLabel(item.code) ?? item.message }}
         <span
@@ -64,9 +64,3 @@ defineProps<{
   <span v-else class="text-medium-emphasis">—</span>
 </template>
 
-<style scoped>
-.problem-list {
-  margin: 0;
-  padding-inline-start: 1.1rem;
-}
-</style>

@@ -14,7 +14,10 @@ defineProps<{
 </script>
 
 <template>
-  <div class="empty-state">
+  <div
+    class="empty-state d-flex flex-column align-center text-center
+      py-10 px-4"
+  >
     <v-icon
       :icon="icon ?? 'mdi-inbox-outline'"
       size="48"
@@ -29,12 +32,3 @@ defineProps<{
   </div>
 </template>
 
-<style scoped>
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2.5rem 1rem;
-  text-align: center;
-}
-</style>

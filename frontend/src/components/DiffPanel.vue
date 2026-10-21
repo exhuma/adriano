@@ -124,19 +124,23 @@ watch([fromDigest, toDigest], load);
 <template>
   <v-card class="mb-4">
     <v-card-title tag="h2" class="text-title-large">Diff</v-card-title>
-    <v-card-subtitle class="diff-source">
+    <v-card-subtitle class="text-wrap">
       {{ sourceId }} / {{ project }} @ {{ refName }} — last indexed
       {{ lastIndexedAt ? formatDateTime(lastIndexedAt) : "never" }}
     </v-card-subtitle>
 
-    <v-card-text v-if="digestOptions.length > 2" class="diff-selectors">
+    <v-card-text
+      v-if="digestOptions.length > 2"
+      class="d-flex flex-wrap ga-3"
+    >
       <v-select
         v-model="fromDigest"
         :items="[{ title: 'Default base', value: undefined }, ...digestOptions]"
         label="Compare from"
         density="comfortable"
         variant="outlined"
-        class="diff-select"
+        min-width="224"
+        class="flex-1-1"
       />
       <v-select
         v-model="toDigest"
@@ -144,7 +148,8 @@ watch([fromDigest, toDigest], load);
         label="Compare to"
         density="comfortable"
         variant="outlined"
-        class="diff-select"
+        min-width="224"
+        class="flex-1-1"
       />
     </v-card-text>
 
@@ -183,16 +188,19 @@ watch([fromDigest, toDigest], load);
         These two revisions are identical.
       </v-card-text>
       <v-card-text v-else>
-        <p class="sr-only" role="status">{{ summaryText }}</p>
+        <p class="d-sr-only" role="status">{{ summaryText }}</p>
         <p class="text-body-small text-medium-emphasis mb-1">
           Legend: lines starting with
           <code>+</code> were added, lines starting with <code>-</code> were
           removed (also {{ summaryText }}).
         </p>
-        <pre class="diff-pre" aria-hidden="false"><span
+        <pre
+          class="diff-pre overflow-x-auto ma-0 pa-2 border rounded"
+          aria-hidden="false"
+        ><span
             v-for="(line, index) in diffLines"
             :key="index"
-            :class="`diff-line diff-line--${line.kind}`"
+            :class="`diff-line d-block diff-line--${line.kind}`"
           >{{ line.text }}
 </span></pre>
       </v-card-text>
@@ -201,57 +209,31 @@ watch([fromDigest, toDigest], load);
 </template>
 
 <style scoped>
-.diff-source {
-  white-space: normal;
-  opacity: var(--v-medium-emphasis-opacity);
-}
-
-.diff-selectors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.diff-select {
-  min-width: 14rem;
-  flex: 1 1 14rem;
-}
-
+/* MD3's type scale (DECISIONS.md Phase 11 mapping) has no 13px role;
+   this diff view's monospace size/line-height predates that ladder
+   and keeping the exact value avoids changing the diff's established
+   density. Browser `<pre>` already renders monospace, so no
+   font-family override is needed (`<code>` elsewhere in the app, e.g.
+   CopyValueButton/DecisionDialog, relies on the same UA default); the
+   rest of this element's layout now uses utility classes at the call
+   site. */
 .diff-pre {
-  overflow-x: auto;
-  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
   font-size: 0.8125rem;
   line-height: 1.4;
-  white-space: pre;
-  margin: 0;
-  padding: 0.5rem;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 4px;
 }
 
-.diff-line {
-  display: block;
-}
-
+/* Theme-coloured tint/text with no bg- or text- utility class for an
+   arbitrary semantic colour plus opacity pair in main.css; grouped by
+   diff-line kind since a `v-for` item can only carry one dynamic
+   class list. */
 .diff-line--added {
   background: rgba(var(--v-theme-success), 0.12);
 }
-
 .diff-line--removed {
   background: rgba(var(--v-theme-error), 0.12);
 }
-
 .diff-line--hunk {
   color: rgb(var(--v-theme-primary));
   font-weight: 600;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
 }
 </style>

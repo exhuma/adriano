@@ -123,7 +123,12 @@ async function onDigestChanged(): Promise<void> {
       v-else-if="loadState === 'not-found'"
       class="d-flex flex-column align-center text-center py-12 px-4"
     >
-      <v-icon icon="mdi-file-question-outline" size="48" color="medium-emphasis" />
+      <v-icon
+        icon="mdi-file-question-outline"
+        size="48"
+        color="medium-emphasis"
+        aria-hidden="true"
+      />
       <h1
         id="record-heading"
         class="text-headline-medium font-weight-medium mt-2"
