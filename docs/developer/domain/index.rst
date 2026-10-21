@@ -2,7 +2,7 @@ Domain model
 ============
 
 These pages describe what Adriano stores and the rules it applies,
-as implemented in ``app.domain`` (pure logic) and ``app.storage``
+as implemented in :mod:`app.domain` (pure logic) and :mod:`app.storage`
 (persistence).
 They are written for developers changing that logic.
 How authors write ADR and erratum files is covered for authors in

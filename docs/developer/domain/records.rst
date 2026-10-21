@@ -13,18 +13,18 @@ Discovery
    Source adapters list files under the registration's ``path``
    (default ``doc/decisions``), recursively, and keep only file names
    matching ``^\d{4}-\d{2}-\d{2}-(.*)\.md$``
-   (``app.domain.titles.is_adr_filename``).
+   (:py:obj:`app.domain.titles.is_adr_filename`).
    Other files, such as a ``README.md`` next to the ADRs, are ignored.
 
 Parsing
-   ``app.domain.records.parse_record`` turns the exact bytes into a
+   :py:obj:`app.domain.records.parse_record` turns the exact bytes into a
    ``ParsedRecord``.
    It never raises for content problems:
    every problem becomes an issue on the record,
    so one broken file never affects another.
    It splits the ``---`` frontmatter, loads it with
    ``yaml.safe_load``, validates known fields
-   (``app.domain.validation``) and derives the title and date.
+   (:mod:`app.domain.validation`) and derives the title and date.
 
 Title
    The ``title`` field, else the first ATX ``#`` heading outside code
@@ -63,7 +63,7 @@ Three identifiers are easy to confuse:
 ``record_key``
    The authored UUID in lower case, or, when there is no valid UUID,
    the fallback ``src:<source_id>/<project>/<path>``
-   (``app.domain.values.record_key``).
+   (:py:obj:`app.domain.values.record_key`).
    A UUID is never invented.
 
 The **logical identity** of a record is
@@ -258,6 +258,6 @@ When a record can be decided
 ``ParsedRecord.approvable`` is true unless the file is not valid UTF-8
 or the record has no valid UUID.
 For stored rows the same rule is
-``app.services.approval_view.is_approvable``.
+:py:obj:`app.services.approval_view.is_approvable`.
 Other issues, including errors such as ``bad_date``, are shown but do
 not block a decision.

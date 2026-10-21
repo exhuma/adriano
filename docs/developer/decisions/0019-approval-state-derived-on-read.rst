@@ -16,8 +16,8 @@ Decision
 --------
 
 Derive the state from ``decision_event`` on every read.
-``app.domain.approval.evaluate`` is the reference rule;
-``app.storage.postgres.search.approval_join`` mirrors it in SQL with
+:py:obj:`app.domain.approval.evaluate` is the reference rule;
+:py:obj:`app.storage.postgres.search.approval_join` mirrors it in SQL with
 set-based joins.
 A parity test compares both for every row under every policy variant.
 

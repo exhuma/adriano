@@ -5,9 +5,9 @@ Approval is a formal accept or reject decision by an eligible reviewer
 on one exact content revision.
 Decisions are stored in the database, never in the Markdown files
 (:doc:`/developer/decisions/0007-approval-outside-markdown`).
-The rules live in ``app.domain.approval`` (pure),
-``app.services.decisions`` (the write path) and
-``app.services.approval_view`` (the detail page's approval block).
+The rules live in :mod:`app.domain.approval` (pure),
+:mod:`app.services.decisions` (the write path) and
+:mod:`app.services.approval_view` (the detail page's approval block).
 
 The policy
 ----------
@@ -36,7 +36,7 @@ There is one global policy, the ``approval_policy`` section of
 ``reviewers``
    A caller is eligible when their ``issuer|subject`` is listed in
    ``users`` or one of their token roles is listed in ``roles``
-   (``app.domain.approval.is_eligible``).
+   (:py:obj:`app.domain.approval.is_eligible`).
    Eligibility is independent of RBAC:
    ``read`` never implies review,
    and being a reviewer grants no ``read`` or ``operate``.
@@ -58,7 +58,7 @@ States
 The state belongs to a record's **current digest**,
 evaluated from all decision events of its logical identity
 ``(source_id, project, record_key)``.
-``app.domain.approval.evaluate`` applies these rules in order:
+:py:obj:`app.domain.approval.evaluate` applies these rules in order:
 
 .. mermaid::
 
@@ -90,7 +90,7 @@ evaluated from all decision events of its logical identity
 
 The "Needs approval" filter returns every state except ``accepted`` and
 ``not_required``.
-``app.storage.postgres.search.approval_join`` mirrors the same rules in
+:py:obj:`app.storage.postgres.search.approval_join` mirrors the same rules in
 SQL so the filter paginates correctly;
 ``tests/storage/test_approval_parity.py`` keeps the two in step.
 
@@ -143,7 +143,7 @@ Recording a decision
 ``POST /api/v1/records/{id}/decisions`` with
 ``{action, comment?, expected_digest?}``
 (``comment`` up to 2,000 characters).
-``app.services.decisions.decision_blocker`` checks, in order,
+:py:obj:`app.services.decisions.decision_blocker` checks, in order,
 and the same function gives the detail page its ``can_decide`` flag
 and reason:
 
@@ -190,11 +190,11 @@ This is a documented limit of the policy, not a security guarantee.
 Diffs
 -----
 
-``GET /api/v1/records/{id}/diff`` (``app.services.diff``) is a unified
+``GET /api/v1/records/{id}/diff`` (:mod:`app.services.diff`) is a unified
 diff between two stored revisions, labelled with both digests.
 The default base is the identity's last decided revision other than the
 current one (latest acceptance, else latest rejection,
-``app.domain.approval.last_decided``),
+:py:obj:`app.domain.approval.last_decided`),
 else the row's ``previous_digest``,
 else there is no prior revision.
 Only digests related to the record can be requested;
@@ -208,7 +208,7 @@ A registration is stale when it has never polled successfully,
 its last poll failed or was partial,
 or its last successful poll is older than
 ``ADRIANO_STALE_AFTER_MINUTES`` (default 120)
-(``app.services.sources_view.is_stale``).
+(:py:obj:`app.services.sources_view.is_stale`).
 The UI then shows a banner next to a published record's state and never
 claims that the indexed revision is the current published content.
 The approval state itself is still evaluated normally against what was

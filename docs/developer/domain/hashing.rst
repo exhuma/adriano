@@ -4,7 +4,7 @@ Content hashing
 Approval binds to a digest of the record's content.
 This page specifies the digest so it can be reproduced outside
 Adriano, and states what it does not prove.
-The reference implementation is ``app.domain.hashing``.
+The reference implementation is :mod:`app.domain.hashing`.
 
 Algorithm ``sha256-v1``
 -----------------------

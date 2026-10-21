@@ -22,7 +22,7 @@ Search uses a weighted ``tsvector`` column on ``record``
 configuration; body D with ``english`` stemming),
 maintained by a trigger and indexed with GIN.
 Services depend only on the ``CatalogStore`` protocol in
-``app.storage.port``; ``app.storage.postgres`` is its only
+:mod:`app.storage.port`; :mod:`app.storage.postgres` is its only
 implementation.
 
 Consequences

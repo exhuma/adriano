@@ -15,7 +15,7 @@ Reads never call a source
    Browse, search, detail, diff, facets, sources and ``/me`` read only
    PostgreSQL.
    Source adapters are opened only through
-   ``SourceBinding.open_adapter``, which only ``app.services.polling``
+   ``SourceBinding.open_adapter``, which only :mod:`app.services.polling`
    calls.
 
    *Tests:* ``routers/test_no_adapter_calls.py``
@@ -25,7 +25,7 @@ Reads never call a source
    (``test_intake_decisions_and_diff_never_open_an_adapter``).
 
 Push never writes a published row
-   ``app.services.intake`` always ingests as ``RecordState.CANDIDATE``
+   :mod:`app.services.intake` always ingests as ``RecordState.CANDIDATE``
    and refuses the literal ``published_ref``.
    Published and candidate rows live under separate partial unique
    indexes, so an upsert of one kind cannot hit a row of the other.
@@ -69,7 +69,7 @@ Unchanged content is not fetched again
    ``test_polls_ingest_then_skip_unchanged_branches``.
 
 Poll and push share one ingest path
-   Both call ``app.services.ingest.prepare_document`` and
+   Both call :py:obj:`app.services.ingest.prepare_document` and
    ``ingest_document``; nothing else writes record rows.
 
    *Tests:* ``services/test_ingest.py``.
@@ -84,7 +84,7 @@ Content and identity
 --------------------
 
 The digest depends only on canonical content
-   ``app.domain.hashing.content_digest`` takes bytes only;
+   :py:obj:`app.domain.hashing.content_digest` takes bytes only;
    no path, ref or registration enters it.
    The server always computes it: a client-supplied ``digest`` field is
    refused as unexpected.
@@ -94,14 +94,14 @@ The digest depends only on canonical content
    (``routers/approval/test_candidates.py``).
 
 One broken file affects only itself
-   ``app.domain.records.parse_record`` never raises for content
+   :py:obj:`app.domain.records.parse_record` never raises for content
    problems; every problem becomes an issue on that record.
 
    *Tests:* ``domain/test_records.py``
    (``test_parse_record_never_raises``, property-based).
 
 No UUID is ever invented
-   ``app.domain.values.record_key`` falls back to
+   :py:obj:`app.domain.values.record_key` falls back to
    ``src:<source_id>/<project>/<path>``.
 
    *Tests:* ``domain/test_records.py``.
@@ -131,7 +131,7 @@ Decision history is append-only
    (``routers/approval/test_decisions.py``).
 
 SQL and Python agree on approval state
-   ``approval_join`` mirrors ``app.domain.approval.evaluate``.
+   ``approval_join`` mirrors :py:obj:`app.domain.approval.evaluate`.
 
    *Tests:* ``storage/test_approval_parity.py`` (every row, every
    policy variant, paged and unpaged).
@@ -207,7 +207,7 @@ The dev bypass needs both gates, and never reaches production builds
    ``build`` script).
 
 Rendered Markdown is sanitized before storage
-   ``app.services.ingest.render_markdown`` passes every body through
+   :py:obj:`app.services.ingest.render_markdown` passes every body through
    nh3; the frontend renders only that field with ``v-html``.
 
    *Tests:* ``services/test_ingest.py``
@@ -228,12 +228,12 @@ Not enforced by a test
 ----------------------
 
 The domain package is pure
-   ``app.domain`` must not import FastAPI, SQLAlchemy, httpx or do
+   :mod:`app.domain` must not import FastAPI, SQLAlchemy, httpx or do
    file or network I/O (its only third-party import is PyYAML).
    No lint rule or test checks this today; it is kept by review.
 
 Polling never deletes candidates
    Guaranteed by the ``kind`` filter in
-   ``app.storage.postgres.records.delete_published``,
+   :py:obj:`app.storage.postgres.records.delete_published`,
    but no test polls a registration that also holds candidates and
    checks they survive a reconciling poll.

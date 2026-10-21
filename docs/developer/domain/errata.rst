@@ -6,8 +6,8 @@ decision.
 It is a record of its own, with its own UUID, digest and approval
 history, and it never changes the decision it corrects
 (:doc:`/developer/decisions/0015-errata-as-records`).
-The parser is ``app.domain.errata``; reading errata for a decision is
-``app.services.errata_view`` and ``app.services.record_relationships``.
+The parser is :mod:`app.domain.errata`; reading errata for a decision is
+:mod:`app.services.errata_view` and :mod:`app.services.record_relationships`.
 How authors write an erratum file is covered in :doc:`/user/index`.
 
 Model

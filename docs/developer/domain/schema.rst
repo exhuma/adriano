@@ -3,7 +3,7 @@ Database schema
 
 The schema is owned by the Alembic migrations in
 ``backend/alembic/versions``;
-``app.storage.postgres.models`` only mirrors it for querying and is
+:mod:`app.storage.postgres.models` only mirrors it for querying and is
 never used to create tables outside tests.
 Triggers and column comments exist only in the migrations.
 

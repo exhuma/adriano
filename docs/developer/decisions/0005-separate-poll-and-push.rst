@@ -20,7 +20,7 @@ Polling reads only each registration's ``published_ref`` and writes
 **published** rows.
 Push intake (``PUT``/``POST /api/v1/candidates``) writes only
 **candidate** rows and refuses the literal published ref.
-Both go through ``app.services.ingest``
+Both go through :mod:`app.services.ingest`
 (``prepare_document`` then ``ingest_document``).
 Published rows are unique per ``(source_id, project, path)``;
 candidates per ``(source_id, project, record_key, ref)``.

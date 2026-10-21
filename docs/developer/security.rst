@@ -61,11 +61,11 @@ Authentication paths
      principal --> perm
 
 Bearer tokens (people)
-   ``app.auth.tokens.verify_token`` picks the validator from the
+   :py:obj:`app.auth.tokens.verify_token` picks the validator from the
    token's unverified ``alg`` header and never tries validators in
    turn, so an RS256 token can never be checked against the dev
    secret.
-   ``app.auth.oidc`` validates signature, ``exp``, ``nbf``, ``aud`` and
+   :mod:`app.auth.oidc` validates signature, ``exp``, ``nbf``, ``aud`` and
    ``iss`` with PyJWT; ``exp``, ``iss``, ``aud`` and ``sub`` are
    required.
    No custom crypto.
@@ -74,7 +74,7 @@ Bearer tokens (people)
    Token values are never logged or echoed.
 
 Claims to principal
-   ``app.auth.deps.principal_from_claims`` maps ``iss`` and ``sub`` to
+   :py:obj:`app.auth.deps.principal_from_claims` maps ``iss`` and ``sub`` to
    the identity, ``name`` or ``preferred_username`` to the display name,
    ``email`` (dropped when ``email_verified`` is false) and the roles
    at ``ADRIANO_OIDC_ROLES_CLAIM``.
@@ -83,7 +83,7 @@ Claims to principal
 Push tokens (CI)
    Per-registration shared secrets, resolved at startup from the env
    var names in ``push_tokens_env``.
-   ``app.auth.push`` hashes both sides with SHA-256 and compares with
+   :mod:`app.auth.push` hashes both sides with SHA-256 and compares with
    ``hmac.compare_digest``, checking every configured token without an
    early exit, so neither content nor length leaks through timing.
    A push token authorizes writing candidates to its own registration
@@ -133,7 +133,7 @@ Parsing
 
 Rendering
    Markdown is rendered with markdown-it-py and sanitized with nh3 at
-   ingest (``app.services.ingest.render_markdown``):
+   ingest (:py:obj:`app.services.ingest.render_markdown`):
    scripts, event handlers and unsafe URLs are removed and links get
    ``rel="noopener noreferrer"``.
    Only the stored, sanitized HTML is rendered with ``v-html``
@@ -211,7 +211,7 @@ Secrets
 
 * ``catalog.yaml`` holds env var **names** (``token_env``,
   ``push_tokens_env``), never values.
-  Values are resolved once at startup by ``app.composition`` and held
+  Values are resolved once at startup by :mod:`app.composition` and held
   as ``pydantic.SecretStr``.
 * Secrets never appear in log lines, error messages, stored
   ``config`` JSON or ``intake_run`` rows;

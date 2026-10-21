@@ -19,7 +19,7 @@ Build a FastAPI backend (Python, uv) and a Vue 3 + Vuetify + TypeScript
 frontend, following the ``stack-fastapi-vuetify`` route.
 Separate concerns by package boundaries inside the one backend
 (routers, services, domain, sources, storage, auth),
-with ``app.composition`` as the only composition root.
+with :mod:`app.composition` as the only composition root.
 Run PostgreSQL as the only stateful service.
 
 Consequences

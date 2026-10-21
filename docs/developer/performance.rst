@@ -62,7 +62,7 @@ Method
 ------
 
 Dataset
-   ``adriano seed-synthetic`` (``app.services.seed_synthetic`` and its
+   ``adriano seed-synthetic`` (:mod:`app.services.seed_synthetic` and its
    helper modules) generates a deterministic corpus (seed 42) and
    ingests it through ``prepare_document`` and ``ingest_document``,
    the same path poll and push use, never raw SQL.
@@ -124,7 +124,7 @@ Needs approval: set-based joins
    over PostgreSQL's JIT thresholds, adding 0.4 to 0.8 s of JIT
    compilation per statement (P95 1.85 s at concurrency 1,
    4.16 s at concurrency 8).
-   ``app.storage.postgres.search.approval_join`` now uses one
+   :py:obj:`app.storage.postgres.search.approval_join` now uses one
    ``LEFT JOIN`` on identity and digest
    (the unique constraint guarantees at most one match)
    and one ``EXISTS`` for "accepted elsewhere".

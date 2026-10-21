@@ -108,44 +108,44 @@ and calls flow only downward:
      services -. "polling only" .-> sources
      storage -- "SQL" --> db
 
-``app.domain``
+:mod:`app.domain`
    Pure logic with no I/O: frontmatter parsing and validation,
    the canonical digest, relationship resolution,
    approval-state evaluation, erratum body parsing.
    It imports neither FastAPI, SQLAlchemy nor httpx,
    so it is tested with plain unit tests.
 
-``app.services``
+:mod:`app.services`
    Use cases.
-   They take a ``CatalogStore`` from ``app.storage.port`` and plain
+   They take a ``CatalogStore`` from :mod:`app.storage.port` and plain
    values, and return plain dataclasses.
    They never import FastAPI.
 
-``app.storage``
-   ``app.storage.port`` defines the DB-neutral ``CatalogStoreProvider``
+:mod:`app.storage`
+   :mod:`app.storage.port` defines the DB-neutral ``CatalogStoreProvider``
    and ``CatalogStore`` protocols and their value types;
-   ``app.storage.postgres`` is the only implementation.
+   :mod:`app.storage.postgres` is the only implementation.
    No ORM object crosses the port.
 
-``app.sources``
-   ``app.sources.port`` defines the provider-neutral ``SourceAdapter``
-   protocol; ``app.sources.filesystem`` and ``app.sources.gitlab``
+:mod:`app.sources`
+   :mod:`app.sources.port` defines the provider-neutral ``SourceAdapter``
+   protocol; :mod:`app.sources.filesystem` and :mod:`app.sources.gitlab`
    implement it.
-   ``app.sources.registry`` maps a source type to its settings validator
+   :mod:`app.sources.registry` maps a source type to its settings validator
    and adapter factory.
    Everything GitLab-specific stays inside the ``gitlab*`` modules.
 
-``app.routers`` and ``app.schemas``
+:mod:`app.routers` and :mod:`app.schemas`
    The HTTP boundary: request parsing, Pydantic response models,
    permission dependencies.
-   Domain errors from ``app.errors`` are mapped to HTTP statuses with a
+   Domain errors from :mod:`app.errors` are mapped to HTTP statuses with a
    flat ``{detail, code}`` body.
 
-``app.auth``
-   Token validation (``app.auth.tokens`` picks the validator by the
+:mod:`app.auth`
+   Token validation (:mod:`app.auth.tokens` picks the validator by the
    token's ``alg``), claim mapping, RBAC and push-token checks.
 
-``app.composition``
+:mod:`app.composition`
    The composition root.
    It is the only module that names concrete implementations
    (the PostgreSQL store, the default source registry)
@@ -160,7 +160,7 @@ Two rules follow from this layering and are enforced by tests
 * Browse, search, detail, diff and sources requests reach
   ``services → storage → PostgreSQL`` only.
   They never construct or call a source adapter.
-* Source adapters are opened only by ``app.services.polling``.
+* Source adapters are opened only by :mod:`app.services.polling`.
   Push intake never calls an adapter.
 
 Data flows
@@ -239,12 +239,12 @@ CI submits candidates from branches other than the published ref.
      I->>S: record intake_run
      R-->>CI: 200 or 201 with server digest and issues
 
-Push intake and polling share ``app.services.ingest``:
+Push intake and polling share :mod:`app.services.ingest`:
 ``prepare_document`` parses, validates, hashes and renders,
 ``ingest_document`` stores the snapshot and upserts the row.
 Push always writes a candidate row, so it can never replace or delete a
 published row, and it never calls a source adapter.
-The full check order and error codes are in the ``app.services.intake``
+The full check order and error codes are in the :mod:`app.services.intake`
 docstring.
 
 Read path
