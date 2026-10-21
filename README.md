@@ -42,10 +42,12 @@ task poll                # in another terminal: index samples/adr-root
 
 Open <http://localhost:5173> and use the "Dev sign-in" chip.
 
-Or run the whole stack in containers:
+Or run the whole stack in containers (one `adriano` image serving the
+API and the web UI, plus PostgreSQL):
 
 ```sh
 task demo                # build, start, poll; serves http://localhost:8180
+task demo:down           # discard it (own compose project: adriano-demo)
 ```
 
 Never enable the dev sign-in in production. See the

@@ -322,7 +322,7 @@ tasks:
   demo:build:
     internal: true
     cmds:
-      - docker compose build
+      - "{{.DEMO_COMPOSE}} build"
 
   demo:up:
     internal: true
@@ -331,17 +331,18 @@ tasks:
       # The backend's env_file (catalog-referenced secrets such as
       # ADRIANO_PUSH_TOKEN_CENTRAL); see docker-compose.yml.
       ADRIANO_BACKEND_ENV_FILE: .env.demo
+      ADRIANO_IMAGE_TAG: demo
     cmds:
-      - docker compose up -d
+      - "{{.DEMO_COMPOSE}} up -d"
       - task: demo:wait-health
 
   demo:wait-health:
     internal: true
-    desc: Wait until the demo stack's frontend/backend answer healthy.
+    desc: Wait until the demo container answers healthy.
     dotenv: [".env.demo"]
     cmds:
       - |
-        port="${ADRIANO_FRONTEND_PORT:-8180}"
+        port="${ADRIANO_PORT:-8180}"
         for i in $(seq 1 60); do
           if curl -fsS "http://localhost:${port}/healthz" \
               >/dev/null 2>&1; then
@@ -351,7 +352,7 @@ tasks:
           sleep 2
         done
         echo "timed out waiting for the demo stack to become healthy;" \
-          "see \`docker compose ps\` / \`docker compose logs\`." >&2
+          "see \`{{.DEMO_COMPOSE}} ps\` / \`{{.DEMO_COMPOSE}} logs\`." >&2
         exit 1
 
   demo:poll:
@@ -359,26 +360,26 @@ tasks:
       Poll the demo stack's source registrations (the bundled
       samples/adr-root/ tree) into its running database.
     cmds:
-      - docker compose exec backend adriano poll
+      - "{{.DEMO_COMPOSE}} exec adriano adriano poll"
 
   demo:print-info:
     internal: true
     dotenv: [".env.demo"]
     cmds:
       - |
-        port="${ADRIANO_FRONTEND_PORT:-8180}"
+        port="${ADRIANO_PORT:-8180}"
         echo
         echo "adriano demo is up:"
-        echo "  Frontend:  http://localhost:${port}/"
+        echo "  Web UI:    http://localhost:${port}/"
         echo "  Healthz:   http://localhost:${port}/healthz"
         echo
-        echo "The frontend container is a PRODUCTION build (no"
-        echo "dev-login UI). To sign in interactively, run" \
+        echo "The image serves a PRODUCTION web build (no dev-login"
+        echo "UI). To sign in interactively, run" \
           "\`task demo:ui\` in another terminal (a Vite dev server" \
-          "with dev login, proxying to this same demo backend)."
+          "with dev login, proxying to this same demo container)."
         echo
         echo "Or mint a token on the command line:"
-        echo '  docker compose exec backend adriano mint-dev-token \'
+        echo '  {{.DEMO_COMPOSE}} exec adriano adriano mint-dev-token \'
         echo '    --sub alice --roles admin'
         echo
         echo "Push a candidate (CI push demo; see samples/push-" \
@@ -408,14 +409,14 @@ tasks:
   demo:down:
     desc: Stop and discard the demo stack (compose down -v).
     cmds:
-      - docker compose down -v
+      - "{{.DEMO_COMPOSE}} down -v"
 
   demo:ui:
     desc: >-
       Run the Vite dev server with dev login enabled, proxying to
-      the running demo stack's backend (the demo's nginx container
-      is a production build with no dev-login UI; use this for an
-      interactive sign-in against the same demo data).
+      the running demo container (the image serves a production web
+      build with no dev-login UI; use this for an interactive
+      sign-in against the same demo data).
     dotenv: [".env.demo"]
     dir: frontend
     deps: [frontend:install]
@@ -425,7 +426,7 @@ tasks:
           echo "frontend/package.json not found; skipping demo:ui."
           exit 0
         fi
-        port="${ADRIANO_FRONTEND_PORT:-8180}"
+        port="${ADRIANO_PORT:-8180}"
         export VITE_DEV_AUTH=true
         export VITE_DEV_PROXY_TARGET="http://localhost:${port}"
         npm run dev -- --port 5180

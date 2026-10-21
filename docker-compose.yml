@@ -1,22 +1,21 @@
-# adriano deployment stack: db -> migrate (one-shot) -> backend ->
-# frontend. See docs/operator/configuration.rst for every setting,
-# and README.md / Taskfile.yml (`task demo`) for a one-command local
-# demo. Do not confuse this stack with the ephemeral dev/test database
-# started by `task db:up` (container `adriano-db`, host port 55432):
-# this stack's `db` service is independent and uses a named volume.
+# adriano deployment stack: `db` (bundled PostgreSQL) and `adriano`
+# (the single image serving API and web UI). See
+# docs/operator/configuration.rst for every setting and README.md /
+# Taskfile.yml (`task demo`) for a one-command local demo. Do not
+# confuse this stack with the ephemeral dev/test database started by
+# `task db:up` (container `adriano-db`, host port 55432): this stack's
+# `db` service is independent and uses a named volume.
 #
 # Project name is pinned so this stack never collides with another
-# compose project on the same Docker host.
+# compose project on the same Docker host. The demo tasks override it
+# (`-p adriano-demo`) so `task demo:down` can never delete a real
+# deployment's volume.
 name: adriano
-
-x-backend-image: &backend-image
-  build:
-    context: ./backend
-    dockerfile: Dockerfile
-  image: adriano-backend:local
 
 services:
   db:
+    # Drop this service (and the depends_on below) when you use an
+    # external PostgreSQL: set ADRIANO_DATABASE_URL in your env file.
     image: postgres:18
     restart: unless-stopped
     environment:
@@ -34,50 +33,29 @@ services:
       retries: 10
       start_period: 10s
 
-  # One-shot: applies migrations, then exits. `backend` waits for this
-  # to succeed before starting (module-database-postgresql "deploy
-  # order is always migrations first, then app").
-  migrate:
-    <<: *backend-image
-    restart: "no"
-    command: ["alembic", "upgrade", "head"]
-    environment:
-      ADRIANO_DATABASE_URL: postgresql://${ADRIANO_DB_USER:-adriano}:${ADRIANO_DB_PASSWORD:-adriano}@db:5432/${ADRIANO_DB_NAME:-adriano}
-    depends_on:
-      db:
-        condition: service_healthy
-
-  backend:
-    <<: *backend-image
+  adriano:
+    # `build` + `image`: `docker compose build` builds the root
+    # Dockerfile and tags the result with the `image` name, while
+    # `docker compose pull` (operators) fetches that same name from
+    # GHCR. `up` uses a local or pulled image first and builds only
+    # when neither exists.
+    build: .
+    image: ghcr.io/exhuma/adriano:${ADRIANO_IMAGE_TAG:-edge}
     restart: unless-stopped
-    # Catalog-referenced secrets (the env var NAMES catalog.yaml points
-    # at: ADRIANO_GITLAB_TOKEN_*, ADRIANO_PUSH_TOKEN_*, ...) come from
-    # this optional file, so a new registration needs no edit here.
-    # Default: ./.env (the operator's file, see
-    # docs/operator/install.rst);
-    # `task demo` points it at the generated .env.demo. Precedence:
-    # the `environment:` entries below override the same names from
-    # this file.
+    # ALL application settings come from env files, never from an
+    # `environment:` block, so nothing here can silently override
+    # what the operator configured. Later files win: the committed
+    # defaults first, then the operator's file (default ./.env;
+    # `task demo` points it at the generated .env.demo). Catalog-
+    # referenced secrets (ADRIANO_GITLAB_TOKEN_*, ADRIANO_PUSH_TOKEN_*,
+    # ...) belong in that file as well.
     env_file:
+      - path: ./deploy/compose.defaults.env
+        required: true
       - path: ${ADRIANO_BACKEND_ENV_FILE:-.env}
         required: false
-    environment:
-      ADRIANO_DATABASE_URL: postgresql://${ADRIANO_DB_USER:-adriano}:${ADRIANO_DB_PASSWORD:-adriano}@db:5432/${ADRIANO_DB_NAME:-adriano}
-      ADRIANO_CONFIG_FILE: /app/catalog.yaml
-      ADRIANO_WORKERS: ${ADRIANO_WORKERS:-4}
-      ADRIANO_OIDC_AUTHORITY: ${ADRIANO_OIDC_AUTHORITY:-}
-      ADRIANO_OIDC_ISSUER: ${ADRIANO_OIDC_ISSUER:-}
-      ADRIANO_OIDC_AUDIENCE: ${ADRIANO_OIDC_AUDIENCE:-adr_viewer}
-      ADRIANO_OIDC_ROLES_CLAIM: ${ADRIANO_OIDC_ROLES_CLAIM:-roles}
-      # Dev-only HS256 bypass -- MUST stay unset outside a throwaway
-      # local demo (module-dev-auth-bypass). `task demo` sets these
-      # from a gitignored .env.demo it generates; never commit values
-      # here.
-      ADRIANO_DEV_AUTH_ENABLED: ${ADRIANO_DEV_AUTH_ENABLED:-false}
-      ADRIANO_DEV_SHARED_SECRET: ${ADRIANO_DEV_SHARED_SECRET:-}
-      ADRIANO_STALE_AFTER_MINUTES: ${ADRIANO_STALE_AFTER_MINUTES:-120}
     volumes:
-      # Read-only: the filesystem source and the demo catalog config.
+      # Read-only: the catalog and the demo's filesystem source.
       # Point ADRIANO_CATALOG_FILE_HOST at your own catalog.yaml for a
       # non-demo deployment (see docs/operator/catalog-file.rst).
       - ${ADRIANO_CATALOG_FILE_HOST:-./catalog.demo.yaml}:/app/catalog.yaml:ro
@@ -87,40 +65,12 @@ services:
       # docker-compose.override.yml (see docs/operator/sources.rst).
       - ./samples:/app/samples:ro
     depends_on:
-      migrate:
-        condition: service_completed_successfully
       db:
-        condition: service_healthy
-    # Optional: publish the backend directly for debugging without
-    # going through the frontend's /api/ proxy. Uncomment and pick a
-    # free host port (8000 is commonly already in use):
-    # ports:
-    #   - "8190:8000"
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: adriano-frontend:local
-    restart: unless-stopped
-    environment:
-      # Empty API_BASE_URL -> same-origin relative requests; nginx
-      # proxies /api/, /healthz and /auth/dev/ to the backend service
-      # (see frontend/nginx.conf).
-      API_BASE_URL: ${ADRIANO_FRONTEND_API_BASE_URL:-}
-      OIDC_AUTHORITY: ${ADRIANO_OIDC_AUTHORITY:-}
-      OIDC_CLIENT_ID: ${ADRIANO_OIDC_CLIENT_ID:-}
-      OIDC_REDIRECT_URI: ${ADRIANO_OIDC_REDIRECT_URI:-}
-      OIDC_POST_LOGOUT_REDIRECT_URI: ${ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI:-}
-      OIDC_SCOPE: ${ADRIANO_OIDC_SCOPE:-}
-    depends_on:
-      backend:
         condition: service_healthy
     ports:
       # Host 8000 and 8080 are commonly already in use on a dev
-      # machine; this stack publishes on 8180 instead (documented in
-      # README.md / docs/operator/install.rst).
-      - "${ADRIANO_FRONTEND_PORT:-8180}:8080"
+      # machine; this stack publishes on 8180 instead.
+      - "${ADRIANO_PORT:-8180}:8000"
 
 volumes:
   adriano-db-data:
