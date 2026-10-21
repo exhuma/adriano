@@ -27,6 +27,7 @@ How people use Adriano is described in the :doc:`user guide
    health-and-logging
    backup-restore
    upgrades
+   migrating-from-adr-viewer
    scaling
    troubleshooting
    cli

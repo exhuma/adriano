@@ -95,6 +95,72 @@ The backend answers on http://localhost:8100; with it running,
 ``curl -fsS localhost:8100/healthz`` reports the state of each
 subsystem.
 
+Sample data
+^^^^^^^^^^^
+
+``samples/adr-root`` is a ready-made source tree.
+It contains one example for each kind of record and each validation
+finding, which makes it the quickest way to see how the indexer
+reacts.
+Each entry below names a file under ``samples/adr-root`` unless
+stated otherwise.
+
+Legacy file
+   ``platform/doc/decisions/2024-01-10-use-postgresql.md`` has only
+   ``uuid``, ``decision-date`` and ``signed-off-by``.
+
+Legacy ``deprecates``
+   ``payments/doc/decisions/2024-02-02-retire-legacy-invoicing.md``
+   uses the legacy alias of ``obsoletes``.
+
+Obsolete ``kind`` line
+   ``payments/doc/decisions/2024-09-09-adopt-event-sourcing.md`` is
+   current-schema but keeps ``kind: decision`` on purpose, to show
+   the ``obsolete_kind_field`` warning.
+
+``obsoletes``
+   ``platform/doc/decisions/2025-02-20-add-rest-gateway-for-grpc-services.md``
+   points at the record it replaces.
+
+``updates``
+   ``central/doc/decisions/2025-08-01-add-trace-id-propagation.md``
+   points at the earlier record it updates.
+
+Errata
+   ``platform/doc/decisions/errata/2025-05-01-grpc-adoption-erratum.md``
+   is a technical erratum with original text, corrected text and
+   notes.
+   ``payments/doc/decisions/errata/2023-12-04-stripe-wording-fix.md``
+   is an editorial one.
+
+Invalid YAML (``bad_yaml``)
+   ``platform/doc/decisions/2025-01-05-broken-yaml-frontmatter.md``
+
+Invalid UUID (``bad_uuid``)
+   ``platform/doc/decisions/2025-03-01-bad-uuid-example.md`` falls
+   back to an identity based on its source location.
+
+Broken link (``missing_target``)
+   ``platform/doc/decisions/2025-04-10-broken-link-example.md``
+
+Duplicate UUID (``duplicate_uuid``, a warning)
+   ``platform/doc/decisions/2025-06-01-shared-event-bus.md`` and
+   ``payments/doc/decisions/2025-07-01-duplicate-uuid-payments.md``
+   share one UUID across two projects.
+
+Nested folders
+   ``platform/doc/decisions/2024/2024-11-01-use-feature-flags.md``
+
+Ignored file
+   ``central/doc/decisions/README.md`` is not an ADR and discovery
+   skips it.
+
+Candidate pushes
+   ``samples/candidates/`` holds push bodies, including an erratum
+   candidate for a published decision.
+   ``samples/push-candidate.sh`` sends them; see
+   :doc:`/operator/ci-push`.
+
 Dev sign-in
 ^^^^^^^^^^^
 
