@@ -49,6 +49,7 @@ function baseProps(): SidebarProps {
     recordKind: "decision",
     kind: "published",
     recordId: "11111111-1111-1111-1111-111111111111",
+    recordTitle: "Adopt gRPC for internal APIs",
     approval: approval(),
     adrUuid: "22222222-2222-2222-2222-222222222222",
     decisionDate: "2024-12-24",

@@ -1,8 +1,9 @@
 /**
  * Ensure the dev-login dialog's role presets fill the roles field,
- * Cancel closes without signing in, and a successful/failed
- * submission is handled (`module-dev-auth-bypass`, module-ux-
- * principles "UI modes": Cancel never mutates state).
+ * Cancel closes without signing in, a successful/failed submission
+ * is handled (`module-dev-auth-bypass`, module-ux-principles "UI
+ * modes": Cancel never mutates state), and the dialog has an
+ * accessible name (docs/ui-review D-01).
  *
  * `v-dialog` teleports its content to `document.body` (outside the
  * mounted wrapper's own DOM subtree), so interactive elements inside
@@ -48,6 +49,18 @@ describe("DevLoginDialog", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     document.body.innerHTML = "";
+  });
+
+  it("has an accessible name naming the dialog", () => {
+    mountDialog();
+
+    const dialog = document.body.querySelector('[role="dialog"]')!;
+    const labelledBy = dialog.getAttribute("aria-labelledby")!;
+    expect(labelledBy).toBeTruthy();
+    const heading = document.getElementById(labelledBy)!;
+    expect(heading.tagName).toBe("H2");
+    expect(heading.textContent?.trim()).toBe("Dev sign-in");
+    expect(heading.className).toContain("text-title-large");
   });
 
   it("fills the roles field from a preset button", async () => {

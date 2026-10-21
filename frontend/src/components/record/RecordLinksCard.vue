@@ -6,8 +6,12 @@
  * (not a sidebar-sized relationship list) -- see `RecordView`'s
  * `#errata` section. Heading level and list typography come from
  * `RecordSidebar`'s scoped defaults. The lists are not tab stops
- * themselves (docs/ui-review G-10); their links are.
+ * themselves (docs/ui-review G-10); their links are. A target's raw
+ * UUID (an unresolved link has no record to show a title for) is
+ * shown short with copy, never as full running text (docs/ui-review
+ * R-12, module-ux-principles "Technical identifiers").
  */
+import ShortIdCopy from "@/components/record/ShortIdCopy.vue";
 import type { InboundLinkOut, OutboundLinkOut } from "@/types/records";
 import { linkTypeLabel } from "@/utils/labels";
 
@@ -34,20 +38,32 @@ defineProps<{
           {{ linkTypeLabel(link.link_type) }}
         </v-list-item-title>
         <v-list-item-subtitle>
-          <router-link
-            v-if="link.target_id"
-            :to="`/records/${link.target_id}`"
+          <template v-if="link.target_id">
+            <router-link :to="`/records/${link.target_id}`">
+              {{ link.target_title ?? "Untitled" }}
+            </router-link>
+            <ShortIdCopy
+              v-if="!link.target_title"
+              :value="link.target_uuid"
+              label="target UUID"
+            />
+          </template>
+          <span
+            v-else-if="link.ambiguous"
+            class="text-warning d-inline-flex align-center flex-wrap ga-1"
           >
-            {{ link.target_title ?? link.target_uuid }}
-          </router-link>
-          <span v-else-if="link.ambiguous" class="text-warning">
             <v-icon icon="mdi-alert" size="small" aria-hidden="true" />
             Ambiguous: matches {{ link.candidate_ids.length }} records
-            (uuid {{ link.target_uuid }})
+            <ShortIdCopy :value="link.target_uuid" label="target UUID" />
           </span>
-          <span v-else class="text-medium-emphasis">
+          <span
+            v-else
+            class="text-medium-emphasis d-inline-flex align-center
+              flex-wrap ga-1"
+          >
             <v-icon icon="mdi-link-off" size="small" aria-hidden="true" />
-            Missing target (uuid {{ link.target_uuid }})
+            Missing target
+            <ShortIdCopy :value="link.target_uuid" label="target UUID" />
           </span>
         </v-list-item-subtitle>
       </v-list-item>

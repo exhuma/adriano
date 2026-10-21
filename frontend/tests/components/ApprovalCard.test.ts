@@ -41,6 +41,8 @@ function baseApproval(): ApprovalOut {
   };
 }
 
+const RECORD_TITLE = "Adopt gRPC for internal APIs";
+
 function mountCard(recordKind: "decision" | "erratum") {
   return mount(ApprovalCard, {
     props: {
@@ -48,6 +50,7 @@ function mountCard(recordKind: "decision" | "erratum") {
       kind: "published",
       recordKind,
       recordId: "11111111-1111-1111-1111-111111111111",
+      recordTitle: RECORD_TITLE,
     },
     global: { plugins: [vuetify] },
   });
@@ -81,6 +84,19 @@ describe("ApprovalCard", () => {
 });
 
 describe("ApprovalCard dialog focus", () => {
+  it("names the record in the decision dialog (D-02)", async () => {
+    const wrapper = mountCard("decision");
+
+    const accept = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Accept")!;
+    await accept.trigger("click");
+    await flushPromises();
+
+    expect(document.body.textContent).toContain(RECORD_TITLE);
+    wrapper.unmount();
+  });
+
   it("returns focus to Accept after the dialog is cancelled", async () => {
     const wrapper = mount(ApprovalCard, {
       props: {
@@ -88,6 +104,7 @@ describe("ApprovalCard dialog focus", () => {
         kind: "published",
         recordKind: "decision",
         recordId: "11111111-1111-1111-1111-111111111111",
+        recordTitle: RECORD_TITLE,
       },
       global: { plugins: [vuetify] },
       attachTo: document.body,
@@ -134,6 +151,7 @@ describe("ApprovalCard blocked content (R-02, R-10)", () => {
         kind: "published",
         recordKind: "decision",
         recordId: "11111111-1111-1111-1111-111111111111",
+        recordTitle: RECORD_TITLE,
       },
       global: { plugins: [vuetify] },
     });
@@ -163,6 +181,7 @@ describe("ApprovalCard blocked content (R-02, R-10)", () => {
         kind: "published",
         recordKind: "decision",
         recordId: "11111111-1111-1111-1111-111111111111",
+        recordTitle: RECORD_TITLE,
       },
       global: { plugins: [vuetify] },
     });
@@ -186,6 +205,7 @@ describe("ApprovalCard blocked content (R-02, R-10)", () => {
         kind: "published",
         recordKind: "decision",
         recordId: "11111111-1111-1111-1111-111111111111",
+        recordTitle: RECORD_TITLE,
       },
       global: { plugins: [vuetify] },
     });

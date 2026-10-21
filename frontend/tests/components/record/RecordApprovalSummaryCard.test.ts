@@ -45,6 +45,7 @@ function mountCard(overrides: Partial<Record<string, unknown>> = {}) {
       kind: "published",
       recordKind: "decision",
       recordId: "11111111-1111-1111-1111-111111111111",
+      recordTitle: "Adopt gRPC for internal APIs",
       recordRef: "main",
       headingId: "about-heading",
       ...overrides,

@@ -45,6 +45,9 @@ const props = defineProps<{
   recordKind: RecordKind;
   /** Record id, for the decision dialog's submission. */
   recordId: string;
+  /** Title of the record being decided, passed to the decision
+   *  dialog so it names the record (docs/ui-review D-02). */
+  recordTitle: string;
   /** Branch/ref of the record's content, shown in the candidate
    *  erratum chip's "Proposed (branch …)" suffix; omitted falls back
    *  to a plain "Proposed". */
@@ -138,6 +141,7 @@ const blockedDetails = computed(() =>
         class="mt-3"
         :record-id="recordId"
         :record-kind="recordKind"
+        :record-title="recordTitle"
         :digest="approval.digest"
         @decided="(event) => emit('decided', event)"
         @digest-changed="emit('digest-changed')"

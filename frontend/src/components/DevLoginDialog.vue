@@ -10,7 +10,7 @@
  * token or touching any existing session (module-ux-principles "UI
  * modes": dismiss must never mutate state).
  */
-import { ref, watch } from "vue";
+import { ref, useId, watch } from "vue";
 
 import { ApiError } from "@/api";
 import { devSignIn } from "@/auth/devAuth";
@@ -49,6 +49,20 @@ const email = ref("");
 const roles = ref("");
 const submitting = ref(false);
 const errorText = ref<string | null>(null);
+
+/** Id of the heading, referenced by the dialog's own
+ *  `aria-labelledby` so assistive tech announces it as the dialog's
+ *  accessible name instead of an unnamed "dialog" (docs/ui-review
+ *  D-01). */
+const titleId = useId();
+
+/** docs/ui-review D-03: see `DecisionDialog.vue` for why this is a
+ *  scoped `v-defaults-provider` instead of a global `VCardText`
+ *  default. */
+const dialogCardDefaults = {
+  VCardTitle: { class: "ma-0 px-6" },
+  VCardText: { class: "px-6" },
+} as const;
 
 /** Reset the form whenever the dialog is reopened, so a previous
  *  submission's error never lingers into the next attempt. */
@@ -110,79 +124,93 @@ async function submit(): Promise<void> {
 <template>
   <v-dialog
     :model-value="modelValue"
+    :aria-labelledby="titleId"
     max-width="480"
     @update:model-value="(value: boolean) => emit('update:modelValue', value)"
   >
-    <v-card>
-      <v-card-title>Dev sign-in</v-card-title>
-      <v-card-subtitle>
-        Local-only: mints a token for any identity you type. Never available
-        in a production build.
-      </v-card-subtitle>
-      <v-card-text>
-        <v-alert v-if="errorText" type="error" variant="tonal" class="mb-4" role="alert">
-          {{ errorText }}
-        </v-alert>
-
-        <v-text-field
-          v-model="sub"
-          label="Subject (sub)"
-          hint="Any stable identifier, e.g. a username."
-          persistent-hint
-          variant="outlined"
-          density="comfortable"
-          class="mb-2"
-          autofocus
-        />
-        <v-text-field
-          v-model="name"
-          label="Display name (optional)"
-          variant="outlined"
-          density="comfortable"
-          class="mb-2"
-        />
-        <v-text-field
-          v-model="email"
-          label="Email (optional)"
-          variant="outlined"
-          density="comfortable"
-          class="mb-2"
-        />
-        <v-text-field
-          v-model="roles"
-          label="Roles (comma-separated)"
-          hint="Must match role names in this catalog's rbac/approval_policy configuration."
-          persistent-hint
-          variant="outlined"
-          density="comfortable"
-        />
-
-        <div class="presets mt-3" role="group" aria-label="Role presets">
-          <v-btn
-            v-for="preset in PRESETS"
-            :key="preset.label"
-            size="small"
+    <v-defaults-provider :defaults="dialogCardDefaults">
+      <v-card>
+        <v-card-title :id="titleId" tag="h2" class="text-title-large">
+          Dev sign-in
+        </v-card-title>
+        <v-card-subtitle>
+          Local-only: mints a token for any identity you type. Never
+          available in a production build.
+        </v-card-subtitle>
+        <v-card-text>
+          <v-alert
+            v-if="errorText"
+            type="error"
             variant="tonal"
-            class="mr-2 mb-2"
-            @click="applyPreset(preset)"
+            class="mb-4"
+            role="alert"
           >
-            {{ preset.label }}
+            {{ errorText }}
+          </v-alert>
+
+          <v-text-field
+            v-model="sub"
+            label="Subject (sub)"
+            hint="Any stable identifier, e.g. a username."
+            persistent-hint
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+            autofocus
+          />
+          <v-text-field
+            v-model="name"
+            label="Display name (optional)"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+          />
+          <v-text-field
+            v-model="email"
+            label="Email (optional)"
+            variant="outlined"
+            density="comfortable"
+            class="mb-2"
+          />
+          <v-text-field
+            v-model="roles"
+            label="Roles (comma-separated)"
+            :hint="
+              `Must match role names in this catalog's ` +
+                `rbac/approval_policy configuration.`
+            "
+            persistent-hint
+            variant="outlined"
+            density="comfortable"
+          />
+
+          <div class="presets mt-3" role="group" aria-label="Role presets">
+            <v-btn
+              v-for="preset in PRESETS"
+              :key="preset.label"
+              size="small"
+              variant="tonal"
+              class="mr-2 mb-2"
+              @click="applyPreset(preset)"
+            >
+              {{ preset.label }}
+            </v-btn>
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="close">Cancel</v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            :loading="submitting"
+            :disabled="submitting"
+            @click="submit"
+          >
+            Sign in
           </v-btn>
-        </div>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer />
-        <v-btn variant="text" @click="close">Cancel</v-btn>
-        <v-btn
-          color="primary"
-          variant="flat"
-          :loading="submitting"
-          :disabled="submitting"
-          @click="submit"
-        >
-          Sign in
-        </v-btn>
-      </v-card-actions>
-    </v-card>
+        </v-card-actions>
+      </v-card>
+    </v-defaults-provider>
   </v-dialog>
 </template>

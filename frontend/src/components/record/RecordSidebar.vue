@@ -41,6 +41,9 @@ defineProps<{
   kind: RecordState;
   /** Record id, for the sidebar's decision dialog. */
   recordId: string;
+  /** Title of the record being decided, passed to the decision
+   *  dialog so it names the record (docs/ui-review D-02). */
+  recordTitle: string;
   /** Approval state of the record's current content (status chip,
    *  `can_decide`, digest to decide). */
   approval: ApprovalOut;
@@ -115,6 +118,7 @@ const infoCardDefaults = {
         :kind="kind"
         :record-kind="recordKind"
         :record-id="recordId"
+        :record-title="recordTitle"
         :record-ref="provenance.ref"
         @decided="(event) => emit('decided', event)"
         @digest-changed="emit('digest-changed')"

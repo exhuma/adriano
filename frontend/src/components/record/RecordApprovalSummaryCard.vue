@@ -26,6 +26,9 @@ const props = defineProps<{
   recordKind: RecordKind;
   /** Record id, for the decision dialog's submission. */
   recordId: string;
+  /** Title of the record being decided, passed to the decision
+   *  dialog so it names the record (docs/ui-review D-02). */
+  recordTitle: string;
   /** Branch/ref of the content, for the candidate erratum chip. */
   recordRef: string;
   /** Element id of the heading, which labels the whole sidebar. */
@@ -71,6 +74,7 @@ const statusLabel = computed(() =>
         v-if="approval.can_decide"
         :record-id="recordId"
         :record-kind="recordKind"
+        :record-title="recordTitle"
         :digest="approval.digest"
         @decided="(event) => emit('decided', event)"
         @digest-changed="emit('digest-changed')"

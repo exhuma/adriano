@@ -20,6 +20,9 @@ defineProps<{
   recordId: string;
   /** Decision or erratum; picks the button and dialog wording. */
   recordKind: RecordKind;
+  /** Title of the record being decided, passed straight through to
+   *  the dialog so it can name the record (docs/ui-review D-02). */
+  recordTitle: string;
   /** The exact digest being decided. */
   digest: string;
 }>();
@@ -76,6 +79,7 @@ function onDialogModel(open: boolean): void {
       :record-id="recordId"
       :action="dialogAction"
       :record-kind="recordKind"
+      :record-title="recordTitle"
       :digest="digest"
       @update:model-value="onDialogModel"
       @decided="(event) => emit('decided', event)"
