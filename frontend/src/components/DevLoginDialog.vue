@@ -15,6 +15,7 @@
  * modes": dismiss must never mutate state).
  */
 import { ref, useId, watch } from "vue";
+import type { VTextField } from "vuetify/components";
 
 import { ApiError } from "@/api";
 import {
@@ -99,6 +100,21 @@ watch(
   { immediate: true },
 );
 
+/** The Subject field, focused once per open (see `focusSubject`). */
+const subjectField = ref<InstanceType<typeof VTextField> | null>(null);
+
+/** Move focus to Subject once the open transition has finished.
+ *
+ *  Deliberately not the field's `autofocus` prop: Vuetify implements
+ *  that with an IntersectionObserver that re-fires (50 ms later)
+ *  whenever the field's intersection changes -- e.g. when the preset
+ *  buttons appear after the role fetch resolves and the dialog grows
+ *  -- which stole focus from the Roles field mid-typing and sent
+ *  roles into Subject. `after-enter` fires exactly once per open. */
+function focusSubject(): void {
+  subjectField.value?.focus();
+}
+
 function applyPreset(preset: DevRolePreset): void {
   roles.value = preset.roles.join(", ");
 }
@@ -149,6 +165,7 @@ async function submit(): Promise<void> {
     :model-value="modelValue"
     :aria-labelledby="titleId"
     max-width="480"
+    @after-enter="focusSubject"
     @update:model-value="(value: boolean) => emit('update:modelValue', value)"
   >
     <v-defaults-provider :defaults="dialogCardDefaults">
@@ -172,6 +189,7 @@ async function submit(): Promise<void> {
           </v-alert>
 
           <v-text-field
+            ref="subjectField"
             v-model="sub"
             label="Subject (sub)"
             hint="Any stable identifier, e.g. a username."
@@ -179,7 +197,6 @@ async function submit(): Promise<void> {
             variant="outlined"
             density="comfortable"
             class="mb-2"
-            autofocus
           />
           <v-text-field
             v-model="name"

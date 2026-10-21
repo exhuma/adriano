@@ -15,9 +15,50 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { VDialog } from "vuetify/components";
+
 import vuetify from "@/plugins/vuetify";
 import DevLoginDialog from "@/components/DevLoginDialog.vue";
 import { ApiError } from "@/api";
+
+/** jsdom has no `IntersectionObserver`, and Vuetify decides at import
+ *  time whether `v-intersect` (behind the `autofocus` prop) is active,
+ *  so a fake is installed before any import. Its callbacks are fired
+ *  on demand to simulate an intersection change. */
+const intersection = vi.hoisted(() => {
+  const instances: {
+    callback: IntersectionObserverCallback;
+    targets: Element[];
+  }[] = [];
+  class FakeObserver {
+    readonly targets: Element[] = [];
+    constructor(readonly callback: IntersectionObserverCallback) {
+      instances.push(this);
+    }
+    observe(target: Element): void {
+      this.targets.push(target);
+    }
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+  Object.assign(globalThis, { IntersectionObserver: FakeObserver });
+  return {
+    fireAll(): void {
+      for (const { callback, targets } of instances) {
+        const entries = targets.map(
+          (target) =>
+            ({ target, isIntersecting: true }) as IntersectionObserverEntry,
+        );
+        if (entries.length) {
+          callback(entries, {} as IntersectionObserver);
+        }
+      }
+    },
+  };
+});
 
 const devSignIn = vi.fn();
 const loadDevPresets = vi.fn();
@@ -32,6 +73,19 @@ const PRESETS = [
   { label: "Reviewer", roles: ["adr-reader", "adr-reviewer"] },
   { label: "Operator", roles: ["admin"] },
 ];
+
+function inputByLabel(label: string): HTMLInputElement {
+  const labelEl = Array.from(document.querySelectorAll("label[for]")).find(
+    (candidate) => candidate.textContent?.trim() === label,
+  ) as HTMLLabelElement | undefined;
+  const input = labelEl?.htmlFor
+    ? (document.getElementById(labelEl.htmlFor) as HTMLInputElement | null)
+    : null;
+  if (!input) {
+    throw new Error(`No input labelled "${label}" found`);
+  }
+  return input;
+}
 
 function presetLabels(): string[] {
   const group = document.body.querySelector(
@@ -71,6 +125,7 @@ describe("DevLoginDialog", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
@@ -146,6 +201,57 @@ describe("DevLoginDialog", () => {
     expect(devSignIn).toHaveBeenCalledWith(
       expect.objectContaining({ sub: "alice", roles: ["adr-reader"] }),
     );
+  });
+
+  it("never autofocuses Subject by intersection", () => {
+    mountDialog();
+
+    const subject = inputByLabel("Subject (sub)");
+    expect(subject.hasAttribute("autofocus")).toBe(false);
+  });
+
+  it("focuses Subject once the open transition ends", async () => {
+    const wrapper = mountDialog();
+    await flushPromises();
+
+    wrapper.findComponent(VDialog).vm.$emit("afterEnter");
+    await flushPromises();
+
+    expect(document.activeElement).toBe(inputByLabel("Subject (sub)"));
+  });
+
+  it("keeps focus and typed values when presets arrive late", async () => {
+    // Vuetify's `autofocus` re-fires on every intersection change (the
+    // dialog grows when presets appear); simulate that change by
+    // firing every observer once the presets have rendered.
+    vi.useFakeTimers();
+    let resolvePresets: (value: typeof PRESETS) => void = () => {};
+    loadDevPresets.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePresets = resolve;
+      }),
+    );
+    const wrapper = mountDialog();
+    wrapper.findComponent(VDialog).vm.$emit("afterEnter");
+    await flushPromises();
+    const vm = wrapper.vm as unknown as { sub: string; roles: string };
+    vm.sub = "operator";
+    const rolesInput = inputByLabel("Roles (comma-separated)");
+    rolesInput.focus();
+    vm.roles = "admin";
+    await wrapper.vm.$nextTick();
+
+    resolvePresets(PRESETS);
+    await flushPromises();
+    intersection.fireAll();
+    vi.advanceTimersByTime(500);
+    await flushPromises();
+    vi.useRealTimers();
+
+    expect(presetLabels()).toEqual(["Reader", "Reviewer", "Operator"]);
+    expect(document.activeElement).toBe(rolesInput);
+    expect(vm.sub).toBe("operator");
+    expect(vm.roles).toBe("admin");
   });
 
   it("does not load presets while closed", async () => {
