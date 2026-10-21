@@ -35,3 +35,6 @@ docs/_build/
 
 # Local catalog configuration (copy of catalog.example.yaml / catalog.demo.yaml)
 /catalog.yaml
+
+# Generated at docs build time (OpenAPI spec written by docs/conf.py)
+docs/_generated/

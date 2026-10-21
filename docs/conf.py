@@ -16,6 +16,36 @@ sys.path.insert(0, str(BACKEND_DIR))
 # an import path ever instantiates Settings with strict validation.
 os.environ.setdefault("ADRIANO_DEV_AUTH_ENABLED", "false")
 
+# -- OpenAPI spec -----------------------------------------------------
+
+GENERATED_DIR = DOCS_DIR / "_generated"
+
+
+def _write_openapi(_app):
+    """Write the FastAPI app's OpenAPI document for ``http-api.rst``.
+
+    The spec is rendered from the application at build time, so the
+    HTTP reference can never drift from the code. (``frontend/openapi.json``
+    is only refreshed when a developer runs ``npm run gen:types`` against
+    a live backend, so it can lag behind.)
+    """
+    import json
+
+    from app.main import app as fastapi_app
+
+    GENERATED_DIR.mkdir(exist_ok=True)
+    target = GENERATED_DIR / "openapi.json"
+    target.write_text(
+        json.dumps(fastapi_app.openapi(), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def setup(app):
+    """Register the build-time hooks."""
+    app.connect("builder-inited", _write_openapi)
+
+
 # -- Project information ---------------------------------------------
 
 with open(BACKEND_DIR / "pyproject.toml", "rb") as _f:
@@ -42,6 +72,7 @@ extensions = [
 # authors, not a page of the site.
 exclude_patterns = [
     "_build",
+    "_generated",
     "Thumbs.db",
     ".DS_Store",
     "_static/**/*.rst",
@@ -53,6 +84,14 @@ autosectionlabel_prefix_document = True
 
 autodoc_member_order = "bysource"
 autodoc_default_options = {"show-inheritance": True}
+
+# sphinx-autodoc-typehints cannot resolve guarded (TYPE_CHECKING-only)
+# imports inside third-party packages (pydantic, SQLAlchemy, starlette)
+# that surface when it inspects re-used names. Those are not ours.
+suppress_warnings = [
+    "sphinx_autodoc_typehints.forward_reference",
+    "sphinx_autodoc_typehints.guarded_import",
+]
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
