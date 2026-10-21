@@ -15,7 +15,7 @@ Statuses: `todo`, `in-progress`, `done`, `blocked`.
 | 08 | Samples, deploy, demo | done | see git log | see notes |
 | 09 | Benchmark & report | done | 3db7e88 d0ee735 c0e831c 22386ae f154ddf | see notes |
 | 10 | UI sidebar + erratum format | done | db781ea..21b01cb | see notes |
-| 11 | UI/UX updates from desktop review | todo | | planned; findings in docs/ui-review/README.md; decisions recorded 2026-10-20 |
+| 11 | UI/UX updates from desktop review | done | 1a0f0d1..HEAD | see notes |
 
 ## Handoff notes
 
@@ -397,5 +397,53 @@ RFC-style erratum format, and erratum review semantics:
 
 - **Known limitations:** candidate-only targets show errata list but
   erratum page says unknown decision (no candidate detail route);
-  facets count decisions only; demo screenshots 06a–12c are
-  pre-redesign; dev DB reset during screenshot runs.
+  facets count decisions only; dev DB reset during screenshot runs.
+  (The pre-redesign demo screenshots were re-shot in phase 11.)
+
+### Phase 11
+
+UI/UX updates from the desktop review (`docs/ui-review/README.md`; plan
+`phases/11-ui-ux-updates.md`; decisions in `DECISIONS.md` "Phase 11").
+
+- **Vuetify first** is now a project rule (`CLAUDE.md`): theme and
+  `createVuetify` defaults (incl. nested `VDialog`/`VCardTitle`
+  defaults) before providers, props and utilities; custom CSS last,
+  theme variables only, justified. Guard tests:
+  `tests/typography-scale.test.ts` (no MD2 classes),
+  `tests/style-blocks.test.ts` (no literal colours, every rule
+  justified), `tests/plugins/vuetify.test.ts` (contrast of status,
+  primary and medium-emphasis text, light and dark).
+- **Typography:** Vuetify 4 only ships MD3 classes; the MD2 classes
+  used before did nothing. Migrated with a documented type scale and
+  self-hosted Roboto (`@fontsource/roboto`).
+- **Shell:** one 1360 px container for app bar and pages, user menu
+  with light/dark/system (OS default, stored per browser), health chip
+  only when degraded.
+- **Search:** inline exception-only chips, active-filter chips, sort
+  (`sort=relevance|title|recent`, backend) — `SearchView` split into
+  `components/search/*` and `useSearchFacets`.
+- **Record page:** sticky approval summary with Accept/Reject
+  (`DecideButtons`), in-place refresh after a decision, one lifecycle
+  notice, Blocked status (`approvable` on detail, search, siblings,
+  candidates, errata), plain-language reasons; `utils/labels.ts` split
+  into `utils/labels/*`.
+- **Sources:** one chip per row, problem sub-row, `config_error_code`
+  on `SourceOut` with tailored recovery hints, folded columns below sm.
+- **Dev login:** presets from dev-only `GET /auth/dev/roles`; Subject
+  focused once in `after-enter` (Vuetify `autofocus` re-fires and stole
+  focus while typing Roles).
+- **Coordinator deviations:** Task 7 ran before Task 4; a typography
+  migration was inserted between Tasks 5 and 6; review fixes (Task 16)
+  ran in five batches before Tasks 13/14; three issues found in Task 14
+  were fixed in a follow-up batch.
+- **Verification:** all 29 review findings of severity 2+ closed (see
+  the "After (phase 11)" section of `docs/ui-review/README.md`); demo
+  screenshots re-shot on the compose demo stack. Local test DB row
+  counts unchanged throughout.
+- **Tests:** 585 backend, 678 frontend.
+- **Environment note:** the host's inotify instance limit (128) is
+  exhausted, so Vite's watcher hits EMFILE and serves stale code after
+  edits; restart `task dev:frontend` (kill the PID on 5173, not
+  `pkill -f vite`) when a change does not show up.
+- **Open:** inline text links in prose (e.g. "View errata" in the
+  header meta line) are below 24 px tall but exempt under SC 2.5.8.
