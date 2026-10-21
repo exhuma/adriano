@@ -615,3 +615,146 @@ Focus behaviour works:
 - In dev, a Vite dependency-optimisation reload drops the dev-login session,
   which is kept in memory. This only affects development; it was not checked
   for OIDC.
+
+## After (phase 11)
+
+Re-run of the Method above against the phase 11 build, 2026-10-21, same
+local dev servers (backend 8100, Vite 5173, restarted fresh for this run)
+and the same test database (17 records, 2 sources, 1 decision event).
+Roles and viewports match the original method; dark mode used
+`colorScheme: 'dark'` with no stored preference, plus a second pass with a
+stored `"light"` preference. No decision, poll, or candidate push was
+submitted.
+
+Tooling: the session scratchpad's `measure.js` does not composite
+Vuetify's 12%-opacity tonal underlay (`.v-chip__underlay`,
+`.v-alert__underlay`) or ancestor CSS `opacity` (medium-emphasis text). A
+copy, `measure2.js`, adds both: it multiplies the underlay's own
+`opacity` into its background colour before compositing, and multiplies
+cumulative ancestor `opacity` into the text colour's alpha before mixing.
+Re-measuring with the corrected script changed several apparent
+near-black/zero-ratio false positives (caused by the uncomposited
+underlay) to their real values.
+
+### Playwright verification checklist
+
+| Check | Result | Numbers |
+|---|---|---|
+| Alignment: app-bar brand == container at 1366/1920/2560 | pass | edges equal (3px / 280px / 600px) on `/`, a record, `/sources` |
+| Alignment: container left edge identical across routes | pass | same value per width on all 3 routes |
+| Targets: no interactive target under 24x24 | partial | 3 violations found, see "New issues" |
+| Targets: Accept/Reject visible without scrolling at 1366x768 | pass | sidebar Accept inside the 1366x768 viewport |
+| Contrast: light theme, composited, 4.5:1 / 3:1 large | pass | 0 low-contrast nodes on `/`, `/sources`, a record |
+| Contrast: dark theme, composited | partial | 1 violation (link text, 4.14:1), see "New issues" |
+| Keyboard: skip link first | pass | "Skip to main content" is tab stop 1 |
+| Keyboard: visible focus indicator on every control | pass | outline on links/buttons, `v-field--focused` border on inputs |
+| Keyboard: no static content is a tab stop | pass | Provenance list is `<v-list tabindex="-1">` |
+| Keyboard: Escape/Cancel return focus to the trigger | pass | sidebar and main-column Accept/Reject, 4 of 4 combinations |
+| Theme: OS dark, no stored preference, dark applied | pass | |
+| Theme: stored "light" overrides OS dark | pass | |
+| Zoom 683x384 DPR2: no page-level horizontal scroll | pass | sources and a record |
+| Zoom: Sources problem detail visible without table scroll | pass | table not horizontally scrollable |
+| Zoom: record sidebar stacks below main | pass | main top 271px, sidebar top 1112px |
+| Search: Recently changed puts newest-updated record first | pass | matches `order by updated_at desc` query |
+| Search: typing a query switches sort to Relevance | pass | sort control reads "Relevance" after typing |
+| Dev sign-in: each preset, 5 runs, no 403 | pass | reader/reviewer/operator, 0/5 failures each |
+| Console: no errors (ignoring Vite reloads) | pass | 0 at 1366, 1920 and 2560 |
+| Database row counts unchanged | pass | see table below |
+
+Dev sign-in was re-verified only against the running servers'
+`catalog.yaml`; `catalog.demo.yaml` needs its own backend/frontend stack,
+out of scope for a re-verification task that must not start `task dev`.
+Task 10's own tests (`test_dev_roles.py`, preset-derivation tests) cover
+`catalog.demo.yaml`.
+
+### Database row counts
+
+| Table | Before | After |
+|---|---|---|
+| record | 17 | 17 |
+| revision | 17 | 17 |
+| decision_event | 1 | 1 |
+| intake_run | 2 | 2 |
+| source_registration | 2 | 2 |
+
+No decision was submitted, no poll was triggered, and no candidate was
+pushed during this task.
+
+### Before/after screenshots
+
+Curated `after-*` images sit next to their numbered counterparts in this
+directory.
+
+| Before | After | What changed |
+|---|---|---|
+| `01-sign-in.png` | `after-01-sign-in.png` | primary-colour button, health chip hidden |
+| `02-search-1920.png` | `after-02-search-1920.png` | inline status, "Published" hidden, sort control |
+| `06-record-1920.png` | `after-06-record-1920.png` | sidebar Accept/Reject, single title, aligned columns |
+| `07-record-1366.png` | `after-07-record-1366-accept.png` | Accept/Reject reachable without scrolling |
+| `08-record-invalid.png` | `after-08-record-blocked.png` | "Blocked" chip instead of "Pending approval" |
+| `09-erratum-reader.png` | `after-09-erratum-reader.png` | status shown once, human-worded copy |
+| `10-reject-dialog.png` | `after-10-reject-dialog.png` | named dialog, short digest, aligned padding |
+| `11-sources-operator.png` | `after-11-sources-operator.png` | one chip, default-size "Poll now", problem sub-row |
+| `12-sources-zoom-200.png` | `after-12-sources-zoom-200.png` | problem detail visible, no table scroll |
+| `13-record-dark.png` | `after-13-record-dark.png` | reachable dark theme, single-surface cards |
+| `14-focus-indicators.png` | `after-14-focus-indicators.png` | visible focus ring on copy buttons |
+| `15-reader-approval.png` | `after-15-reader-approval.png` | neutral status text, no raw reason codes |
+
+### Finding status (severity 2 and above)
+
+Status legend: **closed** (verified fixed), **partly** (fixed with a
+residual gap), **deferred** (not done, with reason). All 29 findings of
+severity 2 or more are closed; none were deferred.
+
+| ID | Sev | Status | Evidence |
+|---|---|---|---|
+| G-01 | 3 | closed | 0 low-contrast chip/alert text, light and dark |
+| G-02 | 2 | closed | app-bar title left edge == container left edge |
+| G-03 | 2 | closed | container left edge identical across routes |
+| G-04 | 2 | closed | health chip hidden while state is `ok`/checking |
+| G-05 | 2 | closed | MD3 type scale in place; card titles are headings |
+| G-06 | 2 | closed | OS dark applied by default; user menu overrides it |
+| G-07 | 2 | closed | one card style: flat, low-emphasis border |
+| G-08 | 2 | closed | focus ring/field-focus visible on every sampled control |
+| R-01 | 3 | closed | sidebar Accept/Reject in view at 1366x768 |
+| R-02 | 3 | closed | "Blocked" chip shown on invalid records |
+| R-03 | 2 | closed | record title shown once |
+| R-04 | 2 | closed | single lifecycle/freshness notice, not error-red |
+| R-05 | 2 | closed | tight header, only non-default chips |
+| R-06 | 2 | closed | main and sidebar columns share a top line |
+| R-07 | 2 | closed | capped prose width, one body size |
+| R-09 | 2 | closed | wrapped values, copy buttons on path/UUID/digest |
+| R-10 | 2 | closed | human-worded approval and policy copy |
+| R-12 | 2 | closed | short UUID/digest with a "Show full digest" disclosure |
+| S-01 | 3 | closed | status inline on the row's second line, left-aligned |
+| S-02 | 3 | closed | "Published" and other default-state chips hidden |
+| S-03 | 2 | closed | one filter-bar density; hint moved to a tooltip |
+| S-04 | 2 | closed | closable filter chip, count line, neutral switch colour |
+| S-05 | 2 | closed | short chip text, branch moved to metadata text |
+| D-01 | 2 | closed | dialog titled as a heading, `aria-labelledby` |
+| D-02 | 2 | closed | dialog names the record ("Reject “Title”?") |
+| D-04 | 2 | closed | 0 of 5 sign-ins per preset returned 403 |
+| O-01 | 2 | closed | one status chip per row, staleness as secondary text |
+| O-02 | 2 | closed | default-size "Poll now" |
+| O-03 | 2 | closed | problem detail visible at 200% zoom, table doesn't scroll |
+
+### New issues found
+
+Found during this re-verification; none were in scope for any Phase 11
+task, and none were fixed here (per this task's instructions).
+
+1. **Sidebar link targets under 24px tall** (severity 2, effort S).
+   `RecordLinksCard`/`RecordSiblingsCard` render outbound, inbound and
+   sibling links as a plain `<a>` inside `v-list-item-subtitle`; the
+   clickable box is only the text's own line height (measured 186x16 at
+   1366, light theme, for a "Related decisions"/"Obsoletes" link). This is
+   a navigational link in a metadata list, not prose inside a sentence, so
+   the SC 2.5.8 inline exception does not apply.
+2. **Dark-theme link colour under 4.5:1** (severity 2, effort S). The same
+   link text measures 4.14:1 in the dark theme (`rgb(120,120,188)` on
+   `rgb(30,30,30)`, 14px body text) -- just under the 4.5:1 requirement.
+   G-01 fixed chip and alert colours but not the plain anchor colour.
+3. **Sources relative-date tooltip targets under 24px tall** (severity 1,
+   effort S). The O-03 fix's relative-date tooltip trigger (e.g. "10 hours
+   ago") measures 82x16 and is keyboard-focusable. Lower severity since it
+   is a supplementary tooltip, not a navigation or decision action.
