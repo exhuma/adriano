@@ -70,8 +70,15 @@ def load_catalog(settings: Settings) -> CatalogConfig:
     :param settings: Application settings.
     :returns: The configuration (never raises for bad content).
     """
+    if not settings.tls_verify:
+        logger.warning(
+            "ADRIANO_TLS_VERIFY is false: certificates of GitLab "
+            "instances are NOT verified. Never use this in production."
+        )
     return load_catalog_config(
-        settings.config_file, env=os.environ, registry=default_registry()
+        settings.config_file,
+        env=os.environ,
+        registry=default_registry(tls_verify=settings.tls_verify),
     )
 
 

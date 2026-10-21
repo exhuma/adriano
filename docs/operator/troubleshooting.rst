@@ -112,7 +112,8 @@ Requests answer 503 ``auth_unavailable``
 
    *Check:* network access from the Adriano container to
    :envvar:`ADRIANO_OIDC_AUTHORITY`; for an internal certificate
-   authority, :envvar:`SSL_CERT_FILE`.
+   authority, :envvar:`SSL_CERT_FILE` (or, on a non-production
+   instance only, :envvar:`ADRIANO_TLS_VERIFY`).
 
 Signed in, but every page says "permission required" (403)
    *Cause:* none of the user's roles grants ``read`` in ``rbac``,
