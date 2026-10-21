@@ -200,7 +200,11 @@ watch([fromDigest, toDigest], load);
         ><span
             v-for="(line, index) in diffLines"
             :key="index"
-            :class="`diff-line d-block diff-line--${line.kind}`"
+            :class="[
+              'diff-line d-block',
+              `diff-line--${line.kind}`,
+              line.kind === 'hunk' ? 'text-primary font-weight-bold' : null,
+            ]"
           >{{ line.text }}
 </span></pre>
       </v-card-text>
@@ -222,18 +226,14 @@ watch([fromDigest, toDigest], load);
   line-height: 1.4;
 }
 
-/* Theme-coloured tint/text with no bg- or text- utility class for an
-   arbitrary semantic colour plus opacity pair in main.css; grouped by
-   diff-line kind since a `v-for` item can only carry one dynamic
-   class list. */
+/* Added/removed tints need a semantic colour at a specific opacity
+   (0.12) that Vuetify ships no bg- utility class for; the hunk
+   line's colour/weight uses the `text-primary`/`font-weight-bold`
+   utility classes instead (see the class array at the call site). */
 .diff-line--added {
   background: rgba(var(--v-theme-success), 0.12);
 }
 .diff-line--removed {
   background: rgba(var(--v-theme-error), 0.12);
-}
-.diff-line--hunk {
-  color: rgb(var(--v-theme-primary));
-  font-weight: 600;
 }
 </style>

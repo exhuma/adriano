@@ -3,9 +3,13 @@
  * Record detail page's provenance card: source/project, path and
  * ref, source location link, and freshness (last indexed time).
  * Long values wrap rather than ending in an ellipsis, and the path
- * has a copy button (docs/ui-review R-09). Heading level and list
- * typography come from `RecordSidebar`'s scoped defaults; the list is
- * static content, so it is not a tab stop (G-10).
+ * has a copy button (docs/ui-review R-09). The path and its copy
+ * button sit in a `d-flex align-start ga-1` row, with the path text
+ * in a `text-break flex-1-1` span, so the button never wraps onto
+ * its own line below the path (P11-R-20). Heading level and list
+ * typography -- including the one-line clamp override -- come from
+ * `RecordSidebar`'s scoped defaults; the list is static content, so
+ * it is not a tab stop (G-10).
  */
 import { computed } from "vue";
 
@@ -29,7 +33,7 @@ const sourceUrlIsLink = computed(() => {
 <template>
   <v-card class="mb-3" density="compact">
     <v-card-title>Provenance</v-card-title>
-    <v-list :lines="false" tabindex="-1">
+    <v-list tabindex="-1">
       <v-list-item>
         <v-list-item-title>Source</v-list-item-title>
         <v-list-item-subtitle class="text-break">
@@ -38,8 +42,10 @@ const sourceUrlIsLink = computed(() => {
       </v-list-item>
       <v-list-item>
         <v-list-item-title>Path &amp; ref</v-list-item-title>
-        <v-list-item-subtitle class="text-break">
-          {{ provenance.path }} @ {{ provenance.ref }}
+        <v-list-item-subtitle class="d-flex align-start ga-1">
+          <span class="text-break flex-1-1">
+            {{ provenance.path }} @ {{ provenance.ref }}
+          </span>
           <CopyValueButton :value="provenance.path" label="file path" />
         </v-list-item-subtitle>
       </v-list-item>

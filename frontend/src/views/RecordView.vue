@@ -7,9 +7,23 @@
  * metadata to the side, no tabs). Loads the record and handles its
  * loading/not-found/forbidden/error states; the view-model computeds
  * (titles, chips, banners) live in `useRecordDetailView`, and
- * everything else is composed from `components/record/*`.
+ * everything else is composed from `components/record/*`. After a
+ * decision or a digest-changed refresh, the record is re-fetched in
+ * place (P11-R-16): the loaded content stays mounted (only the app
+ * bar's `v-progress-linear`, via `useLoading`, signals the fetch) so
+ * focus and scroll position are never reset the way they were when
+ * that refresh swapped in the `loading` state and unmounted the
+ * page; a request counter discards a stale response if a newer
+ * refresh or route change started first. Once the refreshed detail
+ * is in, focus moves to the sidebar's status heading (a `tabindex=
+ * -1` target, `RecordApprovalSummaryCard`'s `h2`) so a screen-reader
+ * user lands on the outcome instead of keeping focus on a button
+ * that may have gone away (e.g. Accept/Reject hidden once decided);
+ * the outcome itself is announced through the existing snackbar
+ * (decisions) or the existing "content changed" alert (digest
+ * changes), both already live regions.
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 import { ApiError } from "@/api";
 import { getRecord } from "@/api/records";
@@ -50,6 +64,11 @@ const detail = ref<RecordDetail | null>(null);
 const snackbarText = ref<string | null>(null);
 const digestChangedBanner = ref(false);
 
+/** Identifies the most recent `getRecord` request (initial load,
+ *  route change, or post-decision refresh); a response is applied
+ *  only when it is still the latest one requested (P11-R-16). */
+const requestId = ref(0);
+
 const {
   issueIndicator,
   recordKindLabel,
@@ -62,6 +81,7 @@ const {
   pageSubtitle,
   obsoletedByLinks,
   updatedByLinks,
+  sidebarInboundLinks,
   showDiff,
 } = useRecordDetailView(detail);
 
@@ -76,13 +96,24 @@ const snackbarVisible = computed({
   },
 });
 
+/** Full page load: used for the first mount and whenever the route's
+ *  `id` changes, so it owns `loadState` (loading/not-found/error
+ *  states replace the page). */
 async function load(): Promise<void> {
+  const currentRequest = ++requestId.value;
   loadState.value = "loading";
   errorText.value = null;
   try {
-    detail.value = await withLoading(() => getRecord(props.id));
+    const nextDetail = await withLoading(() => getRecord(props.id));
+    if (currentRequest !== requestId.value) {
+      return; // Superseded by a newer request; discard (P11-R-16).
+    }
+    detail.value = nextDetail;
     loadState.value = "loaded";
   } catch (error) {
+    if (currentRequest !== requestId.value) {
+      return;
+    }
     if (error instanceof ApiError && error.status === 404) {
       loadState.value = "not-found";
       return;
@@ -91,6 +122,43 @@ async function load(): Promise<void> {
     errorText.value = describeRecordLoadError(error);
     loadState.value = "error";
   }
+}
+
+/**
+ * Re-fetch the record after a decision or a digest-changed conflict
+ * without unmounting the already-loaded page (P11-R-16): `loadState`
+ * stays `"loaded"` throughout, so the main/sidebar content, scroll
+ * position and focus are undisturbed; `useLoading`'s app-bar
+ * progress bar is the only loading feedback. A stale response (an
+ * even newer refresh, or a route change to a different record) is
+ * discarded rather than overwriting fresher data. On error, the
+ * still-valid content on screen is kept and the error is reported
+ * through the snackbar instead (preserve work on error).
+ */
+async function refreshInPlace(): Promise<void> {
+  const currentRequest = ++requestId.value;
+  try {
+    const nextDetail = await withLoading(() => getRecord(props.id));
+    if (currentRequest !== requestId.value) {
+      return;
+    }
+    detail.value = nextDetail;
+  } catch (error) {
+    if (currentRequest !== requestId.value) {
+      return;
+    }
+    snackbarText.value = describeRecordLoadError(error);
+  }
+}
+
+/** Move focus to the sidebar's status heading once the refreshed
+ *  detail has rendered, so a screen-reader user lands on the
+ *  outcome rather than on a control that may no longer exist
+ *  (P11-R-16). The heading is a `tabindex="-1"` target solely for
+ *  this programmatic focus; it is never a tab stop. */
+async function focusSidebarHeading(): Promise<void> {
+  await nextTick();
+  document.getElementById("sidebar-heading")?.focus();
 }
 
 watch(
@@ -106,12 +174,14 @@ watch(
 async function onDecided(event: DecisionSummaryOut): Promise<void> {
   const isErratum = detail.value?.metadata.record_kind === "erratum";
   snackbarText.value = decidedSnackbarText(event.action, isErratum);
-  await load();
+  await refreshInPlace();
+  await focusSidebarHeading();
 }
 
 async function onDigestChanged(): Promise<void> {
   digestChangedBanner.value = true;
-  await load();
+  await refreshInPlace();
+  await focusSidebarHeading();
 }
 </script>
 
@@ -211,6 +281,7 @@ async function onDigestChanged(): Promise<void> {
             :record-id="props.id"
             :record-title="pageTitle"
             :record-ref="detail.provenance.ref"
+            :has-validation-issues="detail.issues.length > 0"
             @decided="onDecided"
             @digest-changed="onDigestChanged"
           />
@@ -243,7 +314,7 @@ async function onDigestChanged(): Promise<void> {
             :provenance="detail.provenance"
             :freshness="detail.freshness"
             :outbound-links="detail.outbound_links"
-            :inbound-links="detail.inbound_links"
+            :inbound-links="sidebarInboundLinks"
             :siblings="detail.siblings"
             :legacy-signoff-entries="detail.legacy_signoff_unverified"
             @decided="onDecided"

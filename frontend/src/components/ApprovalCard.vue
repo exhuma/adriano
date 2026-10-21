@@ -9,9 +9,13 @@
  * when the viewed record is itself an erratum; the decide logic
  * (`useDecision`) is unchanged -- actions stay accepted/rejected
  * either way. When content cannot be decided at all (R-02), the
- * status chip becomes the neutral "Blocked" status and the "why you
- * can't decide" line uses plain-language copy for the blocker code
- * instead of the raw `decide_blocked_reason` text (R-10).
+ * status chip becomes the neutral "Blocked" status and the
+ * explanation above already states "can't be decided until its
+ * problems are fixed" once, so the blocked-reason row below is not
+ * repeated for that case; its raw secondary detail is shown only
+ * when the issues card above did not already explain the problem
+ * (`hasValidationIssues`), never as plain machine-worded text
+ * (P11-R-07).
  */
 import { computed } from "vue";
 
@@ -52,6 +56,11 @@ const props = defineProps<{
    *  erratum chip's "Proposed (branch …)" suffix; omitted falls back
    *  to a plain "Proposed". */
   recordRef?: string;
+  /** Whether the record page's issues card already lists validation
+   *  problems for this record; when true, the secondary "Details"
+   *  line below is skipped for `not_approvable` instead of repeating
+   *  what the issues card already explains (P11-R-07). */
+  hasValidationIssues?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -99,14 +108,26 @@ const blockedText = computed(
  *  blocker. */
 const blockedIsMuted = computed(() => blockedCode.value === "not_eligible");
 
-/** `not_approvable`'s reader-facing reason (e.g. "the record has no
- *  valid `uuid`") is free text with no code of its own; it is kept,
- *  never parsed, in a secondary "Details" position alongside the
- *  plain-language headline above (Task 8). */
+/** `not_approvable`'s reader-facing reason is free text with no
+ *  code of its own. When the issues card above already lists the
+ *  validation problems, showing this raw text again is a machine-
+ *  worded duplicate (P11-R-07), so it is kept, never parsed, as a
+ *  secondary "Details" fallback only when that card is empty. */
 const blockedDetails = computed(() =>
-  blockedCode.value === "not_approvable"
+  blockedCode.value === "not_approvable" && !props.hasValidationIssues
     ? props.approval.decide_blocked_reason
     : null,
+);
+
+/**
+ * The blocked-reason row above is skipped for `not_approvable`: the
+ * state explanation paragraph (`approvalStateExplanation`) already
+ * renders the exact same "can't be decided until its problems are
+ * fixed" sentence for that code, so showing it again would say the
+ * same thing twice (P11-R-07).
+ */
+const showBlockedReason = computed(
+  () => blockedCode.value !== "not_approvable",
 );
 </script>
 
@@ -148,6 +169,7 @@ const blockedDetails = computed(() =>
       />
       <div v-else class="mt-3">
         <p
+          v-if="showBlockedReason"
           class="text-body-medium d-flex align-center ga-1"
           :class="{ 'text-medium-emphasis': blockedIsMuted }"
         >

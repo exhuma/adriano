@@ -136,8 +136,10 @@ describe("ApprovalCard dialog focus", () => {
   });
 });
 
-describe("ApprovalCard blocked content (R-02, R-10)", () => {
-  it("shows the neutral 'Blocked' status instead of 'Pending approval'", () => {
+describe("ApprovalCard blocked content (R-02, R-10, P11-R-07)", () => {
+  it("shows the neutral 'Blocked' status instead of 'Pending approval'," +
+    " the explanation once, and a raw-text fallback only when no" +
+    " issues card already explains it", () => {
     const wrapper = mount(ApprovalCard, {
       props: {
         approval: {
@@ -152,19 +154,50 @@ describe("ApprovalCard blocked content (R-02, R-10)", () => {
         recordKind: "decision",
         recordId: "11111111-1111-1111-1111-111111111111",
         recordTitle: RECORD_TITLE,
+        hasValidationIssues: false,
       },
       global: { plugins: [vuetify] },
     });
 
     expect(wrapper.text()).toContain("Blocked");
     expect(wrapper.text()).not.toContain("Pending approval");
-    expect(wrapper.text()).toContain(
+    const occurrences = wrapper.text().split(
       "This content can't be decided until its problems are fixed.",
-    );
+    ).length - 1;
+    expect(occurrences).toBe(1);
     expect(wrapper.text()).toContain(
       "Details: this content cannot be decided: the record has no " +
         "valid `uuid`",
     );
+  });
+
+  it("drops the raw 'Details' line when the issues card already" +
+    " explains the problem", () => {
+    const wrapper = mount(ApprovalCard, {
+      props: {
+        approval: {
+          ...baseApproval(),
+          approvable: false,
+          can_decide: false,
+          decide_blocked_code: "not_approvable",
+          decide_blocked_reason:
+            "this content cannot be decided: the record has no valid `uuid`",
+        },
+        kind: "published",
+        recordKind: "decision",
+        recordId: "11111111-1111-1111-1111-111111111111",
+        recordTitle: RECORD_TITLE,
+        hasValidationIssues: true,
+      },
+      global: { plugins: [vuetify] },
+    });
+
+    expect(wrapper.text()).toContain("Blocked");
+    expect(wrapper.text()).toContain(
+      "This content can't be decided until its problems are fixed.",
+    );
+    expect(wrapper.text()).not.toContain("Details:");
+    expect(wrapper.text()).not.toContain("`uuid`");
   });
 
   it("shows a short, muted line for a reader blocked by not_eligible", () => {

@@ -7,7 +7,9 @@
  * `ApprovalCard`). Carrying the sidebar heading inside this card puts
  * the sidebar's top edge on the same line as the main column's first
  * card. Why decisions are blocked is explained once, in the main
- * column's approval card, not repeated here.
+ * column's approval card, not repeated here. The heading carries
+ * `tabindex="-1"` solely so `RecordView` can move focus to it after
+ * an in-place refresh (P11-R-16); it is never a tab stop.
  */
 import { computed } from "vue";
 
@@ -62,13 +64,20 @@ const statusLabel = computed(() =>
 
 <template>
   <v-card class="mb-3" density="compact">
-    <v-card-title :id="headingId" tag="h2" class="text-title-large">
+    <v-card-title
+      :id="headingId"
+      tag="h2"
+      tabindex="-1"
+      class="text-title-large"
+    >
       {{ heading }}
     </v-card-title>
     <v-card-text class="d-flex flex-column ga-3">
       <div class="d-flex align-center justify-space-between flex-wrap ga-2">
         <StatusChip v-bind="statusLabel" />
-        <a href="#approval" class="text-body-medium">Approval details</a>
+        <v-btn href="#approval" variant="text" size="small" color="primary">
+          Approval details
+        </v-btn>
       </div>
       <DecideButtons
         v-if="approval.can_decide"

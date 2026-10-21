@@ -96,6 +96,13 @@ export interface RecordDetailView {
   obsoletedByLinks: Readonly<Ref<RecordDetail["inbound_links"]>>;
   /** Inbound `updated_by` links, for the updated-decision banner. */
   updatedByLinks: Readonly<Ref<RecordDetail["inbound_links"]>>;
+  /** Inbound links for the sidebar's "Referenced by" card, with
+   *  whichever type the lifecycle notice above is currently stating
+   *  removed, so the same fact is never shown twice (P11-R-21). An
+   *  `updated_by` entry still appears here when `status` is
+   *  `"obsoleted"` (obsoleted takes priority in the banner), since
+   *  the banner never mentions it in that case. */
+  sidebarInboundLinks: Readonly<Ref<RecordDetail["inbound_links"]>>;
   /** Whether the Diff card has any other revision to compare
    *  against; it is hidden otherwise (R-08). */
   showDiff: Readonly<Ref<boolean>>;
@@ -216,6 +223,24 @@ export function useRecordDetailView(
       : [],
   );
 
+  /** The link type the lifecycle notice currently states, matching
+   *  `RecordStatusBanners`' own priority (obsoleted over updated),
+   *  or `null` when no notice shows. */
+  const sidebarInboundLinks = computed(() => {
+    if (!detail.value) {
+      return [];
+    }
+    const statedType =
+      detail.value.status === "obsoleted"
+        ? "obsoleted_by"
+        : detail.value.status === "updated"
+          ? "updated_by"
+          : null;
+    return detail.value.inbound_links.filter(
+      (link) => link.link_type !== statedType,
+    );
+  });
+
   const showDiff = computed(() => {
     if (!detail.value) {
       return false;
@@ -245,6 +270,7 @@ export function useRecordDetailView(
     pageSubtitle,
     obsoletedByLinks,
     updatedByLinks,
+    sidebarInboundLinks,
     showDiff,
   };
 }

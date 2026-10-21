@@ -9,7 +9,10 @@
  * themselves (docs/ui-review G-10); their links are. A target's raw
  * UUID (an unresolved link has no record to show a title for) is
  * shown short with copy, never as full running text (docs/ui-review
- * R-12, module-ux-principles "Technical identifiers").
+ * R-12, module-ux-principles "Technical identifiers"). The caller
+ * (`useRecordDetailView`'s `sidebarInboundLinks`) already removes
+ * whichever inbound link the page's lifecycle notice currently
+ * states, so "Referenced by" never repeats that fact (P11-R-21).
  */
 import ShortIdCopy from "@/components/record/ShortIdCopy.vue";
 import type { InboundLinkOut, OutboundLinkOut } from "@/types/records";

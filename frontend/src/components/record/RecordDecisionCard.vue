@@ -29,7 +29,11 @@ const bodyHtml = computed(() => stripLeadingTitleHeading(props.renderedHtml, pro
 
 <template>
   <v-card class="mb-4">
-    <v-card-text>
+    <!-- `text-break` on the card text, not the inner div, so the
+         `eslint-disable-next-line` comment stays adjacent to the
+         `v-html` line (`overflow-wrap`/`word-break` are inherited,
+         so this reaches the markdown body the same way). -->
+    <v-card-text class="text-break">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="rendered-markdown text-body-large" v-html="bodyHtml" />
     </v-card-text>
@@ -38,12 +42,11 @@ const bodyHtml = computed(() => stripLeadingTitleHeading(props.renderedHtml, pro
 
 <style scoped>
 .rendered-markdown {
-  /* No Vuetify utility wraps long unbroken tokens (URLs, identifiers)
-     inside arbitrary markdown body HTML. */
-  overflow-wrap: break-word;
   /* Vuetify has no ch-based measure utility (R-07: cap prose at
      ~70ch characters per line); max-width is the only way to express
-     it. */
+     it. Long unbroken tokens (URLs, identifiers) inside the markdown
+     body are wrapped by the `text-break` utility class at the call
+     site instead of a custom rule. */
   max-width: 70ch;
 }
 

@@ -4,14 +4,27 @@
  * than document body (rfc-editor.org/info layout: the document is
  * the main column, metadata moves to the side). Its first card holds
  * the sidebar heading, the approval status and -- for reviewers --
- * the Accept/Reject buttons (docs/ui-review R-01). At `md` and up the
- * whole sidebar is sticky below the app bar and capped to the
- * viewport height, scrolling on its own when taller, so the decision
- * actions stay in reach while the main column scrolls and no card is
- * ever pushed out of reach below the fold. Below `md` it stacks
- * under the main column as a normal block.
+ * the Accept/Reject buttons (docs/ui-review R-01). At `md` and up
+ * only that first card is sticky below the app bar (P11-R-13); the
+ * info cards below it flow with the page like the main column, so
+ * the sidebar can never grow taller than the viewport the way a
+ * whole-sidebar sticky region did at 1366x768 -- there is no nested
+ * scroll region, so no overflow tracking or extra tab stop is
+ * needed. Below `md` the sticky card stacks under the main column as
+ * a normal block too (the `position-sticky` class is conditional).
+ *
+ * `<aside>` carries `h-100`: a sticky element can never stick past
+ * the bottom edge of its containing block, which for the summary
+ * card (a direct child with no intervening positioned ancestor) is
+ * `<aside>` itself. `RecordView`'s `v-row` already stretches both
+ * columns to equal height (flexbox's default `align-items: stretch`
+ * with the main column's content as the tall side), but `<aside>` is
+ * plain block content, so without `h-100` it still only grows to its
+ * own cards' height -- shorter than the main column whenever the
+ * main column has more content -- and the card would un-stick before
+ * the page finished scrolling. `h-100` lets it fill the already-
+ * stretched `v-col`, so the card stays stuck through the full scroll.
  */
-import { ref } from "vue";
 import { useDisplay } from "vuetify";
 
 import RecordApprovalSummaryCard from
@@ -21,7 +34,6 @@ import RecordMetadataCard from "@/components/record/RecordMetadataCard.vue";
 import RecordProvenanceCard from "@/components/record/RecordProvenanceCard.vue";
 import RecordSiblingsCard from "@/components/record/RecordSiblingsCard.vue";
 import LegacySignoffCard from "@/components/record/LegacySignoffCard.vue";
-import { useScrollOverflow } from "@/composables/useScrollOverflow";
 import type { ApprovalOut, DecisionSummaryOut } from "@/types/approval";
 import type {
   FreshnessOut,
@@ -77,9 +89,6 @@ const emit = defineEmits<{
 }>();
 
 const { mdAndUp } = useDisplay();
-const asideEl = ref<HTMLElement | null>(null);
-const contentEl = ref<HTMLElement | null>(null);
-const overflows = useScrollOverflow(asideEl, contentEl);
 
 /**
  * Scoped defaults for the info cards under the sidebar `h2` (ladder
@@ -103,59 +112,67 @@ const infoCardDefaults = {
 </script>
 
 <template>
-  <aside
-    ref="asideEl"
-    aria-labelledby="sidebar-heading"
-    :class="{
-      'record-sidebar--sticky position-sticky overflow-y-auto': mdAndUp,
-    }"
-    :tabindex="mdAndUp && overflows ? 0 : undefined"
-  >
-    <div ref="contentEl">
-      <RecordApprovalSummaryCard
-        heading-id="sidebar-heading"
-        :approval="approval"
-        :kind="kind"
+  <aside aria-labelledby="sidebar-heading" class="h-100">
+    <RecordApprovalSummaryCard
+      heading-id="sidebar-heading"
+      :class="{ 'sidebar-summary--sticky position-sticky': mdAndUp }"
+      :approval="approval"
+      :kind="kind"
+      :record-kind="recordKind"
+      :record-id="recordId"
+      :record-title="recordTitle"
+      :record-ref="provenance.ref"
+      @decided="(event) => emit('decided', event)"
+      @digest-changed="emit('digest-changed')"
+    />
+
+    <v-defaults-provider :defaults="infoCardDefaults">
+      <RecordMetadataCard
+        :adr-uuid="adrUuid"
+        :decision-date="decisionDate"
+        :decision-date-inferred="decisionDateInferred"
         :record-kind="recordKind"
-        :record-id="recordId"
-        :record-title="recordTitle"
-        :record-ref="provenance.ref"
-        @decided="(event) => emit('decided', event)"
-        @digest-changed="emit('digest-changed')"
       />
 
-      <v-defaults-provider :defaults="infoCardDefaults">
-        <RecordMetadataCard
-          :adr-uuid="adrUuid"
-          :decision-date="decisionDate"
-          :decision-date-inferred="decisionDateInferred"
-          :record-kind="recordKind"
-        />
+      <RecordProvenanceCard :provenance="provenance" :freshness="freshness" />
 
-        <RecordProvenanceCard :provenance="provenance" :freshness="freshness" />
+      <RecordLinksCard
+        :outbound-links="outboundLinks"
+        :inbound-links="inboundLinks"
+      />
 
-        <RecordLinksCard
-          :outbound-links="outboundLinks"
-          :inbound-links="inboundLinks"
-        />
+      <RecordSiblingsCard :siblings="siblings" />
 
-        <RecordSiblingsCard :siblings="siblings" />
-
-        <LegacySignoffCard :entries="legacySignoffEntries" />
-      </v-defaults-provider>
-    </div>
+      <LegacySignoffCard :entries="legacySignoffEntries" />
+    </v-defaults-provider>
   </aside>
 </template>
 
 <style scoped>
-/* docs/ui-review R-01: Vuetify's `position-sticky` has no offset
-   utility, and the offset must follow the app bar's live height,
-   which Vuetify only exposes as `--v-layout-top` (set on `v-main`);
-   16px leaves the same gap as the column gutter. The max-height keeps
-   the sticky sidebar inside the viewport so its lower cards scroll
-   within it (`overflow-y-auto`) instead of being unreachable. */
-.record-sidebar--sticky {
+/* P11-R-13: only the sidebar's first card is sticky, not the whole
+   aside, so the info cards below it flow with the page and can never
+   be taller than the viewport (the old whole-sidebar sticky region
+   was at 1366x768). Vuetify's `position-sticky` utility has no
+   offset utility, and the offset must follow the app bar's live
+   height, which Vuetify only exposes as `--v-layout-top`; 16px
+   leaves the same gap as the column gutter. */
+.sidebar-summary--sticky {
   top: calc(var(--v-layout-top) + 16px);
-  max-height: calc(100vh - var(--v-layout-top) - 32px);
+  /* The card already paints its own opaque theme surface background
+     (Vuetify's `VCard` default), but still needs to stack above the
+     info cards that scroll underneath it as the page scrolls;
+     Vuetify has no utility for stacking order. */
+  z-index: 1;
+}
+
+/* WCAG 2.4.11: a focused control inside an info card below can
+   scroll up underneath the sticky summary card above it; give every
+   focusable element in the sidebar enough top clearance to land
+   below the card instead of partly hidden behind it. Vuetify has no
+   scroll-margin utility. 200px covers the summary card's measured
+   height (about 150-180px with Accept/Reject shown) plus the sticky
+   offset's 16px gap. */
+aside :focus-visible {
+  scroll-margin-top: calc(var(--v-layout-top) + 200px);
 }
 </style>

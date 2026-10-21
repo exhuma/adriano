@@ -6,12 +6,14 @@
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
+import { ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import vuetify from "@/plugins/vuetify";
 import RecordView from "@/views/RecordView.vue";
 import type { RecordDetail } from "@/types/records";
-import type { RecordDiffOut } from "@/types/approval";
+import type { DecisionOutcome } from "@/composables/useDecision";
+import type { DecisionSummaryOut, RecordDiffOut } from "@/types/approval";
 
 const getRecord = vi.fn();
 const getRecordDiff = vi.fn();
@@ -19,6 +21,15 @@ const getRecordDiff = vi.fn();
 vi.mock("@/api/records", () => ({
   getRecord: (...args: unknown[]) => getRecord(...args),
   getRecordDiff: (...args: unknown[]) => getRecordDiff(...args),
+}));
+
+// Same approach as `DecisionDialog.test.ts`: mock the delivery-agnostic
+// decide composable directly so the decided/digest-changed flow can be
+// driven without a real decisions endpoint.
+const decide = vi.fn<(...args: unknown[]) => Promise<DecisionOutcome>>();
+
+vi.mock("@/composables/useDecision", () => ({
+  useDecision: () => ({ submitting: ref(false), decide }),
 }));
 
 const noPriorDiff: RecordDiffOut = {
@@ -327,6 +338,38 @@ describe("RecordView status banners and layout", () => {
     expect(wrapper.text()).toContain("Use gRPC");
   });
 
+  it("hides the sidebar's 'Referenced by' entry the lifecycle notice " +
+    "already states, but keeps one it does not (P11-R-21)", async () => {
+    const detail = baseDetail();
+    detail.status = "obsoleted";
+    detail.inbound_links = [
+      {
+        link_type: "obsoleted_by",
+        source_id: "33333333-3333-3333-3333-333333333333",
+        source_title: "Use gRPC",
+      },
+      {
+        link_type: "updated_by",
+        source_id: "44444444-4444-4444-4444-444444444444",
+        source_title: "Use PostgreSQL v2",
+      },
+    ];
+    getRecord.mockResolvedValue(detail);
+
+    const wrapper = await mountRecordView();
+
+    expect(wrapper.text()).toContain("This decision is obsolete, see");
+    const sidebar = wrapper.find("aside");
+    // The obsoleted_by link is already stated by the banner above,
+    // so the sidebar's "Referenced by" card never repeats it.
+    expect(sidebar.text()).not.toContain("Obsoleted by");
+    expect(sidebar.text()).not.toContain("Use gRPC");
+    // The coexisting updated_by link is not stated by the banner
+    // (obsoleted takes priority there), so it still appears once.
+    expect(sidebar.text()).toContain("Updated by");
+    expect(sidebar.text()).toContain("Use PostgreSQL v2");
+  });
+
   it("shows the updated lifecycle notice from the derived status and an inbound updated_by link", async () => {
     const detail = baseDetail();
     detail.status = "updated";
@@ -521,5 +564,156 @@ describe("RecordView status banners and layout", () => {
 
     const html = wrapper.html();
     expect(html.indexOf("Approval")).toBeLessThan(html.indexOf("About this decision"));
+  });
+});
+
+describe("RecordView post-decision refresh (P11-R-16)", () => {
+  function decisionEvent(
+    action: DecisionSummaryOut["action"],
+  ): DecisionSummaryOut {
+    return {
+      id: "77777777-7777-7777-7777-777777777777",
+      digest: "sha256-v1:abc",
+      current_digest: true,
+      action,
+      actor_issuer: "https://idp.example",
+      actor_subject: "user-1",
+      actor_display: "Jane Reviewer",
+      comment: null,
+      policy_id: "global",
+      policy_version: 1,
+      provenance: {
+        record_id: "11111111-1111-1111-1111-111111111111",
+        kind: "published",
+        source_id: null,
+        project: null,
+        ref: null,
+        path: null,
+        source_url: null,
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+  }
+
+  /** The two page-level Accept/Reject triggers (sidebar + approval
+   *  card) are plain buttons on `document.body` once attached; the
+   *  dialog's own submit button is scoped out via its `v-card-actions`
+   *  wrapper (unique to `DecisionDialog`) so clicking it never
+   *  re-opens a trigger instead of submitting. */
+  function findButton(text: string): HTMLButtonElement | undefined {
+    return Array.from(document.body.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === text,
+    );
+  }
+
+  function dialogButton(text: string): HTMLButtonElement | undefined {
+    return Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(
+        ".v-card-actions button",
+      ),
+    ).find((b) => b.textContent?.trim() === text);
+  }
+
+  async function mountAttached() {
+    const router = await makeRouter();
+    const wrapper = mount(RecordView, {
+      props: { id: "11111111-1111-1111-1111-111111111111" },
+      global: { plugins: [router, vuetify] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    return wrapper;
+  }
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    document.body.innerHTML = "";
+  });
+
+  it("refreshes in place after a decision -- no loading-state remount, " +
+    "and focus moves to the sidebar status heading", async () => {
+    getRecord.mockResolvedValueOnce(baseDetail());
+    getRecord.mockResolvedValueOnce(baseDetail());
+    decide.mockResolvedValueOnce({
+      kind: "success",
+      event: decisionEvent("accepted"),
+    });
+
+    const wrapper = await mountAttached();
+
+    findButton("Accept")!.click();
+    await flushPromises();
+    dialogButton("Accept")!.click();
+    await flushPromises();
+    await flushPromises();
+
+    expect(getRecord).toHaveBeenCalledTimes(2);
+    // The page content stayed mounted throughout -- it never fell
+    // back to the loading state and lost the already-rendered record.
+    expect(wrapper.text()).not.toContain("Loading record");
+    expect(wrapper.find("h1").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Use PostgreSQL");
+    // `v-snackbar` teleports its content to `document.body`, outside
+    // the wrapper's own element (same as `v-dialog`; see
+    // `DecisionDialog.test.ts`).
+    expect(document.body.textContent).toContain("Decision recorded: accepted.");
+    // Focus lands on the sidebar's status heading, a `tabindex="-1"`
+    // target, instead of staying on a trigger button that may have
+    // disappeared or resetting to the document body.
+    expect(document.activeElement?.id).toBe("sidebar-heading");
+  });
+
+  it("discards a stale refresh when a newer decision's refresh " +
+    "already started (P11-R-16)", async () => {
+    getRecord.mockResolvedValueOnce(baseDetail()); // initial load
+
+    let resolveStale!: (detail: RecordDetail) => void;
+    let resolveFresh!: (detail: RecordDetail) => void;
+    getRecord.mockImplementationOnce(
+      () => new Promise<RecordDetail>((resolve) => (resolveStale = resolve)),
+    );
+    getRecord.mockImplementationOnce(
+      () => new Promise<RecordDetail>((resolve) => (resolveFresh = resolve)),
+    );
+    decide
+      .mockResolvedValueOnce({
+        kind: "success",
+        event: decisionEvent("accepted"),
+      })
+      .mockResolvedValueOnce({
+        kind: "success",
+        event: decisionEvent("rejected"),
+      });
+
+    await mountAttached();
+
+    // First decision starts a refresh that will not resolve yet.
+    findButton("Accept")!.click();
+    await flushPromises();
+    dialogButton("Accept")!.click();
+    await flushPromises();
+
+    // `detail.value` has not changed yet (the first refresh is still
+    // pending), so a second decision can start -- and start a newer
+    // refresh -- before the first one resolves.
+    findButton("Accept")!.click();
+    await flushPromises();
+    dialogButton("Accept")!.click();
+    await flushPromises();
+
+    const staleDetail = baseDetail();
+    staleDetail.metadata.title = "Stale title";
+    const freshDetail = baseDetail();
+    freshDetail.metadata.title = "Fresh title";
+
+    // Resolve the newer request first, then the stale one: the stale
+    // response must never overwrite the fresher one already applied.
+    resolveFresh(freshDetail);
+    await flushPromises();
+    resolveStale(staleDetail);
+    await flushPromises();
+
+    expect(document.body.textContent).toContain("Fresh title");
+    expect(document.body.textContent).not.toContain("Stale title");
   });
 });

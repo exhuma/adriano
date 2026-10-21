@@ -25,7 +25,14 @@ defineProps<{
 </script>
 
 <template>
-  <div class="erratum-text-blocks d-flex flex-column ga-3 text-body-large">
+  <!-- `text-break` here, not on each `.erratum-block-body` below, so
+       every `eslint-disable-next-line` comment stays adjacent to its
+       `v-html` line (`overflow-wrap`/`word-break` are inherited, so
+       this still reaches all three quoted blocks). -->
+  <div
+    class="erratum-text-blocks d-flex flex-column ga-3 text-body-large
+      text-break"
+  >
     <div v-if="originalHtml" class="erratum-block">
       <p class="text-label-large mb-1">Original text — says:</p>
       <!-- eslint-disable-next-line vue/no-v-html -->
@@ -57,11 +64,10 @@ defineProps<{
 .erratum-block-body {
   /* Vuetify's border utilities only toggle a themed 1px border; this
      accent rule needs an explicit 3px width, which has no utility
-     equivalent. */
+     equivalent. Long unbroken tokens (URLs, identifiers) inside the
+     quoted HTML are wrapped by the `text-break` utility class at the
+     call site instead of a custom rule. */
   border-left: 3px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  /* No Vuetify utility wraps long unbroken tokens (URLs,
-     identifiers) inside quoted HTML at arbitrary widths. */
-  overflow-wrap: break-word;
 }
 
 /* Same last-resort heading rule as `RecordDecisionCard.vue`'s

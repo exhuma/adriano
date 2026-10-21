@@ -73,9 +73,14 @@ const reportedLine = computed(() => {
       <span v-if="reportedLine" class="text-body-medium text-medium-emphasis">
         {{ reportedLine }}
       </span>
-      <router-link :to="`/records/${erratum.id}`" class="text-body-medium">
+      <v-btn
+        :to="`/records/${erratum.id}`"
+        variant="text"
+        size="small"
+        color="primary"
+      >
         Open erratum
-      </router-link>
+      </v-btn>
       <v-btn
         v-if="isRejected"
         size="small"
