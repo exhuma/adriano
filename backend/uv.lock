@@ -16,7 +16,7 @@ wheels = [
 
 [[package]]
 name = "adriano-backend"
-version = "0.1.0"
+version = "2026.10.21a1"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
