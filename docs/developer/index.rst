@@ -18,4 +18,10 @@ behind them and the reference for the backend code.
    :maxdepth: 2
    :caption: Guides and reference
 
+   getting-started
+   frontend
+   testing
+   code-style
+   contributing
+   http-api
    api/index
