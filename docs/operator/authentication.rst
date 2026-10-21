@@ -81,8 +81,11 @@ Endpoints
    The provider's token and key endpoints must be on the same origin
    (scheme, host and port) as :envvar:`ADRIANO_OIDC_AUTHORITY`;
    the browser blocks requests to any other origin.
+   Adriano's content security policy allows the web UI to contact
+   that one origin and nothing else besides Adriano itself.
 
-Then set in ``.env``:
+Then set (in ``.env`` with Compose, in the ConfigMap on
+Kubernetes):
 
 .. code-block:: sh
 
@@ -91,7 +94,9 @@ Then set in ``.env``:
    ADRIANO_OIDC_AUDIENCE=adr_viewer
    ADRIANO_OIDC_ROLES_CLAIM=realm_access.roles
 
-All OIDC settings are described in :doc:`configuration`.
+One authority serves both the API (token validation) and the web UI
+(sign-in); the client ID, scopes and redirect URIs are described in
+:doc:`configuration`.
 
 Who may do what
 ---------------
@@ -175,12 +180,12 @@ Run these checks after every deployment and after every change to
         -X POST https://adriano.example.com/auth/dev/token
 
    The answer must be ``404``.
-#. The backend start-up log contains neither ``DEV AUTH ENABLED``
+#. The start-up log contains neither ``DEV AUTH ENABLED``
    nor ``dev HS256 tokens are accepted``:
 
    .. code-block:: sh
 
-      docker compose logs backend | grep -i 'dev'
+      docker compose logs adriano | grep -i 'dev'
 
 #. The sign-in page offers no "Dev sign-in" button.
    The production web image never contains it, whatever the
@@ -188,5 +193,6 @@ Run these checks after every deployment and after every change to
    build.
 
 To turn it off, remove both variables from ``.env`` (and from the
-shell environment and the backend environment file), then recreate
-the backend with ``docker compose up -d backend``.
+shell environment and the environment file), then recreate
+the container with ``docker compose up -d adriano`` (Kubernetes:
+``kubectl rollout restart deployment/adriano``).

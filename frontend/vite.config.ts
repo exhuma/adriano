@@ -6,9 +6,8 @@ import vuetify from "vite-plugin-vuetify";
 
 // Dev-only proxy target for the FastAPI backend (backend on 8100, Vite
 // dev server on 5173). Overridable so `task demo:ui` can point the same
-// dev server at the docker-compose demo stack's frontend (which itself
-// proxies to the containerised backend) instead, without a second
-// published port.
+// dev server at the docker-compose demo container (which serves the
+// API and the SPA on one published port) instead.
 const backendDevUrl =
   process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8100";
 

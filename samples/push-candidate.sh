@@ -35,9 +35,8 @@
 #
 # Env vars:
 #   ADRIANO_API_BASE_URL  Base URL of the running API (default:
-#                         http://localhost:8180, the demo frontend's
-#                         nginx proxy; point it at a backend port
-#                         directly if you published one instead).
+#                         http://localhost:8180, the demo container's
+#                         published port).
 set -euo pipefail
 
 usage="usage: push-candidate.sh <file.md> <project> <ref> [source_id] [delivery_id] [path]"

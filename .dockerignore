@@ -1,0 +1,22 @@
+# Keep the build context small and free of local state. Secrets and
+# local environment files must never reach the image.
+.git
+.github
+.devcontainer
+.env
+.env.*
+!.env.example
+.task
+docs
+bench
+samples
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/*.log
+backend/tests
+frontend/tests

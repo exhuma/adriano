@@ -11,10 +11,14 @@ BACKEND_DIR = DOCS_DIR.parent / "backend"
 # Make ``app`` importable for autodoc.
 sys.path.insert(0, str(BACKEND_DIR))
 
-# Importing app modules must not need a database or real secrets. The
-# settings class has safe defaults; these are inert placeholders in case
-# an import path ever instantiates Settings with strict validation.
+# Importing app modules must not need a database or real secrets, but
+# ``app.main`` builds the application at import time and the settings
+# require ADRIANO_DATABASE_URL. This placeholder DSN is never connected
+# to: building the app and its OpenAPI document opens no connection.
 os.environ.setdefault("ADRIANO_DEV_AUTH_ENABLED", "false")
+os.environ.setdefault(
+    "ADRIANO_DATABASE_URL", "postgresql://docs:docs@localhost/docs"
+)
 
 # -- OpenAPI spec -----------------------------------------------------
 

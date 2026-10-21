@@ -6,10 +6,10 @@
  * instead of reading either source directly, so one built artefact
  * can be deployed to any environment without a rebuild.
  *
- * In a deployed container, the entrypoint renders `config.js` from
- * `config.template.js` (environment variables) before the app bundle
- * loads, populating `window.__APP_CONFIG__`. In local dev that global
- * is the static stub in `public/config.js` (usually empty), and the
+ * In a deployed container, the backend renders `/config.js` from its
+ * ADRIANO_* settings before the app bundle loads, populating
+ * `window.__APP_CONFIG__`. In local dev that global is the static stub
+ * in `public/config.js` (usually empty), and the
  * `import.meta.env.VITE_*` build-time values are used instead.
  *
  * SECURITY BOUNDARY: `devAuthEnabled` is a separate, build-time-only

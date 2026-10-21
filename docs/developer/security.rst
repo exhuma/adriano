@@ -148,8 +148,8 @@ Size limits
 Browser hardening
 -----------------
 
-The frontend's nginx adds these headers to every response
-(``frontend/security-headers.conf.template``):
+The backend adds these headers to every response
+(``SecurityHeadersMiddleware`` in ``backend/app/web.py``):
 
 ``Content-Security-Policy``
    ``default-src 'self'``, ``script-src 'self'``,
@@ -166,13 +166,10 @@ The frontend's nginx adds these headers to every response
 ``Referrer-Policy``
    ``strict-origin-when-cross-origin``.
 
-The container entrypoint
-(``docker-entrypoint.d/40-render-app-config.sh``)
-validates ``OIDC_AUTHORITY`` strictly before writing its origin into
-the CSP and into ``config.js``, and refuses to start on anything else,
-so the setting cannot inject CSP directives.
-Because nginx drops inherited ``add_header`` directives in a location
-that sets its own, the snippet is included in every such location.
+The settings validation rejects an ``ADRIANO_OIDC_AUTHORITY`` that is
+not a plain ``http(s)://host[:port][/path]`` before its origin is
+written into the CSP and into ``/config.js``, so the setting cannot
+inject CSP directives.
 
 The development bypass
 ----------------------
@@ -189,8 +186,7 @@ Backend router
    ``/auth/dev/token`` and ``/auth/dev/roles`` are imported and mounted
    only when ``ADRIANO_DEV_AUTH_ENABLED`` is true and the secret is set,
    with a loud warning in the log.
-   Otherwise they are a plain 404, even though the production nginx
-   configuration proxies ``/auth/dev/``.
+   Otherwise they are a plain 404.
 
 Frontend build
    The dev-login UI is reachable only when the build-time literal

@@ -1,0 +1,67 @@
+# Polls the registered sources every 15 minutes. A run that is still
+# going when the next one is due makes the next one skip.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: adriano-poll
+  labels:
+    app.kubernetes.io/name: adriano
+    app.kubernetes.io/component: poll
+    app.kubernetes.io/part-of: adriano
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: adriano
+            app.kubernetes.io/component: poll
+            app.kubernetes.io/part-of: adriano
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: poll
+              image: ghcr.io/exhuma/adriano
+              command: ["adriano", "poll"]
+              envFrom:
+                - configMapRef:
+                    name: adriano
+                - secretRef:
+                    name: adriano
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: catalog
+                  mountPath: /etc/adriano
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: catalog
+              configMap:
+                name: adriano-catalog

@@ -1,0 +1,157 @@
+name: image
+
+# Test, build, smoke-test and (outside pull requests) publish the
+# container image to GHCR.
+#
+# This workflow owns every trigger; testing.yml is only reusable
+# (workflow_call), so each event runs the suite exactly once.
+#
+# What each event produces (image ghcr.io/<owner>/adriano):
+#
+#   pull request     builds and smoke-tests only, publishes nothing.
+#                    ADRIANO_VERSION=pr-<number>
+#   push to master   edge and sha-<short>.
+#                    ADRIANO_VERSION=edge-<short sha>
+#   push of v<tag>   <tag without v> plus one tag per release channel
+#                    (module-calver-release-channels); never `latest`.
+#                    ADRIANO_VERSION=<tag without v>
+#   manual dispatch  like a push when run on master; on any other
+#                    branch it builds and smoke-tests only.
+#                    ADRIANO_VERSION=dev-<short sha>
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push supersedes an older pull-request run; branch and tag
+  # runs are never cancelled so a release cannot be aborted halfway.
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  version:
+    # Resolves the version and the image tags, and fails a release tag
+    # whose manifests disagree with it before any other work starts.
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.resolve.outputs.image }}
+      version: ${{ steps.resolve.outputs.version }}
+      publish: ${{ steps.resolve.outputs.publish }}
+      tags: ${{ steps.resolve.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the manifests match the tag
+        if: github.ref_type == 'tag'
+        run: scripts/check_version_sync.sh "$GITHUB_REF_NAME"
+
+      - name: Resolve the version and the tags
+        id: resolve
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          short="${GITHUB_SHA:0:7}"
+          publish=false
+          tags=""
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+            publish=true
+            tags="type=raw,value=$version"
+            for channel in $(scripts/derive_channels.sh "$GITHUB_REF_NAME")
+            do
+              tags="$tags"$'\n'"type=raw,value=$channel"
+            done
+          elif [ "$GITHUB_REF" = refs/heads/master ]; then
+            version="edge-$short"
+            publish=true
+            tags="type=raw,value=edge"$'\n'"type=sha,prefix=sha-,format=short"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            version="pr-$PR_NUMBER"
+          else
+            version="dev-$short"
+          fi
+          {
+            echo "image=ghcr.io/${GITHUB_REPOSITORY,,}"
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+
+  test:
+    needs: version
+    uses: ./.github/workflows/testing.yml
+
+  build:
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image for the smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: adriano-smoke:ci
+          build-args: |
+            ADRIANO_VERSION=${{ needs.version.outputs.version }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image
+        # Starts its own PostgreSQL 18 container; see the script.
+        run: >
+          scripts/smoke_test_image.sh adriano-smoke:ci
+          http://127.0.0.1:8000 "$VERSION"
+
+      - name: Log in to GHCR
+        if: needs.version.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute the image metadata
+        if: needs.version.outputs.publish == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.version.outputs.image }}
+          flavor: |
+            latest=false
+          tags: ${{ needs.version.outputs.tags }}
+
+      - name: Push the image
+        # Same inputs as the smoke build, so every layer comes from
+        # the build cache and the pushed image is the tested one.
+        if: needs.version.outputs.publish == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ADRIANO_VERSION=${{ needs.version.outputs.version }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -26,6 +26,7 @@ Everything that is not part of a package below lives here.
    app.main
    app.source_config
    app.validation_messages
+   app.web
 
 Authentication
 --------------
@@ -162,6 +163,7 @@ The storage port and its PostgreSQL implementation.
    app.storage.postgres.convert
    app.storage.postgres.errata
    app.storage.postgres.events
+   app.storage.postgres.migrations
    app.storage.postgres.models
    app.storage.postgres.records
    app.storage.postgres.registrations

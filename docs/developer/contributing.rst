@@ -107,3 +107,136 @@ fails the check.
 On the main branch (``master``) it also publishes the built site to
 GitHub Pages.
 If the check fails, reproduce it locally with ``task docs``.
+
+Releases and images
+-------------------
+
+Continuous integration
+^^^^^^^^^^^^^^^^^^^^^^
+
+Three workflows live in ``.github/workflows``:
+
+``testing.yml``
+   The reusable test suite (``workflow_call``): ruff and pytest against
+   a PostgreSQL 18 service, eslint, ``vue-tsc``, vitest and the
+   production build of the frontend, and the self-tests of the release
+   scripts.
+   It has no event triggers of its own, so it never runs twice for the
+   same event.
+``image.yml``
+   Owns the triggers (pull requests, pushes to ``master``, ``v*`` tags
+   and manual dispatch).
+   It calls ``testing.yml``, builds the image from the root
+   ``Dockerfile``, smoke-tests it and, outside pull requests, pushes it
+   to ``ghcr.io/exhuma/adriano``.
+``docs.yml``
+   Builds the documentation (see `Documentation CI`_).
+
+What each event publishes:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 46 32
+
+   * - Event
+     - Image tags
+     - ``ADRIANO_VERSION``
+   * - Pull request
+     - none (build and smoke test only)
+     - ``pr-<number>``
+   * - Push to ``master``
+     - ``edge``, ``sha-<short>``
+     - ``edge-<short>``
+   * - Tag ``vYYYY.M.D``
+     - ``YYYY.M.D``, ``stable``, ``beta``, ``alpha``
+     - ``YYYY.M.D``
+   * - Tag ``vYYYY.M.D-beta.N``
+     - ``YYYY.M.D-beta.N``, ``beta``, ``alpha``
+     - ``YYYY.M.D-beta.N``
+
+The version is baked into the image (build argument
+``ADRIANO_VERSION``) and reported by ``/healthz``.
+The image is never tagged ``latest``: CalVer has no ordering to anchor
+it, so operators pin a full version or follow a channel.
+
+CalVer tags and channels
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Releases are driven by tags of the form ``vYYYY.M.D`` with an optional
+pre-release suffix ``-alpha.N``, ``-beta.N`` or ``-rc.N`` (for example
+``v2026.6.15`` or ``v2026.6.15-alpha.1``).
+Month and day have no leading zero.
+Every release publishes its immutable full version plus the moving
+channels it advances.
+Channels cascade by maturity:
+
+- ``-alpha.N`` moves ``alpha``
+- ``-beta.N`` moves ``beta`` and ``alpha``
+- ``-rc.N`` moves ``rc``
+- no suffix (stable) moves ``stable``, ``beta`` and ``alpha``
+
+``scripts/derive_channels.sh`` implements the mapping.
+
+Version-sync guard
+^^^^^^^^^^^^^^^^^^
+
+On a tag push, ``scripts/check_version_sync.sh`` fails the run unless
+both manifests carry the tag's version, each in its own canonical form:
+
+- ``frontend/package.json`` keeps the tag verbatim
+  (``2026.6.15-alpha.1``);
+- ``backend/pyproject.toml`` uses the PEP 440 form
+  (``2026.6.15a1``; ``-beta.N`` becomes ``bN``, ``-rc.N`` becomes
+  ``rcN``).
+
+The guard runs first, before the tests, and prints an ``::error::``
+line naming the manifest that disagrees.
+Run it locally with ``scripts/check_version_sync.sh v2026.6.15``, and
+the self-tests of both scripts with
+``scripts/tests/test_release_scripts.sh``.
+
+Cutting a release
+^^^^^^^^^^^^^^^^^
+
+#. Pick the version, for example ``2026.6.15`` or
+   ``2026.6.15-rc.1``.
+#. Set ``version`` in ``frontend/package.json`` (verbatim) and in
+   ``backend/pyproject.toml`` (PEP 440 form).
+#. Refresh the lock files so they record the new version:
+   ``cd backend && uv lock`` and
+   ``cd frontend && npm install --package-lock-only``.
+#. Verify with ``scripts/check_version_sync.sh v2026.6.15``.
+#. Commit (``chore(release): 2026.6.15``) and merge to ``master``.
+#. Tag the merge commit and push the tag:
+
+   .. code-block:: sh
+
+      git tag v2026.6.15
+      git push origin v2026.6.15
+
+#. Watch the ``image`` workflow; the image and its channel tags appear
+   under the repository's packages.
+
+A tag whose manifests disagree fails before anything is built or
+published; fix the manifests, delete the tag and tag again.
+
+Smoke-testing an image locally
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+CI runs ``scripts/smoke_test_image.sh`` on every event.
+With Docker, curl and python3 available you can run the same checks:
+
+.. code-block:: sh
+
+   docker build -t adriano:local .
+   scripts/smoke_test_image.sh adriano:local
+
+The script starts a throwaway PostgreSQL 18 container, starts the
+image twice (the second start proves the migrations are idempotent),
+and checks ``/healthz``, ``/config.js``, the security headers, the SPA
+fallback, the API authentication and error responses, the immutable
+asset cache and the non-root user.
+It removes everything it started and prints the container logs when a
+check fails.
+Pass a second argument (``http://127.0.0.1:9000``) when port 8000 is
+taken.

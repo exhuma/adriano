@@ -14,7 +14,7 @@ Scheduling polls
 ----------------
 
 Run ``adriano poll`` on a schedule, as a one-off command next to the
-running backend.
+running container.
 Every 15 minutes is a reasonable start; set
 :envvar:`ADRIANO_STALE_AFTER_MINUTES` to a few poll intervals.
 
@@ -23,25 +23,26 @@ cron on the Docker host
 
 .. code-block:: text
 
-   */15 * * * * docker compose -f /opt/adriano/docker-compose.yml exec -T backend adriano poll >> /var/log/adriano-poll.log 2>&1
+   */15 * * * * docker compose -f /opt/adriano/docker-compose.yml exec -T adriano adriano poll >> /var/log/adriano-poll.log 2>&1
 
 ``-T`` is needed because cron has no terminal.
 
 Kubernetes ``CronJob``
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Run the backend image with the command ``["adriano", "poll"]``,
+Run the Adriano image with the command ``["adriano", "poll"]``,
 with the same environment, secrets and catalog file mount as the
-backend deployment.
+Deployment.
 Set ``concurrencyPolicy: Forbid`` so a slow poll is not overlapped
 by the next one.
+The example in :doc:`deploy/kubernetes` does exactly this.
 
 Polling one registration
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: sh
 
-   docker compose exec backend adriano poll --source gitlab-platform
+   docker compose exec adriano adriano poll --source gitlab-platform
 
 Exit codes
 ~~~~~~~~~~

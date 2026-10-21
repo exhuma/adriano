@@ -24,6 +24,16 @@ Commands:
   Refuses a database whose name does not look like dev/test/bench
   unless ``--force`` is given. Exit code 2 on usage or database
   errors.
+- ``adriano migrate`` -- apply the database migrations (``alembic
+  upgrade head``) under a PostgreSQL advisory lock, so concurrent runs
+  (replicas, init containers) are safe. Exit code 0 on success, 2 when
+  the database is unreachable or a migration fails.
+- ``adriano serve`` -- the container command: when
+  ``ADRIANO_MIGRATE_ON_START`` is true (the default), run the same
+  locked migration first (exit code 2 if it fails), then replace this
+  process with Uvicorn serving ``app.main:app`` on ``0.0.0.0:8000``
+  with ``ADRIANO_WORKERS`` workers (and ``ADRIANO_FORWARDED_ALLOW_IPS``
+  as ``--forwarded-allow-ips`` when set).
 
 Scheduling is external (cron, Kubernetes CronJob); see
 ``docs/developer/decisions/0008-external-poll-job.rst``. This module
@@ -35,6 +45,7 @@ Public API: :func:`main`, :func:`run`.
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from collections.abc import Sequence
 from typing import TextIO
@@ -52,7 +63,7 @@ from app.composition import (
 )
 from app.config import Settings, get_settings
 from app.domain.frontmatter import JsonValue
-from app.errors import NotFoundError
+from app.errors import ConfigurationError, NotFoundError
 from app.services.polling import PollOutcome
 from app.services.registrations import sync_registrations
 from app.services.seed_synthetic import (
@@ -61,10 +72,15 @@ from app.services.seed_synthetic import (
     seed_catalog,
 )
 from app.storage.port import PollStatus
+from app.storage.postgres.migrations import upgrade_to_head
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
 EXIT_USAGE = 2
+
+#: Address and port ``adriano serve`` binds (the image's EXPOSE).
+SERVE_HOST = "0.0.0.0"
+SERVE_PORT = 8000
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -99,6 +115,14 @@ def _parser() -> argparse.ArgumentParser:
         help=f"lifetime in minutes (default {DEFAULT_MINUTES})",
     )
     _add_seed_synthetic_parser(commands)
+    commands.add_parser(
+        "migrate", help="apply the database migrations (advisory-locked)"
+    )
+    commands.add_parser(
+        "serve",
+        help="migrate (unless ADRIANO_MIGRATE_ON_START=false), then run "
+        "the web server",
+    )
     return parser
 
 
@@ -171,6 +195,99 @@ def _mint(settings: Settings, args: argparse.Namespace, out: TextIO) -> int:
         sub=args.sub, name=args.name, email=args.email, roles=roles
     )
     print(mint_dev_token(settings, identity, minutes=args.minutes), file=out)
+    return EXIT_OK
+
+
+def _print_database_error(exc: SQLAlchemyError) -> None:
+    """
+    Explain a database failure on stderr.
+
+    :param exc: The error.
+    """
+    print(
+        f"error: database unavailable or not migrated "
+        f"({type(exc).__name__}); check ADRIANO_DATABASE_URL and run "
+        f"`adriano migrate` (development: `task db:up && task migrate`)",
+        file=sys.stderr,
+    )
+
+
+def _migrate(settings: Settings, out: TextIO) -> int:
+    """
+    Run ``migrate``.
+
+    :param settings: Application settings.
+    :param out: Output stream.
+    :returns: Exit code.
+    """
+    try:
+        upgrade_to_head(str(settings.database_url))
+    except SQLAlchemyError as exc:
+        print(
+            f"error: migration failed ({type(exc).__name__}: {exc}); "
+            "check ADRIANO_DATABASE_URL and that the database is "
+            "reachable",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    except ConfigurationError as exc:
+        print(f"error: {exc.message}", file=sys.stderr)
+        return EXIT_USAGE
+    print("database migrated to head", file=out)
+    return EXIT_OK
+
+
+def _exec(argv: list[str]) -> None:
+    """
+    Replace the current process with *argv* (never returns).
+
+    :param argv: Program and arguments; ``argv[0]`` is the executable.
+    """
+    os.execv(argv[0], argv)
+
+
+def uvicorn_argv(settings: Settings) -> list[str]:
+    """
+    Build the Uvicorn command line of ``adriano serve``.
+
+    Uvicorn runs with this interpreter, so it always comes from the
+    same environment as the application.
+
+    :param settings: Application settings.
+    :returns: The argument vector, executable first.
+    """
+    argv = [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        SERVE_HOST,
+        "--port",
+        str(SERVE_PORT),
+        "--workers",
+        str(settings.workers),
+    ]
+    if settings.forwarded_allow_ips:
+        argv += ["--forwarded-allow-ips", settings.forwarded_allow_ips]
+    return argv
+
+
+def _serve(settings: Settings, out: TextIO) -> int:
+    """
+    Run ``serve``: optionally migrate, then exec Uvicorn.
+
+    :param settings: Application settings.
+    :param out: Output stream.
+    :returns: Exit code (only when the migration fails; otherwise the
+        process is replaced).
+    """
+    if settings.migrate_on_start:
+        code = _migrate(settings, out)
+        if code != EXIT_OK:
+            return code
+    out.flush()
+    _exec(uvicorn_argv(settings))
     return EXIT_OK
 
 
@@ -292,11 +409,7 @@ def _poll(settings: Settings, source_id: str | None, out: TextIO) -> int:
         print(f"error: {exc.message}", file=sys.stderr)
         return EXIT_USAGE
     except SQLAlchemyError as exc:
-        print(
-            f"error: database unavailable ({type(exc).__name__}); run "
-            f"`task db:up && task migrate`",
-            file=sys.stderr,
-        )
+        _print_database_error(exc)
         return EXIT_USAGE
     if not outcomes:
         print(
@@ -354,11 +467,7 @@ def _seed_synthetic(
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     except SQLAlchemyError as exc:
-        print(
-            f"error: database unavailable ({type(exc).__name__}); run "
-            f"`task db:up && task migrate`",
-            file=sys.stderr,
-        )
+        _print_database_error(exc)
         return EXIT_USAGE
     print(
         f"seeded {summary.published} published, {summary.candidates} "
@@ -394,6 +503,10 @@ def main(
     )
     if args.command == "seed-synthetic":
         return _seed_synthetic(settings, args, stream)
+    if args.command == "migrate":
+        return _migrate(settings, stream)
+    if args.command == "serve":
+        return _serve(settings, stream)
     return _poll(settings, args.source, stream)
 
 

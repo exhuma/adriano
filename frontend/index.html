@@ -11,10 +11,10 @@
       This application requires JavaScript to be enabled.
     </noscript>
     <!--
-      Runtime config, rendered by the deployment container entrypoint
-      from environment variables (module-runtime-config-spa). In dev
-      this is the static stub in public/config.js. Must load before
-      the app bundle.
+      Runtime config, rendered by the backend (app/web.py) from its
+      ADRIANO_* settings (module-runtime-config-spa). In dev this is
+      the static stub in public/config.js. Must load before the app
+      bundle.
     -->
     <script src="/config.js"></script>
     <div id="app"></div>

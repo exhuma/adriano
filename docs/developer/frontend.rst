@@ -129,16 +129,15 @@ are not baked into the bundle.
 ``config.ts`` is the only module that reads ``window.__APP_CONFIG__``
 or ``import.meta.env``; components import named values from it.
 
-In the container, the nginx entrypoint
-``docker-entrypoint.d/40-render-app-config.sh`` renders
-``config.template.js`` into ``config.js`` by substituting environment
-variables, and ``index.html`` loads it before the bundle.
-The variables are ``API_BASE_URL``, ``OIDC_AUTHORITY``,
-``OIDC_CLIENT_ID``, ``OIDC_REDIRECT_URI``,
-``OIDC_POST_LOGOUT_REDIRECT_URI`` and ``OIDC_SCOPE``.
-The entrypoint validates ``OIDC_AUTHORITY`` strictly, because it is
-also placed into the content security policy, and refuses to start on
-an invalid value.
+In the container, the backend (``app/web.py``) renders ``/config.js``
+from its ``ADRIANO_*`` settings, and ``index.html`` loads it before the
+bundle.
+The settings are ``ADRIANO_OIDC_AUTHORITY``, ``ADRIANO_OIDC_CLIENT_ID``,
+``ADRIANO_OIDC_REDIRECT_URI``,
+``ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI`` and ``ADRIANO_OIDC_SCOPE``.
+The backend validates ``ADRIANO_OIDC_AUTHORITY`` strictly, because it
+is also placed into the content security policy, and refuses to start
+on an invalid value.
 Operators find the consequences in :doc:`/operator/index`.
 
 In development, ``public/config.js`` is an empty stub, and
@@ -152,7 +151,7 @@ The dev-login switch ``VITE_DEV_AUTH`` is deliberately not part of the
 runtime configuration.
 It is a build-time literal, so no container setting can turn dev login
 on in a deployed image.
-Never add it to ``config.template.js``.
+Never add it to the rendered ``config.js``.
 
 UI route and Vuetify first
 --------------------------

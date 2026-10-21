@@ -8,18 +8,30 @@ database.
 Auth: test settings never use OIDC (no IdP calls) and enable the
 dev-only HS256 path with :data:`tests.auth_helpers.TEST_DEV_SECRET`, a
 throwaway value that exists only in the test suite.
+
+``ADRIANO_DATABASE_URL`` is required by the settings and ``app.main``
+builds the application at import time, so it defaults to the test
+database DSN here, before any ``app`` import.
 """
 
 import os
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
+os.environ.setdefault(
+    "ADRIANO_DATABASE_URL",
+    os.environ.get(
+        "ADRIANO_TEST_DATABASE_URL",
+        "postgresql://adriano:adriano@localhost:55432/adriano_test",
+    ),
+)
 
-from app.config import Settings, get_settings
-from app.main import create_app
-from tests.auth_helpers import TEST_DEV_SECRET
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.config import Settings, get_settings  # noqa: E402
+from app.main import create_app  # noqa: E402
+from tests.auth_helpers import TEST_DEV_SECRET  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

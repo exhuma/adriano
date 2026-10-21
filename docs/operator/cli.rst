@@ -1,16 +1,47 @@
 Command-line reference
 ======================
 
-The backend image contains the ``adriano`` command for administrative
-tasks.
-Run it as a one-off command next to the running stack:
+The Adriano image contains the ``adriano`` command.
+Its default command is ``adriano serve``; the other commands are
+administrative tasks you run as one-off commands.
 
 .. code-block:: sh
 
-   docker compose exec backend adriano <command>          # running backend
-   docker compose run --rm --no-deps backend adriano <command>  # new container
+   # Compose, in the running container
+   docker compose exec adriano adriano <command>
+   # Compose, in a new container
+   docker compose run --rm --no-deps adriano adriano <command>
+   # Kubernetes
+   kubectl exec deployment/adriano -- adriano <command>
 
-It uses the same environment and catalog file as the backend.
+It uses the same environment and catalog file as the running
+container.
+
+``adriano serve``
+-----------------
+
+.. program:: adriano serve
+
+The container command: applies pending database migrations (unless
+:envvar:`ADRIANO_MIGRATE_ON_START` is ``false``), then serves the web
+UI and the API on port 8000 with :envvar:`ADRIANO_WORKERS` worker
+processes.
+If the migration fails, the command exits with code ``2`` and serves
+nothing.
+You rarely run it by hand.
+
+``adriano migrate``
+-------------------
+
+.. program:: adriano migrate
+
+Applies pending database migrations under a database lock and exits.
+Running it several times, or at the same time, is safe.
+Use it as an init container or before a rollout when
+:envvar:`ADRIANO_MIGRATE_ON_START` is ``false`` (:doc:`upgrades`).
+
+Exit codes: ``0`` on success, ``2`` when the database is unreachable
+or a migration fails.
 
 ``adriano check-config``
 ------------------------

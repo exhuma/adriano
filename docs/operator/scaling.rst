@@ -1,10 +1,10 @@
 Running several replicas
 ========================
 
-The backend keeps no state of its own between requests;
+Adriano keeps no state of its own between requests;
 everything lives in the database.
-You can run as many backend replicas as you need behind a load
-balancer, and the web container can be replicated the same way.
+You can run as many replicas of the one image as you need behind a
+load balancer.
 
 What is safe
 ------------
@@ -24,20 +24,22 @@ Sign-in
 What you must take care of
 --------------------------
 
-- Run the schema update **once per deployment, before any replica of
-  the new version starts** (:doc:`upgrades`).
-  In Kubernetes, use a ``Job`` or an init step that runs once,
-  not an init container in every backend pod.
+- Schema updates are safe with many replicas: they run under a
+  database lock, so replicas starting together apply them once
+  (:doc:`upgrades`).
+  On Kubernetes the example runs them in an init container of the
+  Deployment (:doc:`deploy/kubernetes`).
 - Every replica reads the catalog file at start-up.
   Give all replicas the same file and the same secrets, and restart
   all of them after a change; otherwise replicas disagree about
   sources and permissions.
-- Each replica runs :envvar:`ADRIANO_WORKERS` worker processes,
+- Each replica runs :envvar:`ADRIANO_WORKERS` worker processes
+  (and needs memory for each),
   and each worker keeps its own database connections.
   Keep replicas times workers within your database's connection
   limit.
-- Schedule polls once (one cron entry or one ``CronJob``),
-  not once per replica.
+- Schedule polls once (one cron entry or one ``CronJob``,
+  see :doc:`polling`), not once per replica.
 - "Poll now" runs inside the replica that received the request.
   Restarting that replica during a poll stops the poll;
   the registration keeps its previous content, and the next poll
