@@ -1,5 +1,7 @@
 /**
- * Ensure the dev-login dialog's role presets fill the roles field,
+ * Ensure the dev-login dialog's role presets come from the catalog
+ * (docs/ui-review D-04) and fill the roles field, none are shown while
+ * loading or after a failed fetch (manual entry keeps working),
  * Cancel closes without signing in, a successful/failed submission
  * is handled (`module-dev-auth-bypass`, module-ux-principles "UI
  * modes": Cancel never mutates state), and the dialog has an
@@ -18,10 +20,30 @@ import DevLoginDialog from "@/components/DevLoginDialog.vue";
 import { ApiError } from "@/api";
 
 const devSignIn = vi.fn();
+const loadDevPresets = vi.fn();
 
 vi.mock("@/auth/devAuth", () => ({
   devSignIn: (...args: unknown[]) => devSignIn(...args),
+  loadDevPresets: () => loadDevPresets(),
 }));
+
+const PRESETS = [
+  { label: "Reader", roles: ["adr-reader"] },
+  { label: "Reviewer", roles: ["adr-reader", "adr-reviewer"] },
+  { label: "Operator", roles: ["admin"] },
+];
+
+function presetLabels(): string[] {
+  const group = document.body.querySelector(
+    '[role="group"][aria-label="Role presets"]',
+  );
+  if (!group) {
+    return [];
+  }
+  return Array.from(group.querySelectorAll("button")).map(
+    (button) => button.textContent?.trim() ?? "",
+  );
+}
 
 function mountDialog(modelValue = true) {
   return mount(DevLoginDialog, {
@@ -44,6 +66,8 @@ function buttonByText(text: string): HTMLButtonElement {
 describe("DevLoginDialog", () => {
   beforeEach(() => {
     devSignIn.mockReset();
+    loadDevPresets.mockReset();
+    loadDevPresets.mockResolvedValue(PRESETS);
   });
 
   afterEach(() => {
@@ -63,13 +87,72 @@ describe("DevLoginDialog", () => {
     expect(heading.className).toContain("text-title-large");
   });
 
-  it("fills the roles field from a preset button", async () => {
-    const wrapper = mountDialog();
-
-    buttonByText("Operator/Admin").click();
+  it("shows the presets derived from the catalog", async () => {
+    mountDialog();
     await flushPromises();
 
-    expect((wrapper.vm as unknown as { roles: string }).roles).toBe("admin");
+    expect(loadDevPresets).toHaveBeenCalledOnce();
+    expect(presetLabels()).toEqual(["Reader", "Reviewer", "Operator"]);
+  });
+
+  it("shows only the presets the catalog can satisfy", async () => {
+    loadDevPresets.mockResolvedValue([PRESETS[0]]);
+    mountDialog();
+    await flushPromises();
+
+    expect(presetLabels()).toEqual(["Reader"]);
+  });
+
+  it("fills the roles field from a preset button", async () => {
+    const wrapper = mountDialog();
+    await flushPromises();
+
+    buttonByText("Reviewer").click();
+    await flushPromises();
+
+    expect((wrapper.vm as unknown as { roles: string }).roles).toBe(
+      "adr-reader, adr-reviewer",
+    );
+  });
+
+  it("shows no presets while the roles are loading", async () => {
+    loadDevPresets.mockReturnValue(new Promise(() => {}));
+    mountDialog();
+    await flushPromises();
+
+    expect(presetLabels()).toEqual([]);
+    expect(document.body.textContent).not.toContain("Could not load");
+  });
+
+  it("keeps manual entry working when the roles fail to load", async () => {
+    loadDevPresets.mockRejectedValue(new ApiError(404, { detail: "x" }));
+    devSignIn.mockResolvedValue(undefined);
+    const wrapper = mountDialog();
+    await flushPromises();
+
+    expect(presetLabels()).toEqual([]);
+    expect(document.body.textContent).toContain(
+      "Could not load this catalog's roles",
+    );
+    expect(document.body.querySelector(".v-alert")).toBeNull();
+
+    const vm = wrapper.vm as unknown as { sub: string; roles: string };
+    vm.sub = "alice";
+    vm.roles = "adr-reader";
+    await wrapper.vm.$nextTick();
+    buttonByText("Sign in").click();
+    await flushPromises();
+
+    expect(devSignIn).toHaveBeenCalledWith(
+      expect.objectContaining({ sub: "alice", roles: ["adr-reader"] }),
+    );
+  });
+
+  it("does not load presets while closed", async () => {
+    mountDialog(false);
+    await flushPromises();
+
+    expect(loadDevPresets).not.toHaveBeenCalled();
   });
 
   it("Cancel closes the dialog without signing in", async () => {

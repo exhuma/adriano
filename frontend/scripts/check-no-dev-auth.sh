@@ -8,7 +8,8 @@
 # `false`, so `App.vue`'s dynamic `import()` of `DevLoginDialog.vue`
 # is unreachable and the bundler's dead-code elimination drops it --
 # and everything only it imports (`src/auth/devAuth.ts`,
-# `src/api/devAuth.ts`, and the `/auth/dev/token` endpoint path) --
+# `src/api/devAuth.ts`, `src/auth/devPresets.ts`, and the
+# `/auth/dev/token` and `/auth/dev/roles` endpoint paths) --
 # entirely from `dist/`, regardless of how `VITE_DEV_AUTH` is set at
 # build time. This script greps the built `dist/` for markers that
 # exist ONLY inside that dev-login code path and fails if any are
@@ -26,14 +27,15 @@ if [ ! -d "$dist_dir" ]; then
   exit 1
 fi
 
-# Markers unique to the dev-login mechanism: the dev-token endpoint
-# path and dialog-only text. Deliberately excludes generic strings
+# Markers unique to the dev-login mechanism: the dev endpoint paths
+# and dialog-only text. Deliberately excludes generic strings
 # that legitimately appear elsewhere too (e.g. the "auth
 # unconfigured" blocking screen in App.vue also names
 # ADRIANO_DEV_SHARED_SECRET as an operator instruction -- that is
 # not the dev-login UI/mechanism itself).
 markers=(
   "/auth/dev/token"
+  "/auth/dev/roles"
   "DevLoginDialog"
   "mints a token for any identity"
 )

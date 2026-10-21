@@ -1,7 +1,11 @@
 <script setup lang="ts">
 /**
  * Dev-only sign-in dialog: mints an HS256 token for a hand-picked
- * identity via `POST /auth/dev/token`. Only ever rendered when
+ * identity via `POST /auth/dev/token`. Its role presets (Reader,
+ * Reviewer, Operator) come from the loaded catalog via
+ * `GET /auth/dev/roles` (see `src/auth/devPresets.ts`); presets the
+ * catalog cannot satisfy are not shown, and the roles field can
+ * always be typed by hand (docs/ui-review D-04). Only ever rendered when
  * `devAuthEnabled` is true (`src/config.ts`) -- the parent is
  * responsible for that gate so this component never has to repeat
  * it.
@@ -13,22 +17,11 @@
 import { ref, useId, watch } from "vue";
 
 import { ApiError } from "@/api";
-import { devSignIn } from "@/auth/devAuth";
-
-/** One-click role preset, matching this catalog's documented
- *  example `rbac`/`approval_policy` role names (DECISIONS.md); real
- *  deployments may use different names, in which case the roles
- *  field below can still be edited by hand. */
-interface RolePreset {
-  label: string;
-  roles: string[];
-}
-
-const PRESETS: RolePreset[] = [
-  { label: "Reader", roles: ["reader"] },
-  { label: "Operator/Admin", roles: ["admin"] },
-  { label: "Reviewer", roles: ["adr-reviewer"] },
-];
+import {
+  devSignIn,
+  loadDevPresets,
+  type DevRolePreset,
+} from "@/auth/devAuth";
 
 const props = defineProps<{
   /** Whether the dialog is open (`v-model`). */
@@ -50,6 +43,32 @@ const roles = ref("");
 const submitting = ref(false);
 const errorText = ref<string | null>(null);
 
+/** Presets derived from this catalog's roles; empty while loading
+ *  and after a failed fetch, so manual entry still works. */
+const presets = ref<DevRolePreset[]>([]);
+/** Whether the role list could not be fetched (shown as a short,
+ *  non-blocking note; manual entry still works). */
+const presetsFailed = ref(false);
+/** Guards against a slow, superseded preset fetch overwriting a
+ *  newer one when the dialog is reopened quickly. */
+let presetRequest = 0;
+
+async function refreshPresets(): Promise<void> {
+  const request = ++presetRequest;
+  presets.value = [];
+  presetsFailed.value = false;
+  try {
+    const loaded = await loadDevPresets();
+    if (request === presetRequest) {
+      presets.value = loaded;
+    }
+  } catch {
+    if (request === presetRequest) {
+      presetsFailed.value = true;
+    }
+  }
+}
+
 /** Id of the heading, referenced by the dialog's own
  *  `aria-labelledby` so assistive tech announces it as the dialog's
  *  accessible name instead of an unnamed "dialog" (docs/ui-review
@@ -65,18 +84,22 @@ const dialogCardDefaults = {
 } as const;
 
 /** Reset the form whenever the dialog is reopened, so a previous
- *  submission's error never lingers into the next attempt. */
+ *  submission's error never lingers into the next attempt, and
+ *  re-read the catalog's roles (the backend may have restarted with
+ *  a different catalog). */
 watch(
   () => props.modelValue,
   (open) => {
     if (open) {
       errorText.value = null;
       submitting.value = false;
+      void refreshPresets();
     }
   },
+  { immediate: true },
 );
 
-function applyPreset(preset: RolePreset): void {
+function applyPreset(preset: DevRolePreset): void {
   roles.value = preset.roles.join(", ");
 }
 
@@ -184,10 +207,16 @@ async function submit(): Promise<void> {
             density="comfortable"
           />
 
-          <div class="presets mt-3" role="group" aria-label="Role presets">
+          <div
+            v-if="presets.length"
+            class="mt-3"
+            role="group"
+            aria-label="Role presets"
+          >
             <v-btn
-              v-for="preset in PRESETS"
+              v-for="preset in presets"
               :key="preset.label"
+              :title="preset.roles.join(', ')"
               size="small"
               variant="tonal"
               class="mr-2 mb-2"
@@ -196,6 +225,12 @@ async function submit(): Promise<void> {
               {{ preset.label }}
             </v-btn>
           </div>
+          <p
+            v-else-if="presetsFailed"
+            class="mt-3 text-body-small text-medium-emphasis"
+          >
+            Could not load this catalog's roles. Type them by hand.
+          </p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />

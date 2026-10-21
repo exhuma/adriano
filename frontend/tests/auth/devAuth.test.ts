@@ -7,10 +7,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createDevToken = vi.fn();
+const listDevRoles = vi.fn();
 const setDevSession = vi.fn();
 const clearDevSession = vi.fn();
 
-vi.mock("@/api/devAuth", () => ({ createDevToken: (...args: unknown[]) => createDevToken(...args) }));
+vi.mock("@/api/devAuth", () => ({
+  createDevToken: (...args: unknown[]) => createDevToken(...args),
+  listDevRoles: () => listDevRoles(),
+}));
 vi.mock("@/composables/useAuth", () => ({
   setDevSession: (...args: unknown[]) => setDevSession(...args),
   clearDevSession: (...args: unknown[]) => clearDevSession(...args),
@@ -19,6 +23,7 @@ vi.mock("@/composables/useAuth", () => ({
 describe("devAuth", () => {
   beforeEach(() => {
     createDevToken.mockReset();
+    listDevRoles.mockReset();
     setDevSession.mockReset();
     clearDevSession.mockReset();
   });
@@ -54,5 +59,30 @@ describe("devAuth", () => {
     const { devSignOut } = await import("@/auth/devAuth");
     devSignOut();
     expect(clearDevSession).toHaveBeenCalledOnce();
+  });
+
+  it("derives presets from the catalog's role names", async () => {
+    listDevRoles.mockResolvedValue({
+      roles: [
+        { name: "admin", permissions: ["operate", "read"] },
+        { name: "adr-reader", permissions: ["read"] },
+      ],
+      reviewer_roles: ["adr-reviewer"],
+    });
+    const { loadDevPresets } = await import("@/auth/devAuth");
+
+    await expect(loadDevPresets()).resolves.toEqual([
+      { label: "Reader", roles: ["adr-reader"] },
+      { label: "Reviewer", roles: ["adr-reader", "adr-reviewer"] },
+      { label: "Operator", roles: ["admin"] },
+    ]);
+  });
+
+  it("propagates a role-list failure", async () => {
+    const failure = new Error("404");
+    listDevRoles.mockRejectedValue(failure);
+    const { loadDevPresets } = await import("@/auth/devAuth");
+
+    await expect(loadDevPresets()).rejects.toBe(failure);
   });
 });

@@ -60,7 +60,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def _mount_dev_auth(app: FastAPI, settings: Settings) -> None:
     """
-    Mount the dev token router when (and only when) it is enabled.
+    Mount the dev router (token, roles) only when it is enabled.
 
     :param app: The application under construction.
     :param settings: Application settings.
@@ -79,7 +79,8 @@ def _mount_dev_auth(app: FastAPI, settings: Settings) -> None:
 
     app.include_router(auth_dev.router)
     logger.warning(
-        "DEV AUTH ENABLED: /auth/dev/token is mounted and mints tokens "
+        "DEV AUTH ENABLED: /auth/dev/token and /auth/dev/roles are "
+        "mounted; the token route mints tokens "
         "for any identity. Never enable ADRIANO_DEV_AUTH_ENABLED in "
         "production."
     )

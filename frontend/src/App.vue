@@ -21,7 +21,8 @@ import { useHealth } from "@/composables/useHealth";
 import { isLoading } from "@/composables/useLoading";
 
 // `DevLoginDialog` (and everything it pulls in: `src/auth/devAuth.ts`,
-// `src/api/devAuth.ts`, and the `/auth/dev/token` endpoint path) is
+// `src/api/devAuth.ts`, `src/auth/devPresets.ts`, and the
+// `/auth/dev/token` and `/auth/dev/roles` endpoint paths) is
 // loaded through a dynamic `import()` gated by the *same literal
 // expression* `src/config.ts` uses for `devAuthEnabled`, written out
 // again here rather than referencing that import: Vite/esbuild

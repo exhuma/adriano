@@ -24,14 +24,15 @@ frontend (a Vite dev server with dev sign-in enabled) on
 every screenshot below was taken from. Candidates are pushed with
 `samples/push-candidate.sh` (see step 5).
 
-Three identities are used throughout, matching this catalog's demo
-`rbac`/`approval_policy` roles (`catalog.demo.yaml`):
+Three identities are used throughout. The dev sign-in presets are
+derived from the loaded catalog's `rbac`/`approval_policy` roles
+(`catalog.demo.yaml`, via the dev-only `GET /auth/dev/roles`):
 
 | Role preset | Roles granted | Can read | Can decide | Can poll |
 |---|---|---|---|---|
 | Reader | `reader` | yes | no | no |
 | Reviewer | `adr-reviewer` | yes | yes (listed in the policy) | no |
-| Operator/Admin | `admin` | yes | no (not a reviewer) | yes |
+| Operator | `admin` | yes | no (not a reviewer) | yes |
 
 ## 1. Search the catalog (AC 1, 2, 4, 5)
 

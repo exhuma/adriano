@@ -15,5 +15,9 @@ export type MeOut = components["schemas"]["MeOut"];
 export type DevTokenIn = components["schemas"]["DevTokenIn"];
 /** `POST /auth/dev/token` response (OAuth2 token-response shape). */
 export type DevTokenOut = components["schemas"]["DevTokenOut"];
+/** One `rbac` role of the loaded catalog (`GET /auth/dev/roles`). */
+export type DevRoleOut = components["schemas"]["DevRoleOut"];
+/** `GET /auth/dev/roles`: role names for dev sign-in presets. */
+export type DevRolesOut = components["schemas"]["DevRolesOut"];
 /** `POST /api/v1/sources/poll` and `/sources/{id}/poll` response. */
 export type PollAcceptedOut = components["schemas"]["PollAcceptedOut"];

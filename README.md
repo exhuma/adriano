@@ -61,9 +61,12 @@ task test
 ```
 
 Open <http://localhost:5173> and use the "Dev sign-in" chip to sign in
-as one of the preset identities (Reader, Operator/Admin, or Reviewer
--- roles `reader`, `admin`, `adr-reviewer`) -- no external identity
-provider needed. Once the backend is running,
+as one of the preset identities (Reader, Reviewer, Operator) -- no
+external identity provider needed. The presets are derived from the
+loaded `catalog.yaml` roles (with the local example: `adr-reader`;
+`adr-reader, adr-reviewer`; `admin`); presets the catalog cannot
+satisfy are hidden, and roles can always be typed by hand. Once the
+backend is running,
 `curl -fsS localhost:8100/healthz` should return
 `{"status": "ok", "database": "ok", "config": "ok", "policy": "configured", "registrations": "synced", "rbac": "configured", "auth": "dev"}`.
 
@@ -160,7 +163,10 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8100/api/v1/me
 ```
 
 `ADRIANO_DEV_AUTH_ENABLED=true` also mounts `POST /auth/dev/token`
-(body `{"sub", "name", "email", "roles"}`) for the frontend dev login.
+(body `{"sub", "name", "email", "roles"}`) and `GET /auth/dev/roles`
+(the catalog's `rbac` roles with their permissions and the approval
+policy's reviewer roles, used for the sign-in presets) for the
+frontend dev login.
 Never set either variable in production; the backend logs a warning
 at startup whenever the dev path is active.
 

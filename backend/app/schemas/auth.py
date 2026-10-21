@@ -4,6 +4,8 @@ Request and response models for identity, dev tokens and poll triggers.
 - :class:`MeOut` -- ``GET /api/v1/me``.
 - :class:`DevTokenIn` / :class:`DevTokenOut` -- ``POST /auth/dev/token``
   (mounted only when dev auth is enabled).
+- :class:`DevRoleOut` / :class:`DevRolesOut` -- ``GET /auth/dev/roles``
+  (mounted only when dev auth is enabled).
 - :class:`PollAcceptedOut` -- ``POST /api/v1/sources/poll`` and
   ``POST /api/v1/sources/{id}/poll``.
 """
@@ -51,6 +53,24 @@ class DevTokenOut(BaseModel):
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
+
+
+class DevRoleOut(BaseModel):
+    """One ``rbac`` role of the loaded catalog and what it grants."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    permissions: list[Permission]
+
+
+class DevRolesOut(BaseModel):
+    """Role names of the loaded catalog, for dev sign-in presets."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    roles: list[DevRoleOut]
+    reviewer_roles: list[str]
 
 
 class PollAcceptedOut(BaseModel):
