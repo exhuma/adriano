@@ -8,8 +8,9 @@ before pagination:
 
 1. no valid policy -> ``policy_missing``;
 2. policy not required -> ``not_required``;
-3. / 4. the event for (identity, current digest) is accepted /
-   rejected -> ``accepted`` / ``rejected``;
+3. the event for (identity, current digest) is accepted ->
+   ``accepted``;
+4. that event is rejected -> ``rejected``;
 5. an accepted event for the identity exists (necessarily for another
    digest, because rules 3/4 did not apply) ->
    ``changed_since_acceptance``;
