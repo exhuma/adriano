@@ -72,9 +72,13 @@ describe("SearchView", () => {
     const { wrapper } = await mountSearchView("/?q=nonexistent");
 
     expect(wrapper.text()).toContain("No matches for your filters");
+    // The empty state's own action ("Clear search and filters" --
+    // see the dedicated S-07 test below), not the active-filter
+    // row's "Clear filters": `q` alone sets no chip, so that row's
+    // button stays hidden here (P11-R-05).
     const clearButtons = wrapper
       .findAll("button")
-      .filter((btn) => btn.text().includes("Clear filters"));
+      .filter((btn) => btn.text().includes("Clear"));
     expect(clearButtons.length).toBeGreaterThan(0);
   });
 
@@ -473,6 +477,117 @@ describe("SearchView", () => {
     expect(router.currentRoute.value.query.project).toBe("platform");
   });
 
+  it("hides the active-filter row's 'Clear filters' when only the " +
+    "free-text query is set -- no filter chip exists for it, so the " +
+    "button must not appear just because something is set (P11-R-05)",
+  async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/?q=nonexistent");
+    await flushPromises();
+
+    const statusRegions = wrapper.findAll('[role="status"]');
+    const chipRegion = statusRegions.find((region) => region.text() === "");
+    expect(chipRegion).toBeDefined();
+    expect(
+      wrapper.findAll("button").some((btn) => btn.text() === "Clear filters"),
+    ).toBe(false);
+  });
+
+  it("clears only the active filters, keeping the free-text query " +
+    "and the sort order, and the button sits outside the live " +
+    "region (P11-R-05)",
+  async () => {
+    searchRecords.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
+    });
+    getFacets.mockResolvedValue(emptyFacets);
+
+    const { wrapper, router } = await mountSearchView(
+      "/?q=postgres&sort=recent&needs_approval=true&source=central",
+    );
+    await flushPromises();
+
+    const statusRegions = wrapper.findAll('[role="status"]');
+    const chipRegion = statusRegions.find((region) =>
+      region.text().includes("Needs approval"),
+    );
+    expect(chipRegion).toBeDefined();
+
+    const clearButton = wrapper
+      .findAll("button")
+      .find((btn) => btn.text() === "Clear filters");
+    expect(clearButton).toBeDefined();
+    // A sibling of, not a descendant of, the chip row's own
+    // `role="status"` node -- an all-filters clear is a persistent
+    // action beside the live region, not content it announces.
+    expect(chipRegion!.element.contains(clearButton!.element)).toBe(false);
+
+    await clearButton!.trigger("click");
+    await flushPromises();
+
+    // `router.replace()` resolves over an unpredictable number of
+    // microtask ticks in this test environment (see the chip-close
+    // test above), so poll -- interleaving a real macrotask tick, not
+    // just microtask-draining `flushPromises()` calls, since this
+    // navigation (clearing four filters at once) takes more hops to
+    // settle than a single-filter clear does.
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (router.currentRoute.value.query.needs_approval === undefined) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
+    }
+
+    expect(router.currentRoute.value.query.q).toBe("postgres");
+    expect(router.currentRoute.value.query.sort).toBe("recent");
+    expect(router.currentRoute.value.query.needs_approval).toBeUndefined();
+    expect(router.currentRoute.value.query.source).toBeUndefined();
+  });
+
+  it("switches the default sort to Relevance once a query is typed " +
+    "from the landing page, with no explicit choice made, and keeps " +
+    "it out of the URL (P11-R-02)",
+  async () => {
+    const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper, router } = await mountSearchView("/");
+    await flushPromises();
+
+    const sortSelect = () =>
+      wrapper
+        .findAllComponents({ name: "VSelect" })
+        .find((select) => select.props("label") === "Sort by");
+    expect(sortSelect()!.props("modelValue")).toBe("title");
+
+    const input = wrapper.find(
+      'input[placeholder="Search by title, UUID, project, or path"]',
+    );
+    await input.setValue("postgres");
+    // The real debounce delay (300ms default): the whole point of
+    // this test is the reactive *getter* re-evaluating once the
+    // debounce actually commits `q` to the URL, not a timer mock
+    // standing in for it. Poll past it rather than a single fixed
+    // wait, which is unreliable under full-suite load.
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (router.currentRoute.value.query.q === "postgres") {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await flushPromises();
+    }
+
+    expect(router.currentRoute.value.query.q).toBe("postgres");
+    expect(router.currentRoute.value.query.sort).toBeUndefined();
+    expect(sortSelect()!.props("modelValue")).toBe("relevance");
+  });
+
   it("shows no active-filter chip for the free-text query or the sort order", async () => {
     const page: SearchPage = { items: [], total: 0, page: 1, page_size: 20 };
     searchRecords.mockResolvedValue(page);
@@ -487,7 +602,9 @@ describe("SearchView", () => {
     );
   });
 
-  it("mentions the active-filter count in the result line, with a direct sentence for needs-approval alone (S-04)", async () => {
+  it("mentions the active-filter count in the result line, with a " +
+    "direct sentence for needs-approval alone that still keeps the " +
+    "page range (S-04, P11-R-21)", async () => {
     searchRecords.mockResolvedValue({
       items: [],
       total: 14,
@@ -498,7 +615,9 @@ describe("SearchView", () => {
     const { wrapper } = await mountSearchView("/?needs_approval=true");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("14 records need approval.");
+    expect(wrapper.text()).toContain(
+      "Showing 1–14 of 14 records that need approval.",
+    );
   });
 
   it("mentions a plain filter count in the result line for other filter combinations", async () => {

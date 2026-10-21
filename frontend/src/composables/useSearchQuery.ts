@@ -101,6 +101,26 @@ export function readSort(value: unknown, hasQuery: boolean): SearchSort {
   return defaultSort(hasQuery);
 }
 
+/**
+ * Normalise a raw `sort` URL value to an *explicit* choice, or
+ * `null` when there is none -- missing, or not one of the three
+ * valid literals (P11-R-02). `null` is the "no explicit choice yet"
+ * state: {@link useSearchQuery}'s `sort` getter falls back to
+ * {@link defaultSort} for it on every read, so the default tracks
+ * `q` through ordinary reactivity (typing a query turns the
+ * *default* into Relevance) instead of a concrete value computed
+ * once at mount time and never revisited.
+ *
+ * :param value: Raw `route.query.sort` value.
+ * :returns: The explicit sort literal, or `null` when none was set.
+ */
+export function readExplicitSort(value: unknown): SearchSort | null {
+  if (value === "relevance" || value === "title" || value === "recent") {
+    return value;
+  }
+  return null;
+}
+
 /** Options for {@link useSearchQuery}. */
 export interface UseSearchQueryOptions {
   /** Debounce delay (ms) applied to the free-text `q` filter. */
@@ -119,17 +139,26 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
   const state = ref<StateFilter>(readString(route.query.state) as StateFilter);
   const needsApproval = ref(readBoolean(route.query.needs_approval));
   const recordType = ref<RecordTypeFilter>(readRecordType(route.query.record_type));
-  // The user's last explicit sort choice. Exposed as the writable
-  // computed `sort` below, which re-applies `readSort`'s
-  // relevance-needs-a-query rule on every read -- so clearing the
-  // query flips the *effective* value (and the select's display)
-  // straight to "title" through normal reactivity, with no separate
-  // watcher needed to keep the two in sync.
-  const rawSort = ref<SearchSort>(
-    readSort(route.query.sort, Boolean(route.query.q)),
+  // The user's last explicit sort choice, or `null` when none has
+  // been made yet (P11-R-02) -- *not* a concrete `SearchSort` read
+  // once at mount time, which would otherwise permanently shadow
+  // `defaultSort`: typing a query from the landing page must turn
+  // the *default* into Relevance, which only happens while no
+  // explicit choice is on record. Exposed as the writable computed
+  // `sort` below, which re-applies `readSort`'s
+  // relevance-needs-a-query rule (or, with no explicit choice,
+  // `defaultSort` directly) on every read -- so clearing the query
+  // flips the *effective* value (and the select's display) straight
+  // to "title" through normal reactivity, with no separate watcher
+  // needed to keep the two in sync.
+  const rawSort = ref<SearchSort | null>(
+    readExplicitSort(route.query.sort),
   );
   const sort = computed<SearchSort>({
-    get: () => readSort(rawSort.value, q.value !== ""),
+    get: () =>
+      rawSort.value === null
+        ? defaultSort(q.value !== "")
+        : readSort(rawSort.value, q.value !== ""),
     set: (value) => {
       rawSort.value = value;
     },
@@ -217,7 +246,15 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
       const nextState = readString(query.state) as StateFilter;
       const nextNeedsApproval = readBoolean(query.needs_approval);
       const nextRecordType = readRecordType(query.record_type);
-      const nextSort = readSort(query.sort, Boolean(nextQ));
+      // `readExplicitSort`, not `readSort`: a URL navigated to with
+      // no `sort` param must restore "no explicit choice" (`null`),
+      // not a concrete value locked in via the `sort` setter below
+      // -- otherwise navigating back to a plain `?q=...` URL would
+      // re-introduce the P11-R-02 lock-in bug this ref exists to
+      // avoid. Assigned straight to `rawSort`, bypassing the `sort`
+      // computed's setter (which only ever accepts a concrete
+      // `SearchSort`, never `null`).
+      const nextRawSort = readExplicitSort(query.sort);
       const nextPage = readPage(query.page);
       if (q.value !== nextQ) q.value = nextQ;
       if (source.value !== nextSource) source.value = nextSource;
@@ -225,7 +262,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
       if (state.value !== nextState) state.value = nextState;
       if (needsApproval.value !== nextNeedsApproval) needsApproval.value = nextNeedsApproval;
       if (recordType.value !== nextRecordType) recordType.value = nextRecordType;
-      if (sort.value !== nextSort) sort.value = nextSort;
+      if (rawSort.value !== nextRawSort) rawSort.value = nextRawSort;
       if (page.value !== nextPage) page.value = nextPage;
     },
   );
@@ -252,7 +289,7 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
     state.value = "";
     needsApproval.value = false;
     recordType.value = DEFAULT_RECORD_TYPE;
-    sort.value = defaultSort(false);
+    rawSort.value = null;
     page.value = 1;
     void router.replace({ query: {} });
   }

@@ -9,17 +9,26 @@
  * shareable by link and restored by back/forward navigation. Results
  * are fetched only when the *committed* (debounced) URL query
  * changes, never on every keystroke.
+ *
+ * The filter bar, the active-filter chip row, and one result row are
+ * each their own component (`SearchFilterBar`, `ActiveFilterRow`,
+ * `SearchResultRow`; phases/11-ui-ux-updates.md Task 16, P11-R-17),
+ * so this view owns the page's data flow -- the committed query, the
+ * fetch, and the active-filter chips -- while each extracted
+ * component owns only how its own slice renders.
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { ApiError } from "@/api";
-import { getFacets, searchRecords } from "@/api/records";
+import { searchRecords } from "@/api/records";
 import { forbiddenText, isForbidden } from "@/utils/apiErrors";
+import ActiveFilterRow from "@/components/search/ActiveFilterRow.vue";
+import SearchFilterBar from "@/components/search/SearchFilterBar.vue";
+import SearchResultRow from "@/components/search/SearchResultRow.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
-import StatusChip from "@/components/StatusChip.vue";
 import {
   DEFAULT_RECORD_TYPE,
   defaultSort,
@@ -27,28 +36,19 @@ import {
   readSort,
   useSearchQuery,
 } from "@/composables/useSearchQuery";
+import { useSearchFacets } from "@/composables/useSearchFacets";
 import { withLoading } from "@/composables/useLoading";
 import type {
   RecordState,
-  SearchItem,
   SearchPage,
   SearchParams,
   SearchSort,
 } from "@/types/records";
-import type { FacetsOut } from "@/types/sources";
 import {
   activeFilterChips,
   type ActiveFilterChip,
   type FilterKey,
 } from "@/utils/activeFilters";
-import {
-  candidateBranchText,
-  issueIndicatorLabel,
-  recordKindTypeLabel,
-  searchApprovalStateLabel,
-  searchErratumStatusLabel,
-  searchRecordStateLabel,
-} from "@/utils/labels";
 
 const PAGE_SIZE = 20;
 
@@ -64,20 +64,6 @@ const {
   page,
   clearFilters,
 } = useSearchQuery();
-
-/**
- * One shared control density for the whole filter bar
- * (phases/11-ui-ux-updates.md Task 4, S-03: "use one density for the
- * whole bar so every control shares a top line") -- a
- * `<v-defaults-provider>` (ladder step 3) rather than a global
- * default, since only this one region needs it.
- */
-const filterBarDefaults = {
-  VSelect: { density: "compact" },
-  VBtnToggle: { density: "compact" },
-  VBtn: { density: "compact" },
-  VSwitch: { density: "compact" },
-} as const;
 
 /** The needs-approval filter's full "what counts" explanation, used
  *  both as the info button's `aria-label` and the tooltip's text --
@@ -101,60 +87,10 @@ const sortItems = computed<{ title: string; value: SearchSort }[]>(() => {
   return items;
 });
 
-const facets = ref<FacetsOut | null>(null);
-const facetsFailed = ref(false);
-
-onMounted(async () => {
-  try {
-    facets.value = await getFacets();
-  } catch {
-    facetsFailed.value = true;
-  }
-});
-
-const sourceOptions = computed(() => {
-  if (!facets.value) {
-    return [];
-  }
-  return facets.value.sources.map((entry) => ({
-    title: `${entry.source_id} (${entry.count})`,
-    value: entry.source_id,
-  }));
-});
-
-const projectOptions = computed(() => {
-  if (!facets.value) {
-    return [];
-  }
-  if (source.value) {
-    const match = facets.value.sources.find(
-      (entry) => entry.source_id === source.value,
-    );
-    return (match?.projects ?? []).map((entry) => ({
-      title: `${entry.project} (${entry.count})`,
-      value: entry.project,
-    }));
-  }
-  const merged = new Map<string, number>();
-  for (const entry of facets.value.sources) {
-    for (const proj of entry.projects) {
-      merged.set(proj.project, (merged.get(proj.project) ?? 0) + proj.count);
-    }
-  }
-  return [...merged.entries()].map(([value, count]) => ({
-    title: `${value} (${count})`,
-    value,
-  }));
-});
-
-// Changing the source narrows the project list; drop a project that
-// no longer belongs to it rather than silently keeping an invisible
-// filter active.
-watch(source, () => {
-  if (project.value && !projectOptions.value.some((o) => o.value === project.value)) {
-    project.value = "";
-  }
-});
+const { facetsFailed, sourceOptions, projectOptions } = useSearchFacets(
+  source,
+  project,
+);
 
 type LoadState = "loading" | "loaded" | "error";
 
@@ -247,6 +183,20 @@ function clearFilter(key: FilterKey): void {
   }
 }
 
+/** Clears every active filter mode (every chip `ActiveFilterRow`
+ *  shows), but leaves the free-text query and the sort order alone
+ *  (P11-R-05): "Clear filters", beside the chips, should only undo
+ *  what those chips represent -- unlike the empty-state "Clear
+ *  search and filters" action below, which deliberately also clears
+ *  `q`. */
+function clearActiveFilters(): void {
+  needsApproval.value = false;
+  source.value = "";
+  project.value = "";
+  state.value = "";
+  recordType.value = DEFAULT_RECORD_TYPE;
+}
+
 function describeError(error: unknown): string {
   if (isForbidden(error)) {
     return forbiddenText(error);
@@ -279,40 +229,38 @@ const pageCount = computed(() =>
 );
 
 /**
- * The result-count line, now naming the active filters (S-04: "the
- * count line doesn't mention [the filter]"). When "Needs approval" is
- * the only active filter, the direct "N records need approval"
- * wording reads more naturally than a generic filter count; any
- * other combination (including needs-approval plus something else)
- * uses the generic "N filters active" form, since there is no single
- * sentence that reads naturally for every combination.
+ * The result-count line, naming the active filters (S-04: "the count
+ * line doesn't mention [the filter]") while always keeping the page
+ * range (P11-R-21: paging context must not vanish, even when "Needs
+ * approval" is the only active filter). When it is the only active
+ * filter, the range reads directly into "... that need approval."
+ * instead of the generic "N filters active." suffix, since there is
+ * no single generic sentence that reads naturally for every
+ * combination (including needs-approval plus something else, which
+ * still uses the generic form).
  */
 const resultSummary = computed(() => {
   if (loadState.value !== "loaded" || !results.value) {
     return "";
   }
   const { total } = results.value;
-  const chips = activeChips.value;
   if (total === 0) {
     return "No records found.";
   }
+  const chips = activeChips.value;
   const start = (results.value.page - 1) * results.value.page_size + 1;
   const end = Math.min(total, results.value.page * results.value.page_size);
   const plural = total === 1 ? "" : "s";
+  const base = `Showing ${start}–${end} of ${total} record${plural}`;
   if (chips.length === 1 && chips[0].key === "needsApproval") {
-    return `${total} record${plural} need${total === 1 ? "s" : ""} approval.`;
+    return `${base} that ${total === 1 ? "needs" : "need"} approval.`;
   }
-  const base = `Showing ${start}–${end} of ${total} record${plural}.`;
   if (chips.length === 0) {
-    return base;
+    return `${base}.`;
   }
   const filters = `${chips.length} filter${chips.length === 1 ? "" : "s"}`;
-  return `${base} ${filters} active.`;
+  return `${base}. ${filters} active.`;
 });
-
-function recordHref(item: SearchItem): string {
-  return `/records/${item.id}`;
-}
 
 /** The no-matches empty state's clear-action label: "Clear search
  *  and filters" once a query is set, since the action also clears
@@ -321,20 +269,6 @@ function recordHref(item: SearchItem): string {
 const clearActionLabel = computed(() =>
   committedParams.value.q ? "Clear search and filters" : "Clear filters",
 );
-
-/** The result row's primary title: for an erratum, "Erratum for
- *  <target>" leads (so two rows both stored as "Erratum: Decision"
- *  are distinguishable by their target), with the erratum's own
- *  stored title shown as a secondary line; an ordinary decision just
- *  shows its title. */
-function rowTitle(item: SearchItem): string {
-  if (item.record_kind !== "erratum") {
-    return item.title;
-  }
-  return item.erratum_for_title
-    ? `Erratum for ${item.erratum_for_title}`
-    : "Erratum for an unknown decision";
-}
 </script>
 
 <template>
@@ -368,168 +302,32 @@ function rowTitle(item: SearchItem): string {
       max-width="720"
     />
 
-    <!--
-      S-03: one `<v-defaults-provider>` density for every control in
-      the bar, so they share a top line/height (ladder step 3);
-      min/max-width via component props, not CSS, bound each select
-      (ladder step 4).
-    -->
-    <v-defaults-provider :defaults="filterBarDefaults">
-      <div class="d-flex flex-wrap align-center ga-3 mt-2">
-        <v-select
-          v-model="source"
-          :items="[{ title: 'All sources', value: '' }, ...sourceOptions]"
-          label="Source"
-          variant="outlined"
-          min-width="140"
-          max-width="200"
-          :disabled="facetsFailed"
-        />
-        <v-select
-          v-model="project"
-          :items="[{ title: 'All projects', value: '' }, ...projectOptions]"
-          label="Project"
-          variant="outlined"
-          min-width="140"
-          max-width="200"
-          :disabled="facetsFailed"
-        />
-        <v-btn-toggle
-          v-model="state"
-          mandatory
-          color="primary"
-          variant="outlined"
-          divided
-          aria-label="Filter by publication state"
-        >
-          <v-btn value="" aria-label="Show all records">All</v-btn>
-          <v-btn value="published" aria-label="Show published records only">
-            Published
-          </v-btn>
-          <v-btn value="candidate" aria-label="Show candidate records only">
-            Candidate
-          </v-btn>
-        </v-btn-toggle>
-
-        <v-select
-          v-model="recordType"
-          :items="[
-            { title: 'Decisions', value: 'decision' },
-            { title: 'Errata', value: 'erratum' },
-            { title: 'Both', value: 'all' },
-          ]"
-          label="Show"
-          variant="outlined"
-          min-width="130"
-          max-width="170"
-        />
-
-        <v-select
-          v-model="sort"
-          :items="sortItems"
-          label="Sort by"
-          variant="outlined"
-          min-width="200"
-          max-width="220"
-        />
-
-        <!--
-          S-03: the switch's two-line hint moved into a tooltip, with
-          `hide-details` so removing it doesn't leave an empty
-          message slot behind (G-09). The info button goes in
-          `v-switch`'s own `#append` slot (forwarded straight to
-          `VInput`'s prepend/control/append layout, per VSwitch's
-          source) rather than a hand-rolled flex sibling, so it is
-          always positioned after the control+label by Vuetify's own
-          layout, not by assumptions about how wide the switch
-          renders. `density="default"` overrides the bar's shared
-          compact density for this one instance (ladder step 4: "set
-          a prop at the call site only when that instance has to
-          differ") -- `compact` density combined with `size="small"`
-          put this icon button's hit target under the 24x24 px
-          minimum (coordinator browser check). The button carries its
-          own `aria-label` with the full hint text, so it stays
-          accessible whether or not the hover/focus tooltip is open;
-          `v-tooltip` with `activator="parent"` also wires a
-          hover/focus-triggered tooltip onto that same (naturally
-          focusable) button. Decision 2 / S-04: the switch's
-          `color="primary"`, not `warning` -- a deliberate, reversible
-          filter is not a warning.
-        -->
-        <v-switch
-          v-model="needsApproval"
-          label="Needs approval"
-          color="primary"
-          hide-details="auto"
-        >
-          <template #append>
-            <!--
-              `<v-icon>` is explicit, not left to `v-btn`'s `icon`
-              prop to auto-render: once a `v-btn` with an `icon` prop
-              also gets default-slot content (the `v-tooltip` below),
-              Vuetify treats that as "custom content supplied" and
-              silently stops auto-rendering the prop's icon, leaving
-              an empty, invisible button (coordinator browser check:
-              no glyph ever painted, at any size).
-            -->
-            <v-btn
-              icon="mdi-information-outline"
-              variant="text"
-              density="default"
-              :aria-label="`Needs approval means: ${needsApprovalHint}`"
-            >
-              <v-icon icon="mdi-information-outline" aria-hidden="true" />
-              <v-tooltip activator="parent" location="top">
-                {{ needsApprovalHint }}
-              </v-tooltip>
-            </v-btn>
-          </template>
-        </v-switch>
-      </div>
-    </v-defaults-provider>
+    <SearchFilterBar
+      v-model:source="source"
+      v-model:project="project"
+      v-model:state="state"
+      v-model:record-type="recordType"
+      v-model:sort="sort"
+      v-model:needs-approval="needsApproval"
+      :source-options="sourceOptions"
+      :project-options="projectOptions"
+      :sort-items="sortItems"
+      :facets-failed="facetsFailed"
+      :needs-approval-hint="needsApprovalHint"
+    />
 
     <!--
-      S-04: the persistent active-filter row, between the bar and the
-      results. Always mounted (never `v-if`-removed) so the
-      `aria-live` region exists before its content changes, per the
-      module-vue-vuetify mode-indicator rules; the chip row itself
-      (not an extra hidden summary) is the content that changes.
-      "Clear filters" moved here (coordinator browser check: it used
-      to wrap onto its own line at 1920, no longer anchored "at the
-      end" of anything) -- the mode-indicator rules call this out
-      directly ("the indicator carries its own exit"), so an
-      all-filters clear belongs beside the per-filter clears, not in
-      the control bar above. Hidden (not just disabled) when nothing
-      is active, matching the chips themselves having nothing to
-      show.
+      S-04: the persistent active-filter row, between the bar and
+      the results -- always mounted (never `v-if`-removed), per the
+      module-vue-vuetify mode-indicator rules. See
+      `components/search/ActiveFilterRow.vue` for the live-region and
+      "Clear filters" scope/placement rules (P11-R-05).
     -->
-    <div
-      class="d-flex flex-wrap align-center ga-2"
-      :class="{ 'mt-3': activeChips.length > 0 || hasActiveFilters }"
-      role="status"
-      aria-live="polite"
-    >
-      <v-chip
-        v-for="chip in activeChips"
-        :key="chip.key"
-        :color="chip.color"
-        :prepend-icon="chip.icon"
-        closable
-        :close-label="`Remove filter: ${chip.label}`"
-        @click:close="clearFilter(chip.key)"
-      >
-        {{ chip.label }}
-      </v-chip>
-
-      <v-btn
-        v-if="hasActiveFilters"
-        variant="text"
-        prepend-icon="mdi-filter-remove-outline"
-        @click="clearFilters"
-      >
-        Clear filters
-      </v-btn>
-    </div>
+    <ActiveFilterRow
+      :chips="activeChips"
+      @clear-filter="clearFilter"
+      @clear-filters="clearActiveFilters"
+    />
 
     <p class="d-sr-only" role="status" aria-live="polite">
       {{ resultSummary }}
@@ -583,69 +381,13 @@ function rowTitle(item: SearchItem): string {
           {{ resultSummary }}
         </p>
 
-        <!--
-          Title on its own line; source/project, short status and
-          issue chips share a left-aligned metadata line below it
-          (phases/11-ui-ux-updates.md Task 3, S-01: chips sat
-          1,100+ px from the title they describe). A plain flex
-          layout, not `v-list-item`'s `#append` slot, which reserves
-          a fixed-width column that squeezes (and mid-word-wraps) the
-          title at narrow viewports.
-        -->
-        <ul class="results-list">
-          <li v-for="item in results.items" :key="item.id" class="result-row">
-            <router-link
-              :to="recordHref(item)"
-              class="result-link d-flex flex-column py-3 px-1
-                text-decoration-none"
-            >
-              <span class="text-title-medium">{{ rowTitle(item) }}</span>
-              <span
-                v-if="item.record_kind === 'erratum'"
-                class="text-body-medium text-medium-emphasis"
-              >
-                {{ item.title }}
-              </span>
-              <div class="d-flex flex-wrap align-center ga-2 mt-1">
-                <span class="text-body-medium text-medium-emphasis">
-                  {{ item.source_id }} / {{ item.project }}
-                  <template v-if="candidateBranchText(item.kind, item.ref)">
-                    · {{ candidateBranchText(item.kind, item.ref) }}
-                  </template>
-                </span>
-                <StatusChip
-                  v-if="searchRecordStateLabel(item.kind)"
-                  v-bind="searchRecordStateLabel(item.kind)!"
-                />
-                <StatusChip
-                  v-if="item.record_kind === 'erratum'"
-                  v-bind="recordKindTypeLabel(item.record_kind)"
-                />
-                <StatusChip
-                  v-if="item.record_kind === 'erratum'"
-                  v-bind="
-                    searchErratumStatusLabel(
-                      item.approval_state,
-                      item.approvable,
-                    )
-                  "
-                />
-                <StatusChip
-                  v-else
-                  v-bind="
-                    searchApprovalStateLabel(
-                      item.approval_state,
-                      item.approvable,
-                    )
-                  "
-                />
-                <StatusChip
-                  v-if="issueIndicatorLabel(item.issue_counts)"
-                  v-bind="issueIndicatorLabel(item.issue_counts)!"
-                />
-              </div>
-            </router-link>
-          </li>
+        <ul class="results-list ma-0 mt-2 pa-0">
+          <SearchResultRow
+            v-for="(item, index) in results.items"
+            :key="item.id"
+            :item="item"
+            :divided="index > 0"
+          />
         </ul>
 
         <v-pagination
@@ -661,42 +403,10 @@ function rowTitle(item: SearchItem): string {
 </template>
 
 <style scoped>
-/*
- * phases/11-ui-ux-updates.md Task 4 removed `.filters`, `.filter-select`,
- * and `.needs-approval-switch`: the filter bar's layout, density and
- * widths are now expressed through Vuetify itself -- `d-flex
- * flex-wrap align-center ga-3` utility classes on the bar, a
- * `<v-defaults-provider>` for its shared density, `min-width`/
- * `max-width` props on each select, and `<v-spacer>` to anchor
- * "Clear filters" -- with no custom CSS left for any of it.
- */
-
 .results-list {
-  /* No Vuetify utility removes a <ul>'s marker/indent or sets this
-     one-off top margin. */
+  /* No Vuetify utility removes a <ul>'s marker/indent; margin and
+     padding are zeroed/set through utility classes on the element
+     instead (`ma-0 mt-2 pa-0`, ladder step 4). */
   list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-}
-
-.result-row + .result-row {
-  /* Divider between rows, in the theme's border token -- Vuetify has
-     no prop for an adjacent-sibling border on a plain <li>. */
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-.result-link {
-  /* No Vuetify utility sets an anchor's text colour to "inherit from
-     context"; without this a router-link renders browser-default
-     link blue. */
-  color: inherit;
-}
-
-.result-link:hover,
-.result-link:focus-visible {
-  /* Hover/focus highlight at the theme's on-surface token, low
-     opacity -- Vuetify has no built-in hover treatment for a plain
-     router-link acting as a row. */
-  background: rgba(var(--v-theme-on-surface), 0.04);
 }
 </style>

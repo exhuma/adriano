@@ -301,5 +301,57 @@ describe("useSearchQuery", () => {
       expect(api.sort.value).toBe("title");
       expect(router.currentRoute.value.query).toEqual({});
     });
+
+    it("turns the default into Relevance once a query is typed from " +
+      "the landing page, with no explicit choice locked in " +
+      "(P11-R-02)", async () => {
+      const { router, api } = await mountSearchQuery("/", 300);
+
+      expect(api.sort.value).toBe("title");
+
+      api.q.value = "postgres";
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(300);
+      await flushPromises();
+
+      expect(api.sort.value).toBe("relevance");
+      expect(router.currentRoute.value.query.sort).toBeUndefined();
+    });
+
+    it("keeps an explicit 'title' choice once a query is typed, and " +
+      "keeps it in the URL (P11-R-02)", async () => {
+      const { router, api } = await mountSearchQuery("/", 300);
+
+      api.sort.value = "title";
+      await flushPromises();
+      expect(router.currentRoute.value.query.sort).toBeUndefined();
+
+      api.q.value = "postgres";
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(300);
+      await flushPromises();
+
+      expect(api.sort.value).toBe("title");
+      expect(router.currentRoute.value.query.sort).toBe("title");
+    });
+
+    it("restores 'no explicit choice' on external navigation to a " +
+      "URL with no sort param, instead of re-locking the value that " +
+      "was computed for the previous query (P11-R-02)", async () => {
+      const { router, api } = await mountSearchQuery("/?q=postgres");
+      expect(api.sort.value).toBe("relevance");
+
+      await router.push({ query: {} });
+      await flushPromises();
+      expect(api.sort.value).toBe("title");
+
+      api.q.value = "postgres again";
+      await flushPromises();
+      await vi.advanceTimersByTimeAsync(300);
+      await flushPromises();
+
+      expect(api.sort.value).toBe("relevance");
+      expect(router.currentRoute.value.query.sort).toBeUndefined();
+    });
   });
 });
