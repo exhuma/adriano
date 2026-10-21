@@ -14,6 +14,14 @@
  * (docs/ui-review G-06); the user menu (Task 2,
  * `phases/11-ui-ux-updates.md`) is the only planned caller of
  * `setPreference`.
+ *
+ * `App.vue`'s own `setup()` calls this composable once, for its
+ * apply-on-mount side effect alone (P11-R-01): the previous only
+ * caller, `ThemeMenuItems`, lives inside a lazy `v-menu` that never
+ * mounts until the user opens it, so a stored non-"system" choice
+ * was never applied on page load, signed in or out, until then.
+ * Calling the singleton from more than one component is safe and
+ * documented above `applied`.
  */
 import { readonly, ref } from "vue";
 import { useTheme } from "vuetify";

@@ -267,12 +267,23 @@ describe("App", () => {
 
       expect(wrapper.text()).toContain("adriano");
       expect(wrapper.text()).toContain("DEV");
-      expect(wrapper.text()).not.toContain("DEV LOGIN");
       expect(wrapper.text()).not.toContain("Catalog");
       expect(wrapper.text()).not.toContain("Sign out");
 
-      const devChip = document.querySelector(".v-chip");
-      expect(devChip?.getAttribute("aria-label")).toContain("DEV LOGIN");
+      // StatusChip no longer puts `aria-label` on the chip itself
+      // (P11-R-15: not a valid attribute on its generic `<span>`
+      // root). The short "DEV" text is what a sighted user sees
+      // (hidden from assistive tech via `aria-hidden`); the full
+      // "DEV LOGIN" meaning lives in a separate, visually hidden
+      // (`d-sr-only`) span instead -- present in `textContent`
+      // either way, so `wrapper.text()` above only asserts "DEV",
+      // not its absence.
+      const devChip = document.querySelector(".v-chip")!;
+      expect(devChip.getAttribute("aria-label")).toBeNull();
+      const visibleText = devChip.querySelector("span[aria-hidden='true']");
+      expect(visibleText?.textContent).toBe("DEV");
+      const fullText = devChip.querySelector(".d-sr-only");
+      expect(fullText?.textContent).toContain("DEV LOGIN");
 
       expect(
         document.querySelector('button[aria-label="Open menu"]'),
@@ -349,6 +360,36 @@ describe("App", () => {
 
       expect(document.querySelector(".v-overlay--active")).toBeNull();
       expect(document.activeElement).toBe(menuButton);
+    });
+  });
+
+  describe("theme preference applied on load (P11-R-01)", () => {
+    const STORAGE_KEY = "adriano:theme-preference";
+
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("applies a stored preference immediately, before any menu is opened", async () => {
+      window.localStorage.setItem(STORAGE_KEY, "light");
+      // `useThemePreference`'s "apply once per module load" flag
+      // (see its docstring) is a singleton that earlier tests in
+      // this file may already have tripped by opening the user
+      // menu (`ThemeMenuItems` is the other caller of the
+      // composable); reset the module graph so `mountApp`'s dynamic
+      // `import("@/App.vue")` re-evaluates `App.vue` -- and
+      // therefore `useThemePreference.ts` -- fresh, with that flag
+      // unset again, independent of test order.
+      vi.resetModules();
+      const { wrapper } = await mountApp();
+
+      // Never opened the user menu, yet the stored choice is live on
+      // the shared `vuetify` plugin instance (statically imported
+      // above, unaffected by `resetModules`): proof the preference
+      // was applied from `App.vue`'s own `setup()`, not from the
+      // lazily-mounted `ThemeMenuItems`.
+      expect(vuetify.theme.name.value).toBe("light");
+      wrapper.unmount();
     });
   });
 });

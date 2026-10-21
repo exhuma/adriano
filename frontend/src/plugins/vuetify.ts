@@ -50,6 +50,21 @@ export const light: ThemeDefinition = {
     background: "#FFFFFF",
     surface: "#FFFFFF",
   },
+  variables: {
+    // P11-R-03: Vuetify's default `medium-emphasis-opacity` (0.60)
+    // is a plain CSS `opacity` on the whole element -- not a colour
+    // mix -- for `.v-label` (field labels), `.v-list-item-subtitle`
+    // (sidebar list values), and anything nested inside either (a
+    // `StatusChip` nested in a subtitle, e.g. the "Inferred from
+    // filename" chip in `RecordMetadataCard.vue`, is blended toward
+    // the background as one group with its text). The independent
+    // review measured that pairing at 4.30:1 on the opaque surface
+    // and 4.39:1 over the list item's 4% hover overlay -- both below
+    // 4.5:1. 0.66 clears 4.5:1 with margin in both cases
+    // (`tests/plugins/vuetify.test.ts`); only light needs raising --
+    // dark's default (0.70) already passes.
+    "medium-emphasis-opacity": 0.66,
+  },
 };
 
 export const dark: ThemeDefinition = {
@@ -125,6 +140,24 @@ export default createVuetify({
     // and dropped `meta.wide`/`.container--wide`.
     VContainer: {
       maxWidth: 1360,
+    },
+    // P11-R-06/R-18: `VDialog` wraps its default slot in its own
+    // `<VDefaultsProvider root="VDialog">` (`VDialog.js`), which
+    // resets to the root defaults tree and merges this nested object
+    // on top -- so every `VCardTitle`/`VCardSubtitle`/`VCardText`
+    // rendered inside *any* `v-dialog` picks this up, without each
+    // dialog repeating its own `v-defaults-provider`
+    // (`DecisionDialog.vue`, `DevLoginDialog.vue` used to). `ma-0` is
+    // restated here (not merged from the global `VCardTitle` default
+    // above) because this is a separate nested-defaults bucket, not
+    // an extension of it. `px-6` on all three aligns the title,
+    // subtitle, and body at the same 24px horizontal inset (the
+    // Dev sign-in subtitle included); `text-wrap` stops a long
+    // decision title from being clipped at the dialog's `max-width`.
+    VDialog: {
+      VCardTitle: { class: "ma-0 px-6 text-wrap" },
+      VCardSubtitle: { class: "px-6" },
+      VCardText: { class: "px-6" },
     },
   },
 });

@@ -76,14 +76,6 @@ async function refreshPresets(): Promise<void> {
  *  D-01). */
 const titleId = useId();
 
-/** docs/ui-review D-03: see `DecisionDialog.vue` for why this is a
- *  scoped `v-defaults-provider` instead of a global `VCardText`
- *  default. */
-const dialogCardDefaults = {
-  VCardTitle: { class: "ma-0 px-6" },
-  VCardText: { class: "px-6" },
-} as const;
-
 /** Reset the form whenever the dialog is reopened, so a previous
  *  submission's error never lingers into the next attempt, and
  *  re-read the catalog's roles (the backend may have restarted with
@@ -168,101 +160,99 @@ async function submit(): Promise<void> {
     @after-enter="focusSubject"
     @update:model-value="(value: boolean) => emit('update:modelValue', value)"
   >
-    <v-defaults-provider :defaults="dialogCardDefaults">
-      <v-card>
-        <v-card-title :id="titleId" tag="h2" class="text-title-large">
-          Dev sign-in
-        </v-card-title>
-        <v-card-subtitle>
-          Local-only: mints a token for any identity you type. Never
-          available in a production build.
-        </v-card-subtitle>
-        <v-card-text>
-          <v-alert
-            v-if="errorText"
-            type="error"
-            variant="tonal"
-            class="mb-4"
-            role="alert"
-          >
-            {{ errorText }}
-          </v-alert>
+    <v-card>
+      <v-card-title :id="titleId" tag="h2" class="text-title-large">
+        Dev sign-in
+      </v-card-title>
+      <v-card-subtitle>
+        Local-only: mints a token for any identity you type. Never
+        available in a production build.
+      </v-card-subtitle>
+      <v-card-text>
+        <v-alert
+          v-if="errorText"
+          type="error"
+          variant="tonal"
+          class="mb-4"
+          role="alert"
+        >
+          {{ errorText }}
+        </v-alert>
 
-          <v-text-field
-            ref="subjectField"
-            v-model="sub"
-            label="Subject (sub)"
-            hint="Any stable identifier, e.g. a username."
-            persistent-hint
-            variant="outlined"
-            density="comfortable"
-            class="mb-2"
-          />
-          <v-text-field
-            v-model="name"
-            label="Display name (optional)"
-            variant="outlined"
-            density="comfortable"
-            class="mb-2"
-          />
-          <v-text-field
-            v-model="email"
-            label="Email (optional)"
-            variant="outlined"
-            density="comfortable"
-            class="mb-2"
-          />
-          <v-text-field
-            v-model="roles"
-            label="Roles (comma-separated)"
-            :hint="
-              `Must match role names in this catalog's ` +
-                `rbac/approval_policy configuration.`
-            "
-            persistent-hint
-            variant="outlined"
-            density="comfortable"
-          />
+        <v-text-field
+          ref="subjectField"
+          v-model="sub"
+          label="Subject (sub)"
+          hint="Any stable identifier, e.g. a username."
+          persistent-hint
+          variant="outlined"
+          density="comfortable"
+          class="mb-2"
+        />
+        <v-text-field
+          v-model="name"
+          label="Display name (optional)"
+          variant="outlined"
+          density="comfortable"
+          class="mb-2"
+        />
+        <v-text-field
+          v-model="email"
+          label="Email (optional)"
+          variant="outlined"
+          density="comfortable"
+          class="mb-2"
+        />
+        <v-text-field
+          v-model="roles"
+          label="Roles (comma-separated)"
+          :hint="
+            `Must match role names in this catalog's ` +
+              `rbac/approval_policy configuration.`
+          "
+          persistent-hint
+          variant="outlined"
+          density="comfortable"
+        />
 
-          <div
-            v-if="presets.length"
-            class="mt-3"
-            role="group"
-            aria-label="Role presets"
-          >
-            <v-btn
-              v-for="preset in presets"
-              :key="preset.label"
-              :title="preset.roles.join(', ')"
-              size="small"
-              variant="tonal"
-              class="mr-2 mb-2"
-              @click="applyPreset(preset)"
-            >
-              {{ preset.label }}
-            </v-btn>
-          </div>
-          <p
-            v-else-if="presetsFailed"
-            class="mt-3 text-body-small text-medium-emphasis"
-          >
-            Could not load this catalog's roles. Type them by hand.
-          </p>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="close">Cancel</v-btn>
+        <div
+          v-if="presets.length"
+          class="mt-3"
+          role="group"
+          aria-label="Role presets"
+        >
           <v-btn
-            color="primary"
-            variant="flat"
-            :loading="submitting"
-            :disabled="submitting"
-            @click="submit"
+            v-for="preset in presets"
+            :key="preset.label"
+            :title="preset.roles.join(', ')"
+            size="small"
+            variant="tonal"
+            class="mr-2 mb-2"
+            @click="applyPreset(preset)"
           >
-            Sign in
+            {{ preset.label }}
           </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-defaults-provider>
+        </div>
+        <p
+          v-else-if="presetsFailed"
+          class="mt-3 text-body-small text-medium-emphasis"
+        >
+          Could not load this catalog's roles. Type them by hand.
+        </p>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="close">Cancel</v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          :loading="submitting"
+          :disabled="submitting"
+          @click="submit"
+        >
+          Sign in
+        </v-btn>
+      </v-card-actions>
+    </v-card>
   </v-dialog>
 </template>

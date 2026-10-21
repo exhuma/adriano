@@ -110,3 +110,62 @@ describe("theme status colours", () => {
     }
   }
 });
+
+/**
+ * P11-R-03: Vuetify applies `medium-emphasis-opacity` as a literal
+ * CSS `opacity` on the whole element (`.v-list-item-subtitle`'s
+ * `opacity: var(--v-list-item-subtitle-opacity,
+ * var(--v-medium-emphasis-opacity))`; `.v-label`'s field-label rule
+ * is the same variable) -- a true alpha blend of the on-surface
+ * colour toward whatever sits behind it, not a partial colour-mix of
+ * text alone. That "behind it" also carries any `StatusChip` nested
+ * inside the subtitle (the "Inferred from filename" chip in
+ * `RecordMetadataCard.vue`): CSS `opacity` applies to an element and
+ * its whole subtree as one group, so the chip blends along with its
+ * label text, at the same ratio.
+ *
+ * `on-surface` is Vuetify's auto-derived colour for the on-surface
+ * key neither theme sets explicitly: pure black for light's white
+ * surface, pure white for dark's near-black surface
+ * (`hasLightForeground`, `composables/theme.js`). The 4% hover tint
+ * is Vuetify's default list-item hover overlay (`--v-hover-opacity`),
+ * painted in the item's own text colour (`background: currentColor`)
+ * behind the subtitle/chip's own opacity.
+ */
+describe("medium-emphasis text contrast (P11-R-03)", () => {
+  const HOVER_OPACITY = 0.04;
+  const DEFAULT_MEDIUM_EMPHASIS = 0.6;
+
+  for (const [themeName, definition, onSurface] of [
+    ["light", light, [0, 0, 0] as Rgb],
+    ["dark", dark, [255, 255, 255] as Rgb],
+  ] as const) {
+    const colors = definition.colors;
+    const surfaceHex = colors?.surface;
+    if (typeof surfaceHex !== "string") {
+      throw new Error(`${themeName} theme has no hex surface colour`);
+    }
+    const surfaceRgb = hexToRgb(surfaceHex);
+    const mediumEmphasis =
+      (definition.variables?.["medium-emphasis-opacity"] as
+        | number
+        | undefined) ?? DEFAULT_MEDIUM_EMPHASIS;
+
+    it(`${themeName} medium-emphasis text reaches ${MIN_TEXT_CONTRAST}:1 on surface`, () => {
+      const blended = compositeOver(onSurface, surfaceRgb, mediumEmphasis);
+
+      expect(contrastRatio(blended, surfaceRgb)).toBeGreaterThanOrEqual(
+        MIN_TEXT_CONTRAST,
+      );
+    });
+
+    it(`${themeName} medium-emphasis text reaches ${MIN_TEXT_CONTRAST}:1 over the 4% hover tint`, () => {
+      const hoverBg = compositeOver(onSurface, surfaceRgb, HOVER_OPACITY);
+      const blended = compositeOver(onSurface, hoverBg, mediumEmphasis);
+
+      expect(contrastRatio(blended, hoverBg)).toBeGreaterThanOrEqual(
+        MIN_TEXT_CONTRAST,
+      );
+    });
+  }
+});

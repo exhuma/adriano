@@ -21,9 +21,11 @@ defineEmits<{
 </script>
 
 <template>
-  <section
+  <v-container
+    tag="section"
+    :max-width="640"
     aria-labelledby="sign-in-heading"
-    class="sign-in d-flex flex-column align-center text-center py-14 px-4"
+    class="d-flex flex-column align-center text-center py-14 px-4"
   >
     <v-icon
       icon="mdi-shield-lock-outline"
@@ -67,18 +69,5 @@ defineEmits<{
       No sign-in method is available in this build. Contact an
       administrator to configure an identity provider.
     </p>
-  </section>
+  </v-container>
 </template>
-
-<style scoped>
-/* Vuetify has no utility class for an arbitrary max-width value.
-   Without a cap the heading stretches to the full page width and
-   wraps badly at mid-size viewports (docs/ui-review A-01); this
-   widens the previous 32rem measure just enough to fix that while
-   keeping the screen narrow and centred. Layout (flex, centering,
-   padding, gap) is expressed with utility classes above instead. */
-.sign-in {
-  max-width: 40rem;
-  margin: 0 auto;
-}
-</style>

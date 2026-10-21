@@ -16,9 +16,9 @@ defineProps<{
 </script>
 
 <template>
-  <div
-    class="auth-blocking d-flex flex-column align-center text-center
-      py-14 px-4 mx-auto"
+  <v-container
+    :max-width="512"
+    class="d-flex flex-column align-center text-center py-14 px-4"
     role="alert"
   >
     <v-icon
@@ -32,14 +32,5 @@ defineProps<{
     <div v-if="$slots.actions" class="mt-4">
       <slot name="actions" />
     </div>
-  </div>
+  </v-container>
 </template>
-
-<style scoped>
-/* Vuetify has no utility class for an arbitrary max-width value (same
-   limitation noted in SignInScreen.vue); layout, padding, and
-   centering move to utility classes above. */
-.auth-blocking {
-  max-width: 32rem;
-}
-</style>

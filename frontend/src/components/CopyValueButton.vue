@@ -4,7 +4,9 @@
  * "Copied!" (module-ux-principles "Feedback & visibility of system
  * status"). Shared by `ShortIdCopy` (UUIDs), `ApprovalCard` (the
  * indexed digest) and `RecordProvenanceCard` (the file path), so the
- * copy behaviour and its focus ring have one implementation.
+ * copy behaviour has one implementation. Its focus-visible ring
+ * comes from `App.vue`'s app-wide `.v-btn:focus-visible` rule
+ * (P11-R-04), not a local style here.
  */
 import { ref } from "vue";
 
@@ -48,16 +50,3 @@ async function copy(): Promise<void> {
     <span v-if="copied" class="text-success">Copied!</span>
   </span>
 </template>
-
-<style scoped>
-/* docs/ui-review G-08: Vuetify's own focus ring for a `variant="text"`
-   icon button draws `currentColor` at 25% opacity (see
-   `VBtn.css`'s `::after`), which the review measured at ~1.2:1 for
-   this x-small, colourless copy button -- no prop or default reaches
-   that opacity, so an explicit, opaque outline is the last resort
-   (ladder step 6), built from the theme's `primary` colour. */
-.copy-value :deep(.v-btn:focus-visible) {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
-}
-</style>

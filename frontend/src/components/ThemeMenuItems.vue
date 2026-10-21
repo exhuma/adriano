@@ -15,6 +15,8 @@
  * (`module-vue-vuetify` "component design": composables over prop
  * drilling past one level).
  */
+import { useId } from "vue";
+
 import { useThemePreference } from "@/composables/useThemePreference";
 import type { ThemePreference } from "@/composables/useThemePreference";
 
@@ -30,22 +32,42 @@ const choices: Array<{
   { value: "dark", title: "Dark", icon: "mdi-weather-night" },
   { value: "system", title: "System", icon: "mdi-theme-light-dark" },
 ];
+
+/** Labels the `role="group"` wrapper below, so the group has an
+ *  accessible name without repeating "Theme" in an `aria-label`. */
+const subheaderId = useId();
 </script>
 
 <template>
-  <v-list-subheader>Theme</v-list-subheader>
-  <v-list-item
-    v-for="choice in choices"
-    :key="choice.value"
-    :title="choice.title"
-    :aria-current="preference === choice.value ? 'true' : undefined"
-    @click="setPreference(choice.value)"
-  >
-    <template #prepend>
-      <v-icon :icon="choice.icon" aria-hidden="true" />
-    </template>
-    <template v-if="preference === choice.value" #append>
-      <v-icon icon="mdi-check" aria-hidden="true" />
-    </template>
-  </v-list-item>
+  <!--
+    P11-R-14: a theme choice is a mutually-exclusive selection, not a
+    plain list of actions, so each item is a radio button
+    (`role="menuitemradio"` + `aria-checked`) rather than a bare
+    `v-list-item` with an `aria-current` that assistive tech has no
+    standard way to announce for this role. `menuitemradio`'s
+    required ARIA context role is `menu`, `menubar`, or `group`; this
+    wrapper -- not the parent `v-menu`'s `v-list` (`role="list"` by
+    default, shared with non-theme items in `UserMenu.vue`/
+    `AppBarMenu.vue`) -- supplies that `group` context, labelled by
+    the existing visible "Theme" subheader instead of a duplicate
+    `aria-label`.
+  -->
+  <div role="group" :aria-labelledby="subheaderId">
+    <v-list-subheader :id="subheaderId">Theme</v-list-subheader>
+    <v-list-item
+      v-for="choice in choices"
+      :key="choice.value"
+      role="menuitemradio"
+      :aria-checked="preference === choice.value"
+      :title="choice.title"
+      @click="setPreference(choice.value)"
+    >
+      <template #prepend>
+        <v-icon :icon="choice.icon" aria-hidden="true" />
+      </template>
+      <template v-if="preference === choice.value" #append>
+        <v-icon icon="mdi-check" aria-hidden="true" />
+      </template>
+    </v-list-item>
+  </div>
 </template>

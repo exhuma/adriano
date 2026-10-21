@@ -19,6 +19,7 @@ import { devAuthEnabled } from "@/config";
 import { useAuth } from "@/composables/useAuth";
 import { useHealth } from "@/composables/useHealth";
 import { isLoading } from "@/composables/useLoading";
+import { useThemePreference } from "@/composables/useThemePreference";
 
 // `DevLoginDialog` (and everything it pulls in: `src/auth/devAuth.ts`,
 // `src/api/devAuth.ts`, `src/auth/devPresets.ts`, and the
@@ -50,6 +51,14 @@ const { state: healthState, payload: healthPayload, check: recheckHealth } = use
  *  (module-ux-principles "Fitt's/Hick's law": fewer, larger targets
  *  on a narrow viewport instead of cramped, shrinking controls). */
 const { mdAndUp } = useDisplay();
+
+// P11-R-01: apply a stored theme preference on mount, here rather
+// than only inside `ThemeMenuItems` (lazily mounted inside a
+// `v-menu`) -- otherwise a stored "light" choice under a dark OS
+// stays dark until the user happens to open the user menu. The
+// return value is unused; only the composable's apply-once side
+// effect (`composables/useThemePreference.ts`) is needed here.
+useThemePreference();
 
 const {
   me,
@@ -139,7 +148,7 @@ async function handleSignOut(): Promise<void> {
 <template>
   <v-app>
     <a
-      class="skip-link position-absolute left-0 py-2 px-4"
+      class="skip-link position-absolute left-0 py-2 px-4 bg-primary"
       href="#main-content"
     >Skip to main content</a>
 
@@ -309,19 +318,37 @@ async function handleSignOut(): Promise<void> {
 <style scoped>
 /* Skip-link reveal-on-focus pattern: Vuetify has no utility for an
    off-screen offset that flips to visible on :focus (position, left
-   offset and padding move to utility classes above), and no bg- or
-   text-on- utility classes exist in main.css for an arbitrary
-   semantic colour pair, so the theme-token background/text colours
-   stay here too (vuetify-theming kit allows rgb(var(--v-theme-*)) in
-   scoped CSS). */
+   offset and padding move to utility classes above, and `bg-primary`
+   -- Vuetify's own generated utility class, which pairs the primary
+   background with on-primary text -- replaces the hand-written
+   colour pair this rule used to carry; P11-R-10). Only the top-offset
+   toggle itself has no Vuetify equivalent. */
 .skip-link {
   top: -40px;
   z-index: 100;
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
 }
 
 .skip-link:focus {
   top: 0;
+}
+</style>
+
+<style>
+/* docs/ui-review G-08 (P11-R-04): Vuetify's own focus-visible styling
+   does not draw a visible ring for a plain `v-btn` (any variant),
+   `v-list-item` (nav links, menu items), a chip's close affordance,
+   or a clickable chip -- only a `variant="text"` icon button
+   happened to get one from `CopyValueButton.vue`'s now-removed local
+   patch. One rule, keyed off the theme's `primary` token, covers all
+   four everywhere in the app; unscoped because it has to reach
+   markup rendered by other components, not just this file's own
+   template (text fields/selects already show a border change on
+   focus, and the app uses no tabs component, so neither needs this). */
+.v-btn:focus-visible,
+.v-chip__close:focus-visible,
+.v-list-item:focus-visible,
+.v-chip--link:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 </style>

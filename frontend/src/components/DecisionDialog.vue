@@ -94,19 +94,6 @@ const canSubmit = computed(
   () => props.action === "accepted" || confirmReject.value,
 );
 
-/** docs/ui-review D-03: `v-card-title`/`v-card-text` do not render at
- *  equal horizontal padding by default (8px off at this dialog's
- *  width), and no global `VCardText` default exists yet to pair with
- *  Task 1's global `VCardTitle` default -- scoped here (Vuetify-first
- *  ladder step 3, `v-defaults-provider`) rather than globally, since
- *  changing every card's text padding site-wide is outside this
- *  dialog-only task. `DevLoginDialog` repeats the same two classes
- *  for the same reason. */
-const dialogCardDefaults = {
-  VCardTitle: { class: "ma-0 px-6" },
-  VCardText: { class: "px-6" },
-} as const;
-
 /** Reset the form whenever the dialog is reopened, so a previous
  *  attempt's error or comment never lingers into the next one. */
 watch(
@@ -157,104 +144,104 @@ async function submit(): Promise<void> {
     max-width="520"
     @update:model-value="(value: boolean) => emit('update:modelValue', value)"
   >
-    <v-defaults-provider :defaults="dialogCardDefaults">
-      <v-card>
-        <v-card-title :id="titleId" tag="h2" class="text-title-large">
-          {{ dialogTitle }}
-        </v-card-title>
-        <v-card-text>
-          <p class="text-body-medium mb-2">
-            You are about to <strong>{{ actionLabel.toLowerCase() }}</strong>
-            the exact {{ subjectNoun }} at digest:
+    <v-card>
+      <v-card-title :id="titleId" tag="h2" class="text-title-large">
+        {{ dialogTitle }}
+      </v-card-title>
+      <v-card-text>
+        <p class="text-body-medium mb-2">
+          You are about to <strong>{{ actionLabel.toLowerCase() }}</strong>
+          the exact {{ subjectNoun }} at digest:
+        </p>
+        <p class="d-flex align-center flex-wrap ga-1 mb-1">
+          <code :title="digest">{{ shortDigest(digest) }}</code>
+          <CopyValueButton :value="digest" label="digest" />
+        </p>
+        <v-btn
+          color="primary"
+          variant="text"
+          size="small"
+          class="pl-0 mb-2"
+          :append-icon="digestExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+          :aria-expanded="digestExpanded"
+          :aria-controls="digestDisclosureId"
+          @click="digestExpanded = !digestExpanded"
+        >
+          {{ digestExpanded ? "Hide full digest" : "Show full digest" }}
+        </v-btn>
+        <v-expand-transition>
+          <p v-show="digestExpanded" :id="digestDisclosureId" class="mb-4">
+            <code class="text-break">{{ digest }}</code>
           </p>
-          <p class="d-flex align-center flex-wrap ga-1 mb-1">
-            <code :title="digest">{{ shortDigest(digest) }}</code>
-            <CopyValueButton :value="digest" label="digest" />
-          </p>
-          <v-btn
-            variant="text"
-            size="small"
-            class="pl-0 mb-2"
-            :aria-expanded="digestExpanded"
-            :aria-controls="digestDisclosureId"
-            @click="digestExpanded = !digestExpanded"
-          >
-            {{ digestExpanded ? "Hide full digest" : "Show full digest" }}
-          </v-btn>
-          <v-expand-transition>
-            <p v-show="digestExpanded" :id="digestDisclosureId" class="mb-4">
-              <code class="text-break">{{ digest }}</code>
-            </p>
-          </v-expand-transition>
+        </v-expand-transition>
 
-          <v-alert
-            v-if="errorMessage"
-            type="error"
-            variant="tonal"
-            class="mb-4"
-            role="alert"
-          >
-            {{ errorMessage }}
-            <div v-if="errorHintText" class="text-body-medium mt-1">
-              {{ errorHintText }}
-            </div>
-          </v-alert>
+        <v-alert
+          v-if="errorMessage"
+          type="error"
+          variant="tonal"
+          class="mb-4"
+          role="alert"
+        >
+          {{ errorMessage }}
+          <div v-if="errorHintText" class="text-body-medium mt-1">
+            {{ errorHintText }}
+          </div>
+        </v-alert>
 
-          <v-textarea
-            v-model="comment"
-            :label="
-              action === 'rejected'
-                ? 'Comment (suggested)'
-                : 'Comment (optional)'
-            "
-            :hint="
-              action === 'rejected'
-                ? 'Explaining why helps the author fix the content.'
-                : undefined
-            "
-            persistent-hint
-            :counter="MAX_COMMENT_LENGTH"
-            :maxlength="MAX_COMMENT_LENGTH"
-            variant="outlined"
-            density="comfortable"
-            rows="3"
-            auto-grow
-          />
+        <v-textarea
+          v-model="comment"
+          :label="
+            action === 'rejected'
+              ? 'Comment (suggested)'
+              : 'Comment (optional)'
+          "
+          :hint="
+            action === 'rejected'
+              ? 'Explaining why helps the author fix the content.'
+              : undefined
+          "
+          persistent-hint
+          :counter="MAX_COMMENT_LENGTH"
+          :maxlength="MAX_COMMENT_LENGTH"
+          variant="outlined"
+          density="comfortable"
+          rows="3"
+          auto-grow
+        />
 
-          <v-checkbox
-            v-if="action === 'rejected'"
-            v-model="confirmReject"
-            class="mt-1"
-            density="comfortable"
-            hide-details
-          >
-            <template #label>
-              <template v-if="isErratum">
-                I confirm I want to reject this erratum.
-              </template>
-              <template v-else>
-                I confirm I want to reject this exact content.
-              </template>
+        <v-checkbox
+          v-if="action === 'rejected'"
+          v-model="confirmReject"
+          class="mt-1"
+          density="comfortable"
+          hide-details
+        >
+          <template #label>
+            <template v-if="isErratum">
+              I confirm I want to reject this erratum.
             </template>
-          </v-checkbox>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" :disabled="submitting" @click="close">
-            Cancel
-          </v-btn>
-          <v-btn
-            :color="action === 'rejected' ? 'error' : 'primary'"
-            variant="flat"
-            :loading="submitting"
-            :disabled="submitting || !canSubmit"
-            @click="submit"
-          >
-            {{ actionLabel }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-defaults-provider>
+            <template v-else>
+              I confirm I want to reject this exact content.
+            </template>
+          </template>
+        </v-checkbox>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" :disabled="submitting" @click="close">
+          Cancel
+        </v-btn>
+        <v-btn
+          :color="action === 'rejected' ? 'error' : 'primary'"
+          variant="flat"
+          :loading="submitting"
+          :disabled="submitting || !canSubmit"
+          @click="submit"
+        >
+          {{ actionLabel }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
   </v-dialog>
 </template>
 
