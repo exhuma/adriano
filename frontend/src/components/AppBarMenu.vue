@@ -27,8 +27,7 @@ defineProps<{
   hasConfigProblem: boolean;
   /** Backend status row to render (icon, label, theme colour), or
    *  `null` to omit it -- the backend is healthy, which is the
-   *  default state and carries no information worth a row
-   * . */
+   *  default state and carries no information worth a row. */
   health: { icon: string; text: string; color?: string } | null;
   /** Signed-in user's display name, or `null` when signed out. */
   userDisplay: string | null;
