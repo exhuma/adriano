@@ -1,0 +1,24 @@
+# Example kustomization for adriano. Apply with:
+#   kubectl apply -k deploy/kubernetes -n <namespace>
+# (see docs/operator/deploy/kubernetes.rst). The manifests carry no
+# namespace; the one you pass to kubectl is used.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - secret.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - cronjob.yaml
+  - poddisruptionbudget.yaml
+
+# Pin the image to one full release version. REPLACE 2026.1.1 with the
+# release you deploy, and never use a moving channel tag (stable,
+# beta, alpha, edge) in production. This one setting changes the
+# Deployment, its migration init container and the poll CronJob
+# together, so they can never run different versions.
+images:
+  - name: ghcr.io/exhuma/adriano
+    newTag: "2026.1.1"

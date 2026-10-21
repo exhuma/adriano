@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adriano
+  labels:
+    app.kubernetes.io/name: adriano
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: adriano
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adriano
+      app.kubernetes.io/component: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adriano
+        app.kubernetes.io/component: web
+        app.kubernetes.io/part-of: adriano
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Applies pending database migrations before the new pods
+        # serve. Safe with several replicas: concurrent runs wait on
+        # a database lock.
+        - name: migrate
+          image: ghcr.io/exhuma/adriano
+          command: ["adriano", "migrate"]
+          envFrom:
+            - configMapRef:
+                name: adriano
+            - secretRef:
+                name: adriano
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+      containers:
+        - name: adriano
+          image: ghcr.io/exhuma/adriano
+          # The image command is `adriano serve`.
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: adriano
+            - secretRef:
+                name: adriano
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: catalog
+              mountPath: /etc/adriano
+              readOnly: true
+          # Memory grows with ADRIANO_WORKERS: budget roughly 100 to
+          # 150 MiB per worker plus a base. Raise the limit together
+          # with the worker count.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          # Start-up and liveness only check that the process
+          # accepts connections. /healthz answers 503 while the
+          # database is unreachable; a liveness check on it would
+          # restart every pod during a database outage, which fixes
+          # nothing. Readiness uses /healthz, so pods without a
+          # database leave the Service instead.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: catalog
+          configMap:
+            name: adriano-catalog

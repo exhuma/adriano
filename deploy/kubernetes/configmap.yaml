@@ -1,0 +1,72 @@
+# Non-secret settings (ConfigMap `adriano`) and the catalog file
+# (ConfigMap `adriano-catalog`). Adjust the OIDC values and the
+# catalog for your deployment. Changing either ConfigMap does not
+# restart running pods: run
+#   kubectl rollout restart deployment/adriano
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adriano
+  labels:
+    app.kubernetes.io/name: adriano
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: adriano
+data:
+  # Your identity provider (see docs/operator/authentication.rst).
+  ADRIANO_OIDC_AUTHORITY: "https://idp.example.com/realms/adr"
+  ADRIANO_OIDC_CLIENT_ID: "adriano-web"
+  ADRIANO_OIDC_AUDIENCE: "adr_viewer"
+  ADRIANO_OIDC_ROLES_CLAIM: "realm_access.roles"
+
+  # Where the catalog (ConfigMap adriano-catalog) is mounted (see
+  # deployment.yaml).
+  ADRIANO_CONFIG_FILE: "/etc/adriano/catalog.yaml"
+
+  # Trust X-Forwarded-* from the ingress controller. Pod addresses of
+  # the controller are not stable, so every peer is trusted: only
+  # allow the ingress controller to reach the Service (NetworkPolicy).
+  ADRIANO_FORWARDED_ALLOW_IPS: "*"
+
+  # The migrate init container applies migrations; the serving pods
+  # do not repeat them.
+  ADRIANO_MIGRATE_ON_START: "false"
+
+  # Worker processes per pod. Memory use scales with it (see the
+  # resources in deployment.yaml).
+  ADRIANO_WORKERS: "2"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adriano-catalog
+  labels:
+    app.kubernetes.io/name: adriano
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: adriano
+data:
+  catalog.yaml: |
+    # Minimal example: one GitLab group, a review policy and two
+    # roles. See docs/operator/catalog-file.rst for the reference.
+    sources:
+      - id: gitlab-platform
+        type: gitlab
+        base_url: https://gitlab.example.com
+        token_env: ADRIANO_GITLAB_TOKEN_PLATFORM
+        scope:
+          groups: [platform]
+        path: doc/decisions
+        published_ref: "@project-default"
+        intake: [poll, push]
+        push_tokens_env: [ADRIANO_PUSH_TOKEN_PLATFORM]
+    approval_policy:
+      id: global
+      version: 1
+      required: true
+      reviewers:
+        users: []
+        roles: [adr-reviewer]
+      allow_self_approval: false
+    rbac:
+      roles:
+        admin: [read, operate]
+        adr-reader: [read]

@@ -1,0 +1,29 @@
+# Terminates TLS and forwards to the Service. Replace the class, the
+# host and the TLS Secret (a kubernetes.io/tls Secret, or let
+# cert-manager create it). The browser origin must match the redirect
+# URIs registered at your identity provider.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: adriano
+  labels:
+    app.kubernetes.io/name: adriano
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: adriano
+spec:
+  ingressClassName: CHANGE-ME-ingress-class
+  tls:
+    - hosts:
+        - adriano.example.com
+      secretName: adriano-tls
+  rules:
+    - host: adriano.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: adriano
+                port:
+                  name: http

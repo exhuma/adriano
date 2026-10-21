@@ -1,0 +1,15 @@
+# Keeps at least one pod serving during node drains.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: adriano
+  labels:
+    app.kubernetes.io/name: adriano
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: adriano
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adriano
+      app.kubernetes.io/component: web
