@@ -9,6 +9,7 @@ or ``failed``). ``auth`` reports the configured token validators
 (``oidc``, ``dev``, ``oidc+dev`` or ``unconfigured``; with
 ``unconfigured`` every protected route answers 503) and ``rbac``
 whether any role grants a permission (``configured`` or ``empty``).
+``version`` is the running application version (``ADRIANO_VERSION``).
 Configuration problems never make the probe fail: restarting the
 container would not fix them. The route is public and reports no
 secrets and no record data.
@@ -71,10 +72,12 @@ def healthz(
     :param runtime: Startup state of the catalog.
     :param settings: Application settings (auth status).
     :returns: A mapping with ``status``, ``database``, ``config``,
-        ``policy``, ``registrations``, ``rbac`` and ``auth`` keys.
+        ``policy``, ``registrations``, ``rbac``, ``auth`` and
+        ``version`` keys.
     """
     details = _config_status(runtime)
     details["auth"] = auth_status(settings).value
+    details["version"] = settings.version
     try:
         db.execute(text("SELECT 1"))
     except OperationalError:

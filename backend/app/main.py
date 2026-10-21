@@ -17,6 +17,11 @@ tokens (:mod:`app.auth.push`); ``/healthz`` and the OpenAPI schema/docs
 data or secrets. The dev-only ``/auth/dev`` router is imported and
 mounted only when ``ADRIANO_DEV_AUTH_ENABLED`` is true and
 ``ADRIANO_DEV_SHARED_SECRET`` is set (see ``module-dev-auth-bypass``).
+
+When ``ADRIANO_STATIC_DIR`` is set, the same process also serves the
+built SPA, its ``/config.js`` and the security headers
+(:func:`app.web.mount_spa`), registered after every API router so the
+API keeps precedence.
 """
 
 import logging
@@ -38,6 +43,7 @@ from app.routers import (
     records,
     sources,
 )
+from app.web import mount_spa
 
 logger = logging.getLogger(__name__)
 
@@ -109,13 +115,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Build and return the configured FastAPI application.
 
     :param settings: Settings deciding which routers are mounted (dev
-        auth); defaults to :func:`app.config.get_settings`. Request-time
-        settings still come from the ``get_settings`` dependency.
+        auth, SPA) and the reported version; defaults to
+        :func:`app.config.get_settings`. Request-time settings still
+        come from the ``get_settings`` dependency.
     :returns: A fully configured :class:`~fastapi.FastAPI` instance
         with routers and exception handlers registered.
+    :raises ConfigurationError: If ``static_dir`` is set but holds no
+        ``index.html``.
     """
     settings = settings or get_settings()
-    app = FastAPI(title="adriano", docs_url="/api/docs", lifespan=_lifespan)
+    app = FastAPI(
+        title="adriano",
+        version=settings.version,
+        docs_url="/api/docs",
+        lifespan=_lifespan,
+    )
 
     app.include_router(health.router)
     app.include_router(me.router)
@@ -128,6 +142,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _log_auth_status(settings)
 
     register_handlers(app)
+    if settings.static_dir is not None:
+        mount_spa(app, settings)
 
     return app
 

@@ -43,9 +43,8 @@ Backend settings
 
 .. envvar:: ADRIANO_DATABASE_URL
 
-   :Required: yes, when you run the backend outside the bundled stack
-   :Default: ``postgresql://adriano:adriano@localhost:55432/adriano``
-             (a local development database; never rely on it)
+   :Required: yes; the backend refuses to start without it
+   :Default: none
    :Example: ``postgresql://adriano_app:<password>@pg.example.com:5432/adriano``
 
    Address of the PostgreSQL database, as a plain ``postgresql://``

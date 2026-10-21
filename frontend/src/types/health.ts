@@ -46,4 +46,7 @@ export interface HealthPayload {
   auth?: AuthStatus;
   /** Whether any role grants a permission. */
   rbac?: RbacStatus;
+  /** Running application version (`ADRIANO_VERSION`; `"dev"` when
+   *  not set by the image build). */
+  version?: string;
 }

@@ -26,6 +26,7 @@ Everything that is not part of a package below lives here.
    app.main
    app.source_config
    app.validation_messages
+   app.web
 
 Authentication
 --------------

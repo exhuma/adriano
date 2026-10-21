@@ -1,10 +1,10 @@
 // Local-development runtime config stub (module-runtime-config-spa).
 //
-// In a deployed container this file is rendered from
-// `config.template.js` by the deployment entrypoint, substituting
-// environment variables (see phase 08's nginx entrypoint). In local
-// dev it is served as-is by Vite from `public/`; `src/config.ts`
-// falls back to `import.meta.env.VITE_*` for any key left unset here.
+// In the deployed image the backend serves `/config.js` itself,
+// rendered from its `ADRIANO_*` settings (`backend/app/web.py`), and
+// this copied stub is never reached. In local dev it is served as-is
+// by Vite from `public/`; `src/config.ts` falls back to
+// `import.meta.env.VITE_*` for any key left unset here.
 //
 // Deliberately empty: local dev configures OIDC (if any) and the API
 // base URL through `VITE_*` env vars / `.env.local`, never here. The

@@ -40,3 +40,19 @@ def test_healthz_reports_degraded_with_an_unreachable_database(
     body = response.json()
     assert body["status"] == "degraded"
     assert body["database"] == "unavailable"
+
+
+def test_healthz_and_openapi_report_the_version(
+    test_settings: Settings,
+) -> None:
+    """Ensure /healthz and the OpenAPI info carry ADRIANO_VERSION."""
+    settings = test_settings.model_copy(update={"version": "2026.10.21"})
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    with TestClient(app) as versioned_client:
+        health = versioned_client.get("/healthz").json()
+        schema = versioned_client.get("/openapi.json").json()
+
+    assert health["version"] == "2026.10.21"
+    assert schema["info"]["version"] == "2026.10.21"
