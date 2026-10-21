@@ -27,9 +27,10 @@ Public API: :data:`REQUIRED_CLAIMS`, :class:`OidcValidator`,
 """
 
 import logging
+import ssl
 import threading
 from collections.abc import Callable
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Any
 
 import httpx
@@ -50,14 +51,35 @@ logger = logging.getLogger(__name__)
 type JwksClientFactory = Callable[[str], jwt.PyJWKClient]
 
 
-def _default_jwks_client(uri: str) -> jwt.PyJWKClient:
+def unverified_ssl_context() -> ssl.SSLContext:
+    """
+    Build a TLS context that skips certificate and hostname checks.
+
+    Used only when ``ADRIANO_TLS_VERIFY`` is false.
+
+    :returns: The context.
+    """
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
+
+def _default_jwks_client(
+    uri: str, *, tls_verify: bool = True
+) -> jwt.PyJWKClient:
     """
     Build the production JWKS client.
 
     :param uri: JWKS URI from the discovery document.
+    :param tls_verify: Whether to verify the endpoint's certificate.
     :returns: A caching :class:`jwt.PyJWKClient`.
     """
-    return jwt.PyJWKClient(uri, timeout=_TIMEOUT_SECONDS)
+    return jwt.PyJWKClient(
+        uri,
+        timeout=_TIMEOUT_SECONDS,
+        ssl_context=None if tls_verify else unverified_ssl_context(),
+    )
 
 
 def _invalid(message: str) -> AuthenticationError:
@@ -93,7 +115,10 @@ class OidcValidator:
     :param transport: Optional httpx transport for the discovery
         request (tests inject a mock).
     :param jwks_client_factory: Builds the JWKS client from the URI
-        (tests inject one serving local keys).
+        (tests inject one serving local keys); ``None`` uses the
+        production client.
+    :param tls_verify: Whether the discovery and JWKS requests verify
+        the provider's certificate (``ADRIANO_TLS_VERIFY``).
     """
 
     def __init__(
@@ -103,7 +128,8 @@ class OidcValidator:
         audience: str,
         *,
         transport: httpx.BaseTransport | None = None,
-        jwks_client_factory: JwksClientFactory = _default_jwks_client,
+        jwks_client_factory: JwksClientFactory | None = None,
+        tls_verify: bool = True,
     ) -> None:
         """
         Store the settings; performs no I/O.
@@ -112,13 +138,17 @@ class OidcValidator:
         :param issuer: Expected ``iss``, or ``None``.
         :param audience: Expected ``aud``.
         :param transport: Optional httpx transport.
-        :param jwks_client_factory: JWKS client factory.
+        :param jwks_client_factory: JWKS client factory, or ``None``.
+        :param tls_verify: Whether to verify the provider's certificate.
         """
         self._authority = authority.rstrip("/")
         self._issuer = issuer
         self._audience = audience
         self._transport = transport
-        self._jwks_client_factory = jwks_client_factory
+        self._jwks_client_factory = jwks_client_factory or partial(
+            _default_jwks_client, tls_verify=tls_verify
+        )
+        self._tls_verify = tls_verify
         self._lock = threading.Lock()
         self._jwks: jwt.PyJWKClient | None = None
         self._resolved_issuer: str | None = issuer
@@ -136,6 +166,7 @@ class OidcValidator:
                 transport=self._transport,
                 timeout=_TIMEOUT_SECONDS,
                 follow_redirects=False,
+                verify=self._tls_verify,
             ) as client:
                 document = client.get(url).raise_for_status().json()
         except (httpx.HTTPError, ValueError) as exc:
@@ -225,7 +256,10 @@ class OidcValidator:
 
 @lru_cache(maxsize=4)
 def cached_oidc_validator(
-    authority: str, issuer: str | None, audience: str
+    authority: str,
+    issuer: str | None,
+    audience: str,
+    tls_verify: bool = True,
 ) -> OidcValidator:
     """
     Return the process-wide validator for one provider configuration.
@@ -236,6 +270,13 @@ def cached_oidc_validator(
     :param authority: Discovery base URL.
     :param issuer: Expected ``iss``, or ``None``.
     :param audience: Expected ``aud``.
+    :param tls_verify: Whether to verify the provider's certificate.
     :returns: The shared validator.
     """
-    return OidcValidator(authority, issuer, audience)
+    if not tls_verify:
+        logger.warning(
+            "ADRIANO_TLS_VERIFY is false: the certificate of the OIDC "
+            "provider %s is NOT verified. Never use this in production.",
+            authority,
+        )
+    return OidcValidator(authority, issuer, audience, tls_verify=tls_verify)

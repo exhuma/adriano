@@ -97,11 +97,12 @@ What Adriano does with the projects
 TLS
 ~~~
 
-Adriano always verifies the GitLab server's certificate;
-there is no setting to turn that off.
+Adriano verifies the GitLab server's certificate.
 If your GitLab (or identity provider) uses a certificate from an
 internal certificate authority, mount a PEM bundle that contains it
 into the container and point :envvar:`SSL_CERT_FILE` at it.
+On a test or staging instance only, :envvar:`ADRIANO_TLS_VERIFY`
+can turn the checks off instead.
 
 Filesystem
 ----------

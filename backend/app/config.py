@@ -69,6 +69,10 @@ class Settings(BaseSettings):
         ``assets/``). When set, the API process also serves the SPA and
         ``/config.js`` (see :mod:`app.web`); unset, it serves the API
         only.
+    :cvar tls_verify: Whether outbound HTTPS calls (OIDC discovery,
+        the JWKS endpoint, GitLab) verify the server certificate.
+        ``False`` disables verification entirely; meant only as a
+        stop-gap for non-production instances behind an internal CA.
     :cvar migrate_on_start: Whether ``adriano serve`` applies the
         database migrations (under an advisory lock) before starting
         the server.
@@ -110,6 +114,7 @@ class Settings(BaseSettings):
 
     static_dir: Path | None = None
     migrate_on_start: bool = True
+    tls_verify: bool = True
     version: str = "dev"
     workers: int = Field(default=4, ge=1)
     forwarded_allow_ips: str | None = None

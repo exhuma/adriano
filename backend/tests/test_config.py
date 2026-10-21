@@ -192,3 +192,21 @@ def test_workers_must_be_positive(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError, match="workers"):
         Settings()
+
+
+def test_tls_verification_is_on_by_default() -> None:
+    """Ensure outbound TLS certificates are verified unless disabled."""
+    settings = Settings()
+
+    assert settings.tls_verify is True
+
+
+def test_tls_verification_can_be_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure ADRIANO_TLS_VERIFY=false turns verification off."""
+    monkeypatch.setenv("ADRIANO_TLS_VERIFY", "false")
+
+    settings = Settings()
+
+    assert settings.tls_verify is False

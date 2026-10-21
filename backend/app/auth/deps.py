@@ -161,7 +161,10 @@ def get_oidc_validator(
     if not settings.oidc_authority:
         return None
     return cached_oidc_validator(
-        settings.oidc_authority, settings.oidc_issuer, settings.oidc_audience
+        settings.oidc_authority,
+        settings.oidc_issuer,
+        settings.oidc_audience,
+        settings.tls_verify,
     )
 
 

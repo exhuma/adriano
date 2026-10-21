@@ -93,6 +93,7 @@ def open_client(
     token: str,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
+    tls_verify: bool = True,
 ) -> httpx.AsyncClient:
     """
     Build the HTTP client of one poll.
@@ -101,6 +102,8 @@ def open_client(
     :param token: Access token (sent as ``PRIVATE-TOKEN``).
     :param transport: Transport override (tests use
         ``httpx.MockTransport``); ``None`` uses the default transport.
+    :param tls_verify: Whether to verify the instance's certificate
+        (``ADRIANO_TLS_VERIFY``).
     :returns: The client; the caller closes it.
     """
     return httpx.AsyncClient(
@@ -111,7 +114,7 @@ def open_client(
             max_connections=MAX_CONCURRENT_REQUESTS,
             max_keepalive_connections=MAX_CONCURRENT_REQUESTS,
         ),
-        verify=True,
+        verify=tls_verify,
         follow_redirects=False,
         transport=transport,
     )

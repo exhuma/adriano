@@ -152,7 +152,26 @@ Application settings
    It *replaces* the standard set, so include the public authorities
    too if you still need them.
    Mount the file read-only.
-   Certificate checks cannot be turned off.
+   This is the way to trust an internal certificate authority;
+   prefer it over :envvar:`ADRIANO_TLS_VERIFY`.
+
+.. envvar:: ADRIANO_TLS_VERIFY
+
+   :Required: no
+   :Default: ``true``
+   :Example: ``false`` (a non-production instance only)
+
+   Whether Adriano verifies the server certificate when it calls the
+   identity provider (discovery document and signing keys) and
+   GitLab.
+   ``false`` turns all certificate checks off: anyone who can
+   intercept that traffic can then impersonate the identity provider
+   and get any token accepted, or feed false content into the catalog.
+   Use it only as a stop-gap on a test or staging instance, never in
+   production; trust your certificate authority with
+   :envvar:`SSL_CERT_FILE` instead.
+   While it is ``false``, Adriano logs a warning at start-up and when
+   it first contacts the identity provider.
 
 Sign-in settings
 ----------------
