@@ -642,10 +642,10 @@ underlay) to their real values.
 |---|---|---|
 | Alignment: app-bar brand == container at 1366/1920/2560 | pass | edges equal (3px / 280px / 600px) on `/`, a record, `/sources` |
 | Alignment: container left edge identical across routes | pass | same value per width on all 3 routes |
-| Targets: no interactive target under 24x24 | partial | 3 violations found, see "New issues" |
+| Targets: no interactive target under 24x24 | pass | 3 violations found and fixed, see "New issues" |
 | Targets: Accept/Reject visible without scrolling at 1366x768 | pass | sidebar Accept inside the 1366x768 viewport |
 | Contrast: light theme, composited, 4.5:1 / 3:1 large | pass | 0 low-contrast nodes on `/`, `/sources`, a record |
-| Contrast: dark theme, composited | partial | 1 violation (link text, 4.14:1), see "New issues" |
+| Contrast: dark theme, composited | pass | 1 violation (link text, 4.14:1) found and fixed, see "New issues" |
 | Keyboard: skip link first | pass | "Skip to main content" is tab stop 1 |
 | Keyboard: visible focus indicator on every control | pass | outline on links/buttons, `v-field--focused` border on inputs |
 | Keyboard: no static content is a tab stop | pass | Provenance list is `<v-list tabindex="-1">` |
@@ -740,21 +740,66 @@ severity 2 or more are closed; none were deferred.
 
 ### New issues found
 
-Found during this re-verification; none were in scope for any Phase 11
-task, and none were fixed here (per this task's instructions).
+Found during the Task 14 re-verification; none were in scope for any
+Phase 11 task. All three are **fixed** as a Task 16 follow-up (this
+task) and re-verified live, in light and dark at 1366 and 1920, on:
 
-1. **Sidebar link targets under 24px tall** (severity 2, effort S).
-   `RecordLinksCard`/`RecordSiblingsCard` render outbound, inbound and
-   sibling links as a plain `<a>` inside `v-list-item-subtitle`; the
-   clickable box is only the text's own line height (measured 186x16 at
-   1366, light theme, for a "Related decisions"/"Obsoletes" link). This is
-   a navigational link in a metadata list, not prose inside a sentence, so
-   the SC 2.5.8 inline exception does not apply.
-2. **Dark-theme link colour under 4.5:1** (severity 2, effort S). The same
-   link text measures 4.14:1 in the dark theme (`rgb(120,120,188)` on
-   `rgb(30,30,30)`, 14px body text) -- just under the 4.5:1 requirement.
-   G-01 fixed chip and alert colours but not the plain anchor colour.
-3. **Sources relative-date tooltip targets under 24px tall** (severity 1,
-   effort S). The O-03 fix's relative-date tooltip trigger (e.g. "10 hours
-   ago") measures 82x16 and is keyboard-focusable. Lower severity since it
-   is a supplementary tooltip, not a navigation or decision action.
+- `/records/6285cf4a-2da5-4202-b50b-47322b90bfa3` ("Adopt gRPC for
+  internal APIs"; its one inbound link is consumed by the lifecycle
+  notice, so the "Add a REST gateway in front of gRPC services"
+  record's resolved *outbound* link to it is what actually exercises
+  `RecordLinksCard`'s "Related decisions" card)
+- `/records/bbf9b991-54b5-417a-b3e3-1fde9487fbc8`
+- `/sources`
+
+Result: zero contrast violations, zero non-inline targets under 24px.
+
+1. **Sidebar link targets under 24px tall** (severity 2, effort S) --
+   **fixed**. `RecordLinksCard`/`RecordSiblingsCard` rendered outbound,
+   inbound and sibling links as a plain `<a>` inside
+   `v-list-item-subtitle`; the clickable box was only the text's own
+   line height (measured 186x16 at 1366, light theme, for a "Related
+   decisions"/"Obsoletes" link). This is a navigational link in a
+   metadata list, not prose inside a sentence, so the SC 2.5.8 inline
+   exception did not apply. Fix: `d-inline-block py-1` on each link
+   (Vuetify utility classes, ladder step 4); re-measured at 186x28 for
+   the same link. The link stays a real `<a>`/`router-link` in the
+   list's own tab order (only the `<v-list>` itself is `tabindex="-1"`).
+2. **Dark-theme link colour under 4.5:1** (severity 2, effort S) --
+   **fixed**. The same link text measured 4.14:1 in the dark theme
+   (`rgb(120,120,188)` on `rgb(30,30,30)`, 14px body text) -- just under
+   the 4.5:1 requirement, and the same browser-default colour (incl.
+   `:visited`) affected every other plain `<a>`/unstyled `router-link`
+   in the app (the "View errata" anchor, `RecordStatusBanners`'
+   lifecycle/erratum links, `ErratumEntry`'s "open the erratum" link,
+   `DivergenceBanner`'s links, and server-rendered markdown links
+   inside `.rendered-markdown`/`.erratum-block-body`). G-01 fixed chip
+   and alert colours but not the plain anchor colour. Fix: Vuetify's
+   own `text-primary` utility class (ladder step 4) on each affected
+   `router-link`/`<a>`, and a scoped `:deep(a) { color:
+   rgb(var(--v-theme-primary)) }` rule (ladder step 6, justified: a
+   markdown link rendered via `v-html` has no class hook) for the two
+   markdown-body cases. `RecordLinksCard`'s links additionally needed
+   `--v-list-item-subtitle-opacity: 1` inline on their
+   `v-list-item-subtitle`, since that element's medium-emphasis
+   `opacity` composites its whole subtree (not a `color-mix` a
+   descendant's own `color` could simply override) and would otherwise
+   have refaded `text-primary` back under 4.5:1 in light (measured
+   2.92:1 before the override). Re-measured: light primary `#1867C0` on
+   white is 5.61:1; dark primary `#90CAF9` is 9.53:1 on `#1E1E1E`
+   surface, 10.71:1 on `#121212` background; both also clear 4.5:1
+   against the warning/info tonal tints the alert-embedded links sit
+   on (4.72-4.74:1 light, 7.37-7.57:1 dark) -- all covered by new
+   `tests/plugins/vuetify.test.ts` cases. A blanket, unscoped
+   `a, a:visited { color: ... }` rule was tried first and reverted: all
+   of Vuetify's own CSS (components and utilities alike) lives inside
+   `@layer`, and an unlayered author rule always outranks a layered one
+   regardless of specificity -- it recoloured every `v-btn`/`v-list-item`
+   rendered as an anchor (e.g. the app-bar "Catalog" nav button) to
+   primary, which per-element `text-primary` does not.
+3. **Sources relative-date tooltip targets under 24px tall** (severity
+   1, effort S) -- **fixed**. The O-03 fix's relative-date tooltip
+   trigger (e.g. "10 hours ago") measured 82x16 and is
+   keyboard-focusable. Lower severity since it is a supplementary
+   tooltip, not a navigation or decision action. Fix: `d-inline-block
+   py-1` on the trigger span; re-measured at 82x29.

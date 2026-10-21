@@ -58,4 +58,18 @@ describe("RecordSiblingsCard", () => {
     expect(wrapper.text()).toContain("Blocked");
     expect(wrapper.text()).not.toContain("Pending approval");
   });
+
+  // docs/ui-review "New issues" #1 and #2 (Task 14 re-verification,
+  // Phase 11 Task 16 follow-up): the link's own box must be >=24px
+  // tall (`d-inline-block py-1`, since it was only as tall as its
+  // text line), and theme-coloured instead of the browser default
+  // (`text-primary`).
+  it("gives the link a theme colour and an enlarged target box", async () => {
+    const wrapper = await mountCard([sibling()]);
+    const link = wrapper.findComponent({ name: "RouterLink" });
+
+    expect(link.classes()).toContain("text-primary");
+    expect(link.classes()).toContain("d-inline-block");
+    expect(link.classes()).toContain("py-1");
+  });
 });

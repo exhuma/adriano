@@ -110,4 +110,17 @@ const bodyHtml = computed(() => stripLeadingTitleHeading(props.renderedHtml, pro
 .rendered-markdown :deep(:first-child) {
   margin-top: 0;
 }
+
+/* docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+   Task 16 follow-up): a markdown link has no class hook either
+   (same reasoning as the heading rules above), so it rendered in
+   the browser's own link colour instead of the theme (4.14:1 in
+   dark). `primary` clears 4.5:1 on this card's plain `surface`
+   background in both themes (`tests/plugins/vuetify.test.ts`); the
+   rule carries no `:visited` variant because an explicit `color`
+   here already outranks the user-agent stylesheet's `:visited`
+   default regardless. */
+.rendered-markdown :deep(a) {
+  color: rgb(var(--v-theme-primary));
+}
 </style>

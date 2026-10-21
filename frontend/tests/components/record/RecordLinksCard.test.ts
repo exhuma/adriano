@@ -6,6 +6,7 @@
  * module-ux-principles "Technical identifiers").
  */
 import { mount } from "@vue/test-utils";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import vuetify from "@/plugins/vuetify";
@@ -14,13 +15,24 @@ import type { InboundLinkOut, OutboundLinkOut } from "@/types/records";
 
 const TARGET_UUID = "33333333-3333-3333-3333-333333333333";
 
+/** A real router (not a stub) so `<router-link>` resolves to a real,
+ *  inspectable `<a>` -- needed by the "New issues" #1/#2 tests below,
+ *  which check the link's own classes. */
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: "/", component: { template: "<div />" } },
+    { path: "/records/:id", component: { template: "<div />" } },
+  ],
+});
+
 function mountCard(
   outboundLinks: OutboundLinkOut[],
   inboundLinks: InboundLinkOut[] = [],
 ) {
   return mount(RecordLinksCard, {
     props: { outboundLinks, inboundLinks },
-    global: { plugins: [vuetify] },
+    global: { plugins: [router, vuetify] },
   });
 }
 
@@ -147,5 +159,60 @@ describe("RecordLinksCard", () => {
 
     expect(wrapper.text()).toContain("Use PostgreSQL v2");
     expect(wrapper.text()).not.toContain(sourceId);
+  });
+
+  // docs/ui-review "New issues" #1 and #2 (Task 14 re-verification,
+  // Phase 11 Task 16 follow-up): a resolved outbound link's own box
+  // must be >=24px tall (`d-inline-block py-1`) and theme-coloured
+  // (`text-primary`), with its `v-list-item-subtitle` ancestor's
+  // medium-emphasis opacity reset to 1 so that colour is not
+  // refaded under 4.5:1.
+  it("enlarges and colours a resolved outbound link", () => {
+    const wrapper = mountCard([
+      {
+        link_type: "updates",
+        target_uuid: TARGET_UUID,
+        target_id: "44444444-4444-4444-4444-444444444444",
+        target_title: "Adopt gRPC for internal APIs",
+        resolution: "same_registration",
+        ambiguous: false,
+        candidate_ids: [],
+      },
+    ]);
+
+    const link = wrapper.findComponent({ name: "RouterLink" });
+    expect(link.classes()).toContain("text-primary");
+    expect(link.classes()).toContain("d-inline-block");
+    expect(link.classes()).toContain("py-1");
+    const subtitle = wrapper.find(".v-list-item-subtitle");
+    expect(subtitle.attributes("style")).toContain(
+      "--v-list-item-subtitle-opacity: 1",
+    );
+  });
+
+  // Same follow-up: inbound links are always resolved, so the
+  // opacity override and the colour/target-size classes apply
+  // unconditionally.
+  it("enlarges and colours an inbound link", () => {
+    const sourceId = "55555555-5555-5555-5555-555555555555";
+    const wrapper = mountCard(
+      [],
+      [
+        {
+          link_type: "updated_by",
+          source_id: sourceId,
+          source_title: "Use PostgreSQL v2",
+        },
+      ],
+    );
+
+    const link = wrapper.findComponent({ name: "RouterLink" });
+    expect(link.classes()).toContain("text-primary");
+    expect(link.classes()).toContain("d-inline-block");
+    expect(link.classes()).toContain("py-1");
+    const subtitle = wrapper.find(".v-list-item-subtitle");
+    expect(subtitle.attributes("style")).toContain(
+      "--v-list-item-subtitle-opacity: 1",
+    );
   });
 });

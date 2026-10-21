@@ -8,6 +8,10 @@
  * collapsed by default behind a toggle button with `aria-expanded`
  * (module-ux-principles accessibility), since it no longer needs a
  * reader's attention; every other state is expanded by default.
+ * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+ * Task 16 follow-up): the not-indexed-yet fallback's "open the
+ * erratum" link had no colour class, so it rendered in the browser's
+ * own link colour instead of the theme; `text-primary` fixes it.
  */
 import { computed, ref } from "vue";
 
@@ -99,7 +103,9 @@ const reportedLine = computed(() => {
         class="text-body-medium text-medium-emphasis"
       >
         Content not indexed yet —
-        <router-link :to="`/records/${erratum.id}`">open the erratum</router-link>.
+        <router-link :to="`/records/${erratum.id}`" class="text-primary">
+          open the erratum
+        </router-link>.
       </p>
       <ErratumTextBlocks
         v-else

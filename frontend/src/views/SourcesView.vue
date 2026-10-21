@@ -363,10 +363,17 @@ const columnCount = computed(
                   </div>
                 </td>
                 <td>
+                  <!--
+                    docs/ui-review "New issues" #3 (Task 14
+                    re-verification, Phase 11 Task 16 follow-up):
+                    `d-inline-block py-1` so this focusable tooltip
+                    trigger's own box is >=24px tall (it measured
+                    82x16, as tall as its text line only).
+                  -->
                   <span
                     v-if="row.lastAttempt"
                     tabindex="0"
-                    class="date-tooltip-activator"
+                    class="date-tooltip-activator d-inline-block py-1"
                   >
                     {{ row.lastAttempt.relative }}
                     <span class="d-sr-only">
@@ -384,7 +391,7 @@ const columnCount = computed(
                   <span
                     v-if="row.lastSuccess"
                     tabindex="0"
-                    class="date-tooltip-activator"
+                    class="date-tooltip-activator d-inline-block py-1"
                   >
                     {{ row.lastSuccess.relative }}
                     <span class="d-sr-only">

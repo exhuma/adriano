@@ -169,3 +169,53 @@ describe("medium-emphasis text contrast (P11-R-03)", () => {
     });
   }
 });
+
+/**
+ * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+ * Task 16 follow-up): a plain `<a>` or an unstyled `router-link`
+ * (e.g. `RecordLinksCard.vue`'s sidebar relationship links, the
+ * "View errata" anchor, and server-rendered markdown links) carried
+ * no colour of its own, so the browser painted its built-in link
+ * colour instead of the theme -- 4.14:1 on the dark theme's
+ * `surface`, under 4.5:1. Each one now gets Vuetify's own
+ * `text-primary` utility class (or, for markdown links with no
+ * class hook, a scoped `:deep(a) { color:
+ * rgb(var(--v-theme-primary)) }` rule). This guards the premise of
+ * that fix: `primary` itself has to clear 4.5:1 as text on both the
+ * opaque `surface` colour (most of these links sit on a card) and
+ * the page's own `background` colour (a link directly in `v-main`)
+ * in both themes, so the fix cannot regress if either colour
+ * changes later.
+ */
+describe("theme primary colour as link text " +
+  "(docs/ui-review New issues #2)", () => {
+  for (const [themeName, definition] of [
+    ["light", light],
+    ["dark", dark],
+  ] as const) {
+    const colors = definition.colors;
+    if (!colors) {
+      throw new Error(`${themeName} theme has no colors`);
+    }
+    const primaryHex = colors.primary;
+    if (typeof primaryHex !== "string") {
+      throw new Error(`${themeName} theme has no hex primary colour`);
+    }
+    const primaryRgb = hexToRgb(primaryHex);
+
+    for (const bgKey of ["surface", "background"] as const) {
+      const bgHex = colors[bgKey];
+      const label = `${themeName} "primary" reaches ` +
+        `${MIN_TEXT_CONTRAST}:1 as link text on ${bgKey}`;
+
+      it(label, () => {
+        expect(typeof bgHex).toBe("string");
+        const bgRgb = hexToRgb(bgHex as string);
+
+        expect(contrastRatio(primaryRgb, bgRgb)).toBeGreaterThanOrEqual(
+          MIN_TEXT_CONTRAST,
+        );
+      });
+    }
+  }
+});

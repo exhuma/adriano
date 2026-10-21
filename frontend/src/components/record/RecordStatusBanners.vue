@@ -18,6 +18,12 @@
  * approval-state chip, which the sidebar and the Approval card
  * already show (R-11). Purely presentational: the parent computes
  * every prop from the loaded record detail.
+ * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+ * Task 16 follow-up): both notices' `router-link`s had no colour
+ * class, so each rendered in the browser's own link colour instead
+ * of the theme (4.14:1 in dark). `text-primary` fixes both; it stays
+ * >=4.5:1 against the warning/info tonal tint these alerts paint
+ * behind it (`tests/plugins/vuetify.test.ts`).
  */
 import { computed } from "vue";
 
@@ -70,7 +76,9 @@ const lifecycleNotice = computed(() => {
   >
     This decision {{ lifecycleNotice.verb }}, see
     <template v-for="(link, index) in lifecycleNotice.links" :key="link.source_id">
-      <router-link :to="`/records/${link.source_id}`">{{ link.source_title }}</router-link><span v-if="index < lifecycleNotice.links.length - 1">, </span>
+      <router-link :to="`/records/${link.source_id}`" class="text-primary">
+        {{ link.source_title }}
+      </router-link><span v-if="index < lifecycleNotice.links.length - 1">, </span>
     </template>.
   </v-alert>
 
@@ -83,7 +91,9 @@ const lifecycleNotice = computed(() => {
   >
     <template v-if="erratumFor.resolved && erratumFor.id">
       This is an erratum for
-      <router-link :to="`/records/${erratumFor.id}`">{{ erratumFor.title }}</router-link>.
+      <router-link :to="`/records/${erratumFor.id}`" class="text-primary">
+        {{ erratumFor.title }}
+      </router-link>.
     </template>
     <template v-else>
       This is an erratum for an unknown decision

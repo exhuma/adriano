@@ -12,6 +12,14 @@
  * `recordKindLabel`/`recordTypeLabel` for a non-default state (R-05 --
  * "Published" and "Decision" add nothing: published is the default
  * lifecycle state, and the kind already shows in the sidebar).
+ * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+ * Task 16 follow-up): the "View errata" anchor had no colour class,
+ * so the browser's own link colour rendered instead of the theme
+ * (4.14:1 in dark -- below 4.5:1). `text-primary` (Vuetify's own
+ * theme-colour utility) fixes both the unvisited and the browser's
+ * `:visited` colour, since any author rule -- with or without a
+ * `:visited` selector -- outranks the user-agent stylesheet's
+ * default link colours in both states.
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { RecordKind } from "@/types/records";
@@ -71,7 +79,8 @@ defineProps<{
   <p class="text-body-medium text-medium-emphasis mt-0 mb-2">
     {{ provenanceSentence }}
     <template v-if="errataLinkText">
-      · {{ errataLinkText }} · <a href="#errata">View errata</a>
+      · {{ errataLinkText }} ·
+      <a href="#errata" class="text-primary">View errata</a>
     </template>
   </p>
 

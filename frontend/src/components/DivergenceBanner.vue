@@ -6,6 +6,12 @@
  * content, each a separate concern that can occur independently.
  * A competing candidate whose content cannot be decided shows the
  * neutral "Blocked" status (R-02, `approvalDisplayLabel`).
+ * docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+ * Task 16 follow-up): both `router-link`s had no colour class, so
+ * each rendered in the browser's own link colour instead of the
+ * theme; `text-primary` fixes both (verified >=4.5:1 against the
+ * warning tonal tint and against plain `surface`,
+ * `tests/plugins/vuetify.test.ts`).
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { CompetingCandidateOut, DivergenceOut } from "@/types/approval";
@@ -35,7 +41,7 @@ defineProps<{
     <div>{{ divergence.message }}</div>
     <ul v-if="divergence.other_record_ids.length > 0" class="mt-2">
       <li v-for="id in divergence.other_record_ids" :key="id">
-        <router-link :to="`/records/${id}`">
+        <router-link :to="`/records/${id}`" class="text-primary">
           View the {{ shortDigest(divergence.other_digest) }} revision
         </router-link>
       </li>
@@ -53,7 +59,7 @@ defineProps<{
     </v-card-text>
     <v-list density="compact" tabindex="-1">
       <v-list-item v-for="candidate in competingCandidates" :key="candidate.id">
-        <router-link :to="`/records/${candidate.id}`">
+        <router-link :to="`/records/${candidate.id}`" class="text-primary">
           {{ candidate.ref }}
         </router-link>
         <template #append>

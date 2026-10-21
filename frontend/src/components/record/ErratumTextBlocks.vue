@@ -115,4 +115,16 @@ defineProps<{
 .erratum-block-body :deep(:first-child) {
   margin-top: 0;
 }
+
+/* docs/ui-review "New issues" #2 (Task 14 re-verification, Phase 11
+   Task 16 follow-up): same reasoning as `RecordDecisionCard.vue`'s
+   `.rendered-markdown :deep(a)` -- a markdown link here has no
+   class hook, so it rendered in the browser's own link colour
+   instead of the theme. `primary` clears 4.5:1 on `surface` in both
+   themes (`tests/plugins/vuetify.test.ts`); no `:visited` variant
+   is needed, since an explicit `color` already outranks the
+   user-agent stylesheet's `:visited` default. */
+.erratum-block-body :deep(a) {
+  color: rgb(var(--v-theme-primary));
+}
 </style>
