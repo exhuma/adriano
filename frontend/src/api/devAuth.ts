@@ -1,6 +1,7 @@
 /**
  * The dev-only endpoints (token minting and the catalog's role
- * names), isolated from `src/api/auth.ts` on purpose: this module (and everything that imports it) is reachable
+ * names), isolated from `src/api/auth.ts` on purpose: this module
+ * (and everything that imports it) is reachable
  * **only** through `src/auth/devAuth.ts` -> the dynamically-imported
  * `DevLoginDialog`, so a production build's dead-code elimination
  * can drop the dev-login mechanism -- including these endpoint paths

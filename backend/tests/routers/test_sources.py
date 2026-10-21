@@ -23,6 +23,7 @@ def test_sources_report_configuration_and_freshness(
     assert central["type"] == "filesystem"
     assert central["enabled"] is True
     assert central["config_error"] is None
+    assert central["config_error_code"] is None
     assert central["intake"] == ["poll"]
     assert central["published_ref"] == "local"
     assert central["last_status"] == "ok"

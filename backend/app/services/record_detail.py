@@ -168,6 +168,7 @@ class SiblingInfo:
     :param decision_date: Displayed decision date.
     :param decision_date_inferred: Whether the date is only inferred.
     :param approval_state: Approval state of this sibling's digest.
+    :param approvable: Whether this sibling's content can be decided.
     """
 
     id: uuid.UUID
@@ -181,6 +182,7 @@ class SiblingInfo:
     decision_date: datetime.date | None
     decision_date_inferred: bool
     approval_state: ApprovalStateCode
+    approvable: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -283,23 +285,31 @@ def _siblings(
     events: Sequence[DecisionEventView],
 ) -> tuple[SiblingInfo, ...]:
     """Build :class:`SiblingInfo` rows, each with its own approval state."""
-    return tuple(
-        SiblingInfo(
-            id=sibling.id,
-            kind=sibling.kind,
-            source_id=sibling.source_id,
-            project=sibling.project,
-            path=sibling.path,
-            ref=sibling.ref,
-            digest=sibling.digest,
-            title=sibling.title,
-            decision_date=sibling.decision_date,
-            decision_date_inferred=sibling.decision_date_inferred,
-            approval_state=evaluate(
-                policy, events, sibling.digest, is_approvable(sibling)
-            ).state,
-        )
-        for sibling in siblings
+    return tuple(_sibling(sibling, policy, events) for sibling in siblings)
+
+
+def _sibling(
+    sibling: StoredRecord,
+    policy: Policy | None,
+    events: Sequence[DecisionEventView],
+) -> SiblingInfo:
+    """Build one :class:`SiblingInfo` with its approval state."""
+    approvable = is_approvable(sibling)
+    return SiblingInfo(
+        id=sibling.id,
+        kind=sibling.kind,
+        source_id=sibling.source_id,
+        project=sibling.project,
+        path=sibling.path,
+        ref=sibling.ref,
+        digest=sibling.digest,
+        title=sibling.title,
+        decision_date=sibling.decision_date,
+        decision_date_inferred=sibling.decision_date_inferred,
+        approval_state=evaluate(
+            policy, events, sibling.digest, approvable
+        ).state,
+        approvable=approvable,
     )
 
 

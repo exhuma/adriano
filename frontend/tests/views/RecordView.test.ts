@@ -368,6 +368,7 @@ describe("RecordView status banners and layout", () => {
         corrected_html: "<p>fixed</p>",
         notes_html: null,
         approval_state: "pending",
+        approvable: true,
         digest: "sha256-v1:def",
         updated_at: "2026-01-01T00:00:00Z",
         has_content: true,

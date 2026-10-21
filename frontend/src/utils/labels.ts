@@ -21,7 +21,7 @@ import type {
   RecordKind,
   RecordState,
 } from "@/types/records";
-import type { PollStatus } from "@/types/sources";
+import type { ConfigErrorCode, PollStatus } from "@/types/sources";
 
 /** An icon + text + colour triple rendered as a `StatusChip`. */
 export interface StatusLabel {
@@ -283,10 +283,12 @@ const BLOCKED_EXPLANATION =
  * Describe a record's approval state for display, overriding to the
  * neutral "Blocked" status whenever the content itself cannot be
  * decided (R-02). This is the single place a record's approval chip
- * is derived everywhere it appears (the sidebar summary card and the
- * approval card); search rows use {@link searchApprovalStateLabel}
- * directly instead, since the search payload carries no `approvable`
- * field to derive "Blocked" from.
+ * is derived on the record page (the sidebar summary card, the
+ * approval card, the siblings card, the divergence banner's
+ * competing candidates and each erratum entry -- every payload
+ * carries its own `approvable`); search rows use the shorter
+ * {@link searchApprovalStateLabel}/{@link searchErratumStatusLabel},
+ * which apply the same "Blocked" override.
  *
  * `approvable` is distinct from the per-viewer
  * `decide_blocked_code`: a reader is blocked by `not_eligible` even
@@ -472,12 +474,22 @@ export function candidateBranchText(
  * stays visible on search rows but as neutral text; strong colour is
  * reserved for issues (error/warning) and rejection.
  *
+ * Content that cannot be decided at all (`approvable === false`,
+ * R-02) shows the same neutral "Blocked" status as the record page
+ * ({@link approvalDisplayLabel}), never "Pending approval".
+ *
  * :param state: Approval state of the record's current content.
+ * :param approvable: Whether the content can be decided at all
+ *     (`SearchItemOut.approvable`).
  * :returns: Icon, label text, and colour (neutral chips omit it).
  */
 export function searchApprovalStateLabel(
   state: ApprovalStateCode,
+  approvable = true,
 ): StatusLabel {
+  if (!approvable) {
+    return BLOCKED_STATUS_LABEL;
+  }
   switch (state) {
     case "accepted":
       return { icon: "mdi-check-decagram", text: "Accepted", color: "success" };
@@ -521,11 +533,17 @@ export function searchApprovalStateLabel(
  * instead, so the branch is not repeated twice on one row (S-05).
  *
  * :param state: Approval state of the erratum's current content.
+ * :param approvable: Whether the content can be decided at all; when
+ *     not, the neutral "Blocked" status replaces "Reported" (R-02).
  * :returns: Icon, label text, and colour (neutral chips omit it).
  */
 export function searchErratumStatusLabel(
   state: ApprovalStateCode,
+  approvable = true,
 ): StatusLabel {
+  if (!approvable) {
+    return BLOCKED_STATUS_LABEL;
+  }
   switch (state) {
     case "pending":
       return { icon: "mdi-clock-outline", text: "Reported" };
@@ -807,4 +825,38 @@ export function pollProblemLabel(code: string | undefined): string | null {
     return null;
   }
   return POLL_PROBLEM_HEADLINES[code] ?? null;
+}
+
+/**
+ * Plain-language headline for every stable source configuration
+ * error code (`SourceOut.config_error_code`; docs/ui-review R-10).
+ * The backend's own `config_error` text is kept alongside it by the
+ * caller as secondary "Details" text: it carries the per-instance
+ * specifics (which field, which env var name), which are never
+ * parsed out of free text here. Shown to operators only, like the
+ * rest of the problem detail (decision 3, Task 8).
+ */
+const CONFIG_ERROR_HEADLINES: Record<ConfigErrorCode, string> = {
+  invalid_settings:
+    "This registration's settings in catalog.yaml are not valid",
+  unknown_type: "This registration uses a source type the catalog doesn't know",
+  type_unavailable: "This source type isn't available in this build yet",
+  invalid_published_ref: "The published branch setting is not valid",
+  token_env_missing: "The access token's environment variable is not set",
+  removed_from_config: "This registration was removed from catalog.yaml",
+  other: "This registration's configuration has a problem",
+};
+
+/**
+ * Plain-language headline for a source configuration error code.
+ *
+ * :param code: The stable code, or `null` when the backend sent none.
+ * :returns: The headline, or `null` for `null`/an unrecognised code
+ *     (the caller then shows the raw `config_error` text alone).
+ */
+export function configErrorLabel(code: ConfigErrorCode | null): string | null {
+  if (code === null) {
+    return null;
+  }
+  return CONFIG_ERROR_HEADLINES[code] ?? null;
 }

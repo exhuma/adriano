@@ -7,6 +7,7 @@ work, plain dataclasses out, no FastAPI, no source adapter).
 
 Public API: :class:`SourceSummary`, :class:`FacetProject`,
 :class:`FacetSource`, :class:`CatalogFacets`, :func:`is_stale`,
+:func:`config_error_code`,
 :func:`list_sources`, :func:`get_facets`.
 """
 
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 
 from app.catalog_config import SourceRegistration
 from app.domain.frontmatter import JsonValue
+from app.sources.port import ConfigErrorCode
 from app.storage.port import (
     CatalogStore,
     IntakeKind,
@@ -29,6 +31,7 @@ __all__ = [
     "FacetProject",
     "FacetSource",
     "SourceSummary",
+    "config_error_code",
     "get_facets",
     "is_stale",
     "list_sources",
@@ -69,6 +72,8 @@ class SourceSummary:
     :param type: Source type.
     :param enabled: Whether the registration may be polled / pushed to.
     :param config_error: Why the registration is disabled, if invalid.
+    :param config_error_code: Stable code of *config_error*
+        (see :func:`config_error_code`).
     :param intake: Enabled intake mechanisms, from the current
         configuration (empty for a registration removed from
         ``catalog.yaml``).
@@ -85,6 +90,7 @@ class SourceSummary:
     type: str
     enabled: bool
     config_error: str | None
+    config_error_code: ConfigErrorCode | None
     intake: tuple[IntakeKind, ...]
     published_ref: str
     last_attempt_at: datetime.datetime | None
@@ -92,6 +98,28 @@ class SourceSummary:
     last_status: PollStatus
     last_error: JsonValue
     stale: bool
+
+
+def config_error_code(
+    registration: Registration, config: SourceRegistration | None
+) -> ConfigErrorCode | None:
+    """
+    Derive the stable code of a stored registration's config error.
+
+    The stored ``config_error`` text is synced from the configuration
+    loaded at startup (the same one passed here), so the code comes
+    from that configuration; a stored registration missing from it was
+    removed from ``catalog.yaml``.
+
+    :param registration: The stored registration.
+    :param config: Its current configuration, or ``None`` if removed.
+    :returns: The code, or ``None`` without a config error.
+    """
+    if registration.config_error is None:
+        return None
+    if config is None:
+        return ConfigErrorCode.REMOVED_FROM_CONFIG
+    return config.config_error_code or ConfigErrorCode.OTHER
 
 
 def list_sources(
@@ -125,6 +153,7 @@ def list_sources(
                 type=registration.type,
                 enabled=registration.enabled,
                 config_error=registration.config_error,
+                config_error_code=config_error_code(registration, config),
                 intake=(
                     tuple(sorted(config.intake, key=lambda k: k.value))
                     if config

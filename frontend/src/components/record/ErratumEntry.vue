@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * One erratum row in `ErrataSection.vue`: a status chip (Reported /
- * Verified / Rejected / …, icon and text), a type chip, its section
+ * Verified / Rejected / …, icon and text; the neutral "Blocked"
+ * when its content cannot be decided, R-02), a type chip, its section
  * (if any), who/when reported it (if known), a link to its own page,
  * and the original/corrected/notes text. A rejected erratum is
  * collapsed by default behind a toggle button with `aria-expanded`
@@ -13,7 +14,7 @@ import { computed, ref } from "vue";
 import StatusChip from "@/components/StatusChip.vue";
 import ErratumTextBlocks from "@/components/record/ErratumTextBlocks.vue";
 import type { ErratumOut } from "@/types/records";
-import { erratumStatusLabel, erratumTypeLabel } from "@/utils/labels";
+import { approvalDisplayLabel, erratumTypeLabel } from "@/utils/labels";
 
 const props = defineProps<{
   /** One published or candidate erratum correcting the viewed record. */
@@ -21,7 +22,15 @@ const props = defineProps<{
 }>();
 
 const statusLabel = computed(() =>
-  erratumStatusLabel(props.erratum.approval_state, props.erratum.kind, props.erratum.ref),
+  approvalDisplayLabel(
+    {
+      state: props.erratum.approval_state,
+      approvable: props.erratum.approvable,
+    },
+    props.erratum.kind,
+    "erratum",
+    props.erratum.ref,
+  ),
 );
 const typeLabel = computed(() => erratumTypeLabel(props.erratum.type));
 

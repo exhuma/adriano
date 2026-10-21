@@ -1,7 +1,7 @@
 /**
  * Ensure the errata section groups published errata before a
  * "Proposed errata" group of candidates, shows each one's status and
- * type, collapses a rejected erratum behind a toggle (expanding on
+ * type ("Blocked" when its content cannot be decided), collapses a rejected erratum behind a toggle (expanding on
  * click), and falls back to "Content not indexed yet" when
  * `has_content` is false.
  */
@@ -30,6 +30,7 @@ function erratum(overrides: Partial<ErratumOut> = {}): ErratumOut {
     corrected_html: "<p>fixed</p>",
     notes_html: null,
     approval_state: "pending",
+    approvable: true,
     digest: "sha256-v1:def",
     updated_at: "2026-01-01T00:00:00Z",
     has_content: true,
@@ -91,6 +92,16 @@ describe("ErrataSection", () => {
 
     expect(wrapper.text()).toContain("Verified");
     expect(wrapper.text()).toContain("Editorial");
+  });
+
+  it("shows the neutral 'Blocked' status for an erratum that cannot " +
+    "be decided (R-02)", async () => {
+    const wrapper = await mountSection([
+      erratum({ approval_state: "pending", approvable: false }),
+    ]);
+
+    expect(wrapper.text()).toContain("Blocked");
+    expect(wrapper.text()).not.toContain("Reported");
   });
 
   it("appends the proposed/branch suffix for a candidate erratum", async () => {

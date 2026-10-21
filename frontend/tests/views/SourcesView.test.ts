@@ -40,6 +40,7 @@ const baseSource: SourceOut = {
   published_ref: "local",
   enabled: true,
   config_error: null,
+  config_error_code: null,
   last_attempt_at: null,
   last_success_at: null,
   last_status: "never",
@@ -276,6 +277,45 @@ describe("SourcesView", () => {
     expect(rows[1].text()).toContain("fake source is down");
     const subRowCell = rows[1].find("td");
     expect(subRowCell.attributes("colspan")).toBe("8");
+  });
+
+  it("labels a config error by its stable code for an operator, " +
+    "keeping the raw text as Details (R-10)", async () => {
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        type: "gitlab",
+        enabled: false,
+        last_status: "disabled",
+        config_error: "token_env: GitLab token env var GL_TOKEN is not set",
+        config_error_code: "token_env_missing",
+      },
+    ]);
+    const wrapper = await mountView();
+
+    const rows = wrapper.findAll("tbody > tr");
+    expect(rows).toHaveLength(2);
+    expect(rows[1].text()).toContain(
+      "The access token's environment variable is not set",
+    );
+    expect(rows[1].text()).toContain("Details: token_env: GitLab token");
+  });
+
+  it("hides a config error from a reader", async () => {
+    canOperate = false;
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        enabled: false,
+        last_status: "disabled",
+        config_error: "token_env: GitLab token env var GL_TOKEN is not set",
+        config_error_code: "token_env_missing",
+      },
+    ]);
+    const wrapper = await mountView();
+
+    expect(wrapper.text()).not.toContain("GL_TOKEN");
+    expect(wrapper.text()).not.toContain("access token");
   });
 
   it("does not add a problem sub-row for a healthy source", async () => {

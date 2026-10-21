@@ -90,6 +90,7 @@ function baseProps(): SidebarProps {
         decision_date: "2024-12-24",
         decision_date_inferred: false,
         approval_state: "pending",
+        approvable: true,
       },
     ],
     legacySignoffEntries: ["Jane Doe <jane@example.com>"],

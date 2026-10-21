@@ -65,6 +65,55 @@ describe("SourceProblemCell", () => {
     expect(wrapper.text()).not.toContain("Details:");
   });
 
+  it("labels a config error by its code, keeping the raw text as " +
+    "Details (R-10)", () => {
+    const wrapper = mount(SourceProblemCell, {
+      props: {
+        problem: {
+          kind: "config",
+          code: "token_env_missing",
+          text: "token_env: GitLab token env var GL_TOKEN is not set",
+        },
+        hint: null,
+        canOperate: true,
+      },
+    });
+    expect(wrapper.text()).toContain("Configuration problem");
+    expect(wrapper.text()).toContain(
+      "The access token's environment variable is not set",
+    );
+    expect(wrapper.text()).toContain(
+      "Details: token_env: GitLab token env var GL_TOKEN is not set",
+    );
+  });
+
+  it("shows a config error's raw text alone without a code", () => {
+    const wrapper = mount(SourceProblemCell, {
+      props: {
+        problem: { kind: "config", code: null, text: "something odd" },
+        hint: null,
+        canOperate: true,
+      },
+    });
+    expect(wrapper.text()).toContain("something odd");
+    expect(wrapper.text()).not.toContain("Details:");
+  });
+
+  it("hides a config error from a reader", () => {
+    const wrapper = mount(SourceProblemCell, {
+      props: {
+        problem: {
+          kind: "config",
+          code: "token_env_missing",
+          text: "token_env: GitLab token env var GL_TOKEN is not set",
+        },
+        hint: null,
+        canOperate: false,
+      },
+    });
+    expect(wrapper.text()).toBe("—");
+  });
+
   it("hides problem and recovery detail entirely for a reader", () => {
     const wrapper = mount(SourceProblemCell, {
       props: {

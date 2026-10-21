@@ -4,16 +4,14 @@
  * content divergence within one identity (published vs. accepted),
  * and other candidates of the same identity holding different
  * content, each a separate concern that can occur independently.
+ * A competing candidate whose content cannot be decided shows the
+ * neutral "Blocked" status (R-02, `approvalDisplayLabel`).
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { CompetingCandidateOut, DivergenceOut } from "@/types/approval";
 import type { RecordKind } from "@/types/records";
 import { shortDigest } from "@/utils/digest";
-import {
-  approvalStateLabel,
-  divergenceLabel,
-  erratumStatusLabel,
-} from "@/utils/labels";
+import { approvalDisplayLabel, divergenceLabel } from "@/utils/labels";
 
 defineProps<{
   /** Content divergence within the record's identity, if any. */
@@ -63,12 +61,17 @@ defineProps<{
             {{ shortDigest(candidate.digest) }}
           </code>
           <StatusChip
-            v-if="recordKind === 'erratum'"
-            v-bind="erratumStatusLabel(candidate.approval_state, 'candidate', candidate.ref)"
-          />
-          <StatusChip
-            v-else
-            v-bind="approvalStateLabel(candidate.approval_state, 'candidate')"
+            v-bind="
+              approvalDisplayLabel(
+                {
+                  state: candidate.approval_state,
+                  approvable: candidate.approvable,
+                },
+                'candidate',
+                recordKind,
+                candidate.ref,
+              )
+            "
           />
         </template>
       </v-list-item>

@@ -31,12 +31,14 @@ messages must be actionable and must never contain secrets.
 Public API: :class:`SourceProject`, :class:`ProjectListing`,
 :class:`SourceDocument`, :class:`DocumentListing`,
 :class:`FetchedDocument`, :class:`SourceAdapter`, :class:`SourceError`,
-:class:`SourceConfigError`, :class:`SourceUnavailableError`,
+:class:`ConfigErrorCode`, :class:`SourceConfigError`,
+:class:`SourceUnavailableError`,
 :class:`SourceAccessError`, :class:`SourceNotFoundError`.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol
 
 from app.errors import AdrianoError
@@ -46,8 +48,59 @@ class SourceError(AdrianoError):
     """A source could not be read; prior content must be preserved."""
 
 
+class ConfigErrorCode(StrEnum):
+    """
+    Stable, machine-readable reason why a registration is disabled.
+
+    The readable ``config_error`` text stays the detailed explanation;
+    the code lets the UI show plain-language copy.
+
+    - ``invalid_settings`` -- a field of the entry, its type-specific
+      options or its ``scope`` failed validation (missing, wrong type,
+      bad URL, unknown key, ...).
+    - ``unknown_type`` -- the ``type`` is not a known source type.
+    - ``type_unavailable`` -- the type is known but has no adapter in
+      this build.
+    - ``invalid_published_ref`` -- ``published_ref`` is not usable for
+      the type.
+    - ``token_env_missing`` -- the env var named by ``token_env`` is
+      not set.
+    - ``removed_from_config`` -- the registration is stored but no
+      longer in ``catalog.yaml``.
+    - ``other`` -- any other configuration error.
+    """
+
+    INVALID_SETTINGS = "invalid_settings"
+    UNKNOWN_TYPE = "unknown_type"
+    TYPE_UNAVAILABLE = "type_unavailable"
+    INVALID_PUBLISHED_REF = "invalid_published_ref"
+    TOKEN_ENV_MISSING = "token_env_missing"
+    REMOVED_FROM_CONFIG = "removed_from_config"
+    OTHER = "other"
+
+
 class SourceConfigError(SourceError):
-    """Type-specific registration settings are invalid."""
+    """
+    Type-specific registration settings are invalid.
+
+    :param message: Readable, secret-free description.
+    :param config_code: Stable reason code (:class:`ConfigErrorCode`).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        config_code: ConfigErrorCode = ConfigErrorCode.OTHER,
+    ) -> None:
+        """
+        Store the message and its stable reason code.
+
+        :param message: Readable, secret-free description.
+        :param config_code: Stable reason code.
+        """
+        super().__init__(message, code=config_code.value)
+        self.config_code = config_code
 
 
 class SourceUnavailableError(SourceError):

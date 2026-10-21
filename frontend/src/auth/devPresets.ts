@@ -12,7 +12,10 @@
  * - **Reviewer:** a reviewer role that already grants `read` on its
  *   own; otherwise a reviewer role combined with a read role.
  * - **Operator:** a role granting `operate` and `read`; otherwise an
- *   `operate` role combined with a read role.
+ *   `operate` role combined with a read role. Roles that are not
+ *   approval-policy reviewer roles are preferred, so the Operator
+ *   preset cannot also decide; a reviewer role is used only when it
+ *   is the only one granting `operate`.
  *
  * When several roles qualify, the read-only ones are preferred, then
  * the order the backend lists them in (sorted by name).
@@ -82,17 +85,36 @@ function reviewerPreset(
   return reviewer && read ? names(read, reviewer) : null;
 }
 
+/**
+ * Build an Operator preset from *candidates*: a role granting both
+ * `operate` and `read`, otherwise an `operate` role plus the best
+ * read role of the whole catalog.
+ */
+function operatorFrom(
+  candidates: DevRoleOut[],
+  roles: DevRoleOut[],
+  reviewerRoles: Set<string>,
+): string[] | null {
+  const full = candidates.find(
+    (r) => grants(r, "operate") && grants(r, "read"),
+  );
+  if (full) {
+    return names(full);
+  }
+  const operate = candidates.find((r) => grants(r, "operate"));
+  const read = bestReadRole(roles, reviewerRoles);
+  return operate && read ? names(read, operate) : null;
+}
+
 function operatorPreset(
   roles: DevRoleOut[],
   reviewerRoles: Set<string>,
 ): string[] | null {
-  const full = roles.find((r) => grants(r, "operate") && grants(r, "read"));
-  if (full) {
-    return names(full);
-  }
-  const operate = roles.find((r) => grants(r, "operate"));
-  const read = bestReadRole(roles, reviewerRoles);
-  return operate && read ? names(read, operate) : null;
+  const nonReviewers = roles.filter((r) => !reviewerRoles.has(r.name));
+  return (
+    operatorFrom(nonReviewers, roles, reviewerRoles) ??
+    operatorFrom(roles, roles, reviewerRoles)
+  );
 }
 
 /**

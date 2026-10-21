@@ -2,7 +2,8 @@
  * Ensure dev sign-in presets are derived from the catalog's role
  * names (docs/ui-review D-04): Reader is read-only, Reviewer adds a
  * read role to a reviewer role unless that role already reads,
- * Operator needs `operate`, and unsatisfiable presets are left out.
+ * Operator needs `operate` (preferring a role that is not a reviewer
+ * role), and unsatisfiable presets are left out.
  */
 import { describe, expect, it } from "vitest";
 
@@ -106,6 +107,49 @@ describe("deriveDevPresets", () => {
       { label: "Reviewer", roles: ["admin", "adr-reviewer"] },
       { label: "Operator", roles: ["admin"] },
     ]);
+  });
+
+  it("prefers an operate role that is not a reviewer role, so " +
+    "Operator cannot also decide", () => {
+    const presets = deriveDevPresets({
+      roles: [
+        { name: "adr-reader", permissions: ["read"] },
+        { name: "lead", permissions: ["operate", "read"] },
+        { name: "ops", permissions: ["operate", "read"] },
+      ],
+      reviewer_roles: ["lead"],
+    });
+
+    expect(presets).toContainEqual({ label: "Operator", roles: ["ops"] });
+  });
+
+  it("prefers a non-reviewer operate-only role over a reviewer role " +
+    "granting operate and read", () => {
+    const presets = deriveDevPresets({
+      roles: [
+        { name: "adr-reader", permissions: ["read"] },
+        { name: "lead", permissions: ["operate", "read"] },
+        { name: "poller", permissions: ["operate"] },
+      ],
+      reviewer_roles: ["lead"],
+    });
+
+    expect(presets).toContainEqual({
+      label: "Operator",
+      roles: ["adr-reader", "poller"],
+    });
+  });
+
+  it("falls back to a reviewer role when it alone grants operate", () => {
+    const presets = deriveDevPresets({
+      roles: [
+        { name: "adr-reader", permissions: ["read"] },
+        { name: "lead", permissions: ["operate", "read"] },
+      ],
+      reviewer_roles: ["lead"],
+    });
+
+    expect(presets).toContainEqual({ label: "Operator", roles: ["lead"] });
   });
 
   it("offers nothing for a catalog without roles", () => {

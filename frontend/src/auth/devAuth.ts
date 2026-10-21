@@ -10,9 +10,10 @@
  * In a production build that literal folds to `false`, so the
  * bundler's dead-code elimination drops this module, its import of
  * `src/api/devAuth.ts`, and the `/auth/dev/token` and
- * `/auth/dev/roles` endpoint paths entirely -- not merely hides them behind a runtime check. Do not
- * import this module from `src/composables/useAuth.ts` or any other
- * unconditionally-bundled module; that would defeat the isolation.
+ * `/auth/dev/roles` endpoint paths entirely -- not merely hides them
+ * behind a runtime check. Do not import this module from
+ * `src/composables/useAuth.ts` or any other unconditionally-bundled
+ * module; that would defeat the isolation.
  */
 import { createDevToken, listDevRoles } from "@/api/devAuth";
 import { deriveDevPresets, type DevRolePreset } from "@/auth/devPresets";

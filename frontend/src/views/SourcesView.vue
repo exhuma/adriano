@@ -172,7 +172,11 @@ async function pollOne(id: string): Promise<void> {
  *  raw `last_error` JSON (audit finding S3). */
 function problemDisplay(source: SourceOut): SourceProblemDisplay {
   if (source.config_error) {
-    return { kind: "text", text: source.config_error };
+    return {
+      kind: "config",
+      code: source.config_error_code,
+      text: source.config_error,
+    };
   }
   return describeLastError(source.last_error);
 }

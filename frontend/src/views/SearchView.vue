@@ -623,11 +623,21 @@ function rowTitle(item: SearchItem): string {
                 />
                 <StatusChip
                   v-if="item.record_kind === 'erratum'"
-                  v-bind="searchErratumStatusLabel(item.approval_state)"
+                  v-bind="
+                    searchErratumStatusLabel(
+                      item.approval_state,
+                      item.approvable,
+                    )
+                  "
                 />
                 <StatusChip
                   v-else
-                  v-bind="searchApprovalStateLabel(item.approval_state)"
+                  v-bind="
+                    searchApprovalStateLabel(
+                      item.approval_state,
+                      item.approvable,
+                    )
+                  "
                 />
                 <StatusChip
                   v-if="issueIndicatorLabel(item.issue_counts)"

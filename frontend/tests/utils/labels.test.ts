@@ -10,6 +10,7 @@ import {
   approvalStateExplanation,
   approvalStateLabel,
   candidateBranchText,
+  configErrorLabel,
   decideBlockedLabel,
   decisionActionLabel,
   displayStatusLabel,
@@ -41,7 +42,7 @@ import type {
   ErrataSummaryOut,
   IssueCode,
 } from "@/types/records";
-import type { PollStatus } from "@/types/sources";
+import type { ConfigErrorCode, PollStatus } from "@/types/sources";
 
 function errataSummary(overrides: Partial<ErrataSummaryOut> = {}): ErrataSummaryOut {
   return { total: 0, verified: 0, reported: 0, rejected: 0, changed: 0, proposed: 0, ...overrides };
@@ -419,6 +420,19 @@ describe("searchApprovalStateLabel", () => {
       "Approval policy not configured",
     );
   });
+
+  it("shows the same neutral 'Blocked' as the record page when the " +
+    "content is not approvable (R-02)", () => {
+    const states: ApprovalStateCode[] = ["pending", "policy_missing"];
+    for (const state of states) {
+      const label = searchApprovalStateLabel(state, false);
+      expect(label).toEqual(
+        approvalDisplayLabel({ state, approvable: false }, "published"),
+      );
+      expect(label.text).toBe("Blocked");
+      expect(label.color).toBeUndefined();
+    }
+  });
 });
 
 describe("searchErratumStatusLabel", () => {
@@ -446,6 +460,13 @@ describe("searchErratumStatusLabel", () => {
       expect(label.text.split(" ").length).toBeLessThanOrEqual(2);
     },
   );
+
+  it("shows the neutral 'Blocked' instead of 'Reported' when the " +
+    "content is not approvable (R-02)", () => {
+    const label = searchErratumStatusLabel("pending", false);
+    expect(label.text).toBe("Blocked");
+    expect(label.color).toBeUndefined();
+  });
 
   it("keeps strong colour for issues and rejection only", () => {
     expect(searchErratumStatusLabel("rejected").color).toBe("error");
@@ -661,5 +682,31 @@ describe("approvalDisplayLabel", () => {
       "erratum",
     );
     expect(label.text).toBe("Blocked");
+  });
+});
+
+describe("configErrorLabel", () => {
+  const codes: ConfigErrorCode[] = [
+    "invalid_settings",
+    "unknown_type",
+    "type_unavailable",
+    "invalid_published_ref",
+    "token_env_missing",
+    "removed_from_config",
+    "other",
+  ];
+
+  it.each(codes)(
+    "gives a plain-language headline for every code: %s",
+    (code) => {
+      const headline = configErrorLabel(code);
+      expect(headline?.length).toBeGreaterThan(0);
+      // Never the raw machine code itself.
+      expect(headline).not.toContain(code);
+    },
+  );
+
+  it("returns null when the backend sent no code", () => {
+    expect(configErrorLabel(null)).toBeNull();
   });
 });

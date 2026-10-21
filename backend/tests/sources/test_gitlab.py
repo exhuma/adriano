@@ -12,6 +12,7 @@ from app.domain.frontmatter import JsonValue
 from app.sources import gitlab_api
 from app.sources.gitlab import GitLabAdapter, validate_settings
 from app.sources.port import (
+    ConfigErrorCode,
     SourceAccessError,
     SourceConfigError,
     SourceNotFoundError,
@@ -117,27 +118,45 @@ def project(fake: FakeGitLab, path: str) -> SourceProject:
     return SourceProject(id=str(repo.id), path=path, ref="main")
 
 
+_TOKEN_MISSING = ConfigErrorCode.TOKEN_ENV_MISSING
+_INVALID = ConfigErrorCode.INVALID_SETTINGS
+
+
 @pytest.mark.parametrize(
-    ("env", "overrides", "match"),
+    ("env", "overrides", "match", "code"),
     [
-        ({}, {}, "GL_TOKEN is not set"),
-        ({"GL_TOKEN": ""}, {}, "GL_TOKEN is not set"),
-        (ENV, {"base_url": "http://gitlab.test"}, "https"),
-        (ENV, {"base_url": "https://u:p@gitlab.test"}, "credentials"),
-        (ENV, {"surprise": 1}, "surprise"),
-        (ENV, {"scope": {}}, "at least one group or project"),
-        (ENV, {"scope": {"teams": ["x"]}}, "scope"),
-        (ENV, {"published_ref": "@latest"}, "published_ref"),
+        ({}, {}, "GL_TOKEN is not set", _TOKEN_MISSING),
+        ({"GL_TOKEN": ""}, {}, "GL_TOKEN is not set", _TOKEN_MISSING),
+        (ENV, {"base_url": "http://gitlab.test"}, "https", _INVALID),
+        (
+            ENV,
+            {"base_url": "https://u:p@gitlab.test"},
+            "credentials",
+            _INVALID,
+        ),
+        (ENV, {"surprise": 1}, "surprise", _INVALID),
+        (ENV, {"scope": {}}, "at least one group or project", _INVALID),
+        (ENV, {"scope": {"teams": ["x"]}}, "scope", _INVALID),
+        (
+            ENV,
+            {"published_ref": "@latest"},
+            "published_ref",
+            ConfigErrorCode.INVALID_PUBLISHED_REF,
+        ),
     ],
 )
 def test_validate_settings_rejects_invalid_settings(
-    env: dict[str, str], overrides: dict[str, JsonValue], match: str
+    env: dict[str, str],
+    overrides: dict[str, JsonValue],
+    match: str,
+    code: ConfigErrorCode,
 ) -> None:
-    """Ensure invalid gitlab settings are readable config errors."""
+    """Ensure invalid gitlab settings are readable, coded errors."""
     with pytest.raises(SourceConfigError, match=match) as caught:
         validate_settings(settings(**overrides), env)  # type: ignore[arg-type]
 
     assert TOKEN not in caught.value.message
+    assert caught.value.config_code is code
     assert "u:p" not in caught.value.message
 
 

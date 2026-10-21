@@ -31,7 +31,7 @@ from pydantic import JsonValue as PydanticJson
 
 from app.domain.frontmatter import json_safe
 from app.domain.issues import Severity
-from app.sources.port import SourceConfigError
+from app.sources.port import ConfigErrorCode, SourceConfigError
 from app.sources.registry import (
     SourceBinding,
     SourceSettings,
@@ -78,6 +78,7 @@ class SourceRegistration:
     :param config: Non-secret settings as stored in the database.
     :param enabled: ``False`` when the entry is invalid.
     :param config_error: Why the entry is disabled.
+    :param config_error_code: Stable code of *config_error*.
     :param path: ADR path inside each project.
     :param published_ref: Configured published ref.
     :param intake: Enabled intake mechanisms.
@@ -92,6 +93,7 @@ class SourceRegistration:
     config: JsonObject
     enabled: bool
     config_error: str | None = None
+    config_error_code: ConfigErrorCode | None = None
     path: str = "doc/decisions"
     published_ref: str = ""
     intake: frozenset[IntakeKind] = frozenset()
@@ -252,7 +254,10 @@ def _push_tokens(
 
 
 def _disabled(
-    item: Mapping[str, object], position: int, error: str
+    item: Mapping[str, object],
+    position: int,
+    error: str,
+    code: ConfigErrorCode,
 ) -> SourceRegistration:
     """
     Build a disabled registration for an invalid entry.
@@ -260,6 +265,7 @@ def _disabled(
     :param item: Raw entry (with a usable ``id``).
     :param position: Index in the file.
     :param error: Readable reason.
+    :param code: Stable code of *error*.
     :returns: The registration.
     """
     raw_type = item.get("type")
@@ -270,6 +276,7 @@ def _disabled(
         config=_public_config(item),
         enabled=False,
         config_error=error,
+        config_error_code=code,
     )
 
 
@@ -287,7 +294,12 @@ def _source(
     try:
         entry = _SourceEntry.model_validate(item)
     except ValidationError as exc:
-        return _disabled(item, position, describe_validation_error(exc))
+        return _disabled(
+            item,
+            position,
+            describe_validation_error(exc),
+            ConfigErrorCode.INVALID_SETTINGS,
+        )
     settings = SourceSettings(
         id=entry.id,
         type=entry.type,
@@ -300,7 +312,7 @@ def _source(
     try:
         binding = ctx.registry.validate(settings, ctx.env)
     except SourceConfigError as exc:
-        return _disabled(item, position, exc.message)
+        return _disabled(item, position, exc.message, exc.config_code)
     tokens, warnings = _push_tokens(entry, ctx.env)
     return SourceRegistration(
         id=entry.id,

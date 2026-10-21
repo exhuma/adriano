@@ -26,7 +26,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.sources.port import SourceConfigError
+from app.sources.port import ConfigErrorCode, SourceConfigError
 from app.sources.registry import SourceSettings, parse_options
 
 #: ``published_ref`` value selecting each project's default branch.
@@ -187,12 +187,14 @@ def parse_settings(
     ref = settings.published_ref
     if ref.startswith("@") and ref != PROJECT_DEFAULT:
         raise SourceConfigError(
-            f"published_ref: must be a branch name or {PROJECT_DEFAULT!r}"
+            f"published_ref: must be a branch name or {PROJECT_DEFAULT!r}",
+            config_code=ConfigErrorCode.INVALID_PUBLISHED_REF,
         )
     token = SecretStr(env.get(options.token_env, ""))
     if not token.get_secret_value():
         raise SourceConfigError(
-            f"token_env: GitLab token env var {options.token_env} is not set"
+            f"token_env: GitLab token env var {options.token_env} is not set",
+            config_code=ConfigErrorCode.TOKEN_ENV_MISSING,
         )
     return GitLabConfig(
         base_url=options.base_url,

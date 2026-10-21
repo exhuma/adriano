@@ -7,6 +7,8 @@ import type { components } from "@/types/openapi";
 
 /** How content entered the catalog: poll or authenticated push. */
 export type IntakeKind = components["schemas"]["IntakeKind"];
+/** Stable reason why a registration's configuration is invalid. */
+export type ConfigErrorCode = components["schemas"]["ConfigErrorCode"];
 /** Outcome of the latest poll of a registration. */
 export type PollStatus = components["schemas"]["PollStatus"];
 /** One source registration's configuration and freshness. */

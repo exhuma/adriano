@@ -461,7 +461,32 @@ export interface components {
             /** Digest */
             digest: string;
             approval_state: components["schemas"]["ApprovalStateCode"];
+            /** Approvable */
+            approvable: boolean;
         };
+        /**
+         * ConfigErrorCode
+         * @description Stable, machine-readable reason why a registration is disabled.
+         *
+         *     The readable ``config_error`` text stays the detailed explanation;
+         *     the code lets the UI show plain-language copy.
+         *
+         *     - ``invalid_settings`` -- a field of the entry, its type-specific
+         *       options or its ``scope`` failed validation (missing, wrong type,
+         *       bad URL, unknown key, ...).
+         *     - ``unknown_type`` -- the ``type`` is not a known source type.
+         *     - ``type_unavailable`` -- the type is known but has no adapter in
+         *       this build.
+         *     - ``invalid_published_ref`` -- ``published_ref`` is not usable for
+         *       the type.
+         *     - ``token_env_missing`` -- the env var named by ``token_env`` is
+         *       not set.
+         *     - ``removed_from_config`` -- the registration is stored but no
+         *       longer in ``catalog.yaml``.
+         *     - ``other`` -- any other configuration error.
+         * @enum {string}
+         */
+        ConfigErrorCode: "invalid_settings" | "unknown_type" | "type_unavailable" | "invalid_published_ref" | "token_env_missing" | "removed_from_config" | "other";
         /**
          * DecisionAction
          * @description Formal decision recorded by a reviewer.
@@ -723,6 +748,8 @@ export interface components {
             /** Notes Html */
             notes_html: string | null;
             approval_state: components["schemas"]["ApprovalStateCode"];
+            /** Approvable */
+            approvable: boolean;
             /** Digest */
             digest: string;
             /**
@@ -1081,6 +1108,8 @@ export interface components {
             kind: components["schemas"]["RecordState"];
             record_kind: components["schemas"]["RecordKind"];
             approval_state: components["schemas"]["ApprovalStateCode"];
+            /** Approvable */
+            approvable: boolean;
             issue_counts: components["schemas"]["IssueCountsOut"];
             /** Erratum For Title */
             erratum_for_title: string | null;
@@ -1148,6 +1177,8 @@ export interface components {
             /** Decision Date Inferred */
             decision_date_inferred: boolean;
             approval_state: components["schemas"]["ApprovalStateCode"];
+            /** Approvable */
+            approvable: boolean;
         };
         /**
          * SourceOut
@@ -1162,6 +1193,7 @@ export interface components {
             enabled: boolean;
             /** Config Error */
             config_error: string | null;
+            config_error_code: components["schemas"]["ConfigErrorCode"] | null;
             /** Intake */
             intake: components["schemas"]["IntakeKind"][];
             /** Published Ref */

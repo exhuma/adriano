@@ -490,6 +490,36 @@ changed typography (classes, the one `:deep()` heading rule per file,
 and the `font-weight-medium` h1 addition); it did not add heading tags
 to `v-card-title` elements that lack one (Task 6) or change layout.
 
+**Search sort needs no new index (Task 2, recorded in Task 16):**
+`recent` orders by `record.updated_at DESC, lower(title), id`.
+`EXPLAIN (ANALYZE)` on the 20,000-record synthetic corpus (21,967
+rows) showed every sort, old and new, is one scan plus a top-N
+heapsort (30-60 ms browse/needs-approval, 110-155 ms with a text
+query). A trial `(updated_at DESC, lower(title), id)` index only sped
+up `recent` browse without a query or needs-approval filter (35 ms to
+0.6 ms); the text-query and needs-approval paths still read or join
+every row before `LIMIT`. Far below the P95 < 1 s budget, so no
+migration and no extra write cost per upsert. Add the index only if a
+real catalog makes `recent` browse slow. Details:
+`docs/benchmark.md` "Search sort orders (phase 11)".
+
+**Approvable flag and config error codes (Task 16, P11-R-08/R-09):**
+- `approvable` (same rule as `ApprovalOut.approvable`,
+  `approval_view.is_approvable`) is also on `SearchItemOut`,
+  `SiblingOut`, `CompetingCandidateOut` and `ErratumOut`, so every
+  status chip shows the neutral "Blocked" instead of "Pending
+  approval" for content that cannot be decided. It is computed from
+  fields already loaded; no extra queries.
+- `SourceOut.config_error_code` (`ConfigErrorCode`:
+  `invalid_settings`, `unknown_type`, `type_unavailable`,
+  `invalid_published_ref`, `token_env_missing`,
+  `removed_from_config`, `other`) is set where the error is raised
+  (`SourceConfigError.config_code`) and derived at read time from the
+  configuration loaded at startup (no migration: the stored
+  `config_error` text is synced from that same configuration). The UI
+  maps it to plain-language text for operators and keeps the raw
+  `config_error` as "Details".
+
 **Vuetify-first implementation ladder:**
 Expressed in `plugins/vuetify.ts`, `createVuetify({ defaults })`,
 `<v-defaults-provider>`, component props with utility classes, then

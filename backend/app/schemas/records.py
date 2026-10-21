@@ -56,6 +56,7 @@ class SearchItemOut(BaseModel):
     kind: RecordState
     record_kind: RecordKind
     approval_state: ApprovalStateCode
+    approvable: bool
     issue_counts: IssueCountsOut
     erratum_for_title: str | None
 
@@ -165,6 +166,7 @@ class ErratumOut(BaseModel):
     corrected_html: str
     notes_html: str | None
     approval_state: ApprovalStateCode
+    approvable: bool
     digest: str
     updated_at: datetime.datetime
     has_content: bool
@@ -230,6 +232,7 @@ class SiblingOut(BaseModel):
     decision_date: datetime.date | None
     decision_date_inferred: bool
     approval_state: ApprovalStateCode
+    approvable: bool
 
 
 class PolicySummaryOut(BaseModel):
@@ -299,6 +302,7 @@ class CompetingCandidateOut(BaseModel):
     path: str
     digest: str
     approval_state: ApprovalStateCode
+    approvable: bool
 
 
 class ApprovalOut(BaseModel):

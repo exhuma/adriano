@@ -13,11 +13,10 @@
  * as a plain-language headline (docs/ui-review R-10) with the
  * backend's own message kept underneath as secondary "Details" text
  * -- never discarded, since it carries the per-instance specifics
- * (which project, which file). A `text`-kind problem (no code at
- * all -- e.g. a registration's `config_error`) gets a generic
- * "Problem" headline instead, and is listed as an open issue in this
- * task's hand-back: the API gives no stable code to label it more
- * precisely.
+ * (which project, which file). A `config`-kind problem (a
+ * registration's `config_error`) is labelled the same way from its
+ * stable `config_error_code`. A `text`-kind problem (no code at all)
+ * gets a generic "Problem" headline instead.
  *
  * Operator-only detail (env-var names, recovery steps) is gated by
  * `canOperate` (decision 3, Task 8): a reader sees only the
@@ -26,7 +25,7 @@
  * them, regardless of whether a problem exists.
  */
 import type { SourceProblemDisplay } from "@/utils/sourceErrors";
-import { pollProblemLabel } from "@/utils/labels";
+import { configErrorLabel, pollProblemLabel } from "@/utils/labels";
 
 defineProps<{
   /** How to render the registration's problem, if any. */
@@ -45,6 +44,16 @@ defineProps<{
     <p v-if="problem.kind === 'text'" class="text-body-medium">
       <span class="text-label-large d-block">Problem</span>
       {{ problem.text }}
+    </p>
+    <p v-else-if="problem.kind === 'config'" class="text-body-medium">
+      <span class="text-label-large d-block">Configuration problem</span>
+      {{ configErrorLabel(problem.code) ?? problem.text }}
+      <span
+        v-if="configErrorLabel(problem.code)"
+        class="text-body-small text-medium-emphasis d-block"
+      >
+        Details: {{ problem.text }}
+      </span>
     </p>
     <ul v-else-if="problem.kind === 'list'" class="ma-0 ps-4">
       <li v-for="(item, index) in problem.items" :key="index" class="text-body-medium">

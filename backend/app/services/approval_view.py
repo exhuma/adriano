@@ -181,6 +181,7 @@ class CompetingCandidate:
     :param path: File path.
     :param digest: Its digest.
     :param approval_state: Approval state of its digest.
+    :param approvable: Whether its content can be decided at all.
     """
 
     id: uuid.UUID
@@ -188,6 +189,7 @@ class CompetingCandidate:
     path: str
     digest: str
     approval_state: ApprovalStateCode
+    approvable: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -351,19 +353,30 @@ def _competing(
 ) -> tuple[CompetingCandidate, ...]:
     """List the identity's other candidates with different content."""
     return tuple(
-        CompetingCandidate(
-            id=s.id,
-            ref=s.ref,
-            path=s.path,
-            digest=s.digest,
-            approval_state=evaluate(
-                policy, views, s.digest, is_approvable(s)
-            ).state,
-        )
+        _competing_candidate(s, policy, views)
         for s in siblings
         if s.kind is RecordState.CANDIDATE
         and s.id != record.id
         and s.digest != record.digest
+    )
+
+
+def _competing_candidate(
+    sibling: StoredRecord,
+    policy: Policy | None,
+    views: Sequence[DecisionEventView],
+) -> CompetingCandidate:
+    """Build one :class:`CompetingCandidate` with its state."""
+    approvable = is_approvable(sibling)
+    return CompetingCandidate(
+        id=sibling.id,
+        ref=sibling.ref,
+        path=sibling.path,
+        digest=sibling.digest,
+        approval_state=evaluate(
+            policy, views, sibling.digest, approvable
+        ).state,
+        approvable=approvable,
     )
 
 

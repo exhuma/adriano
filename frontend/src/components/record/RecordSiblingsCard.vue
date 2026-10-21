@@ -2,12 +2,13 @@
 /**
  * Record detail page's "Other revisions" card: other published or
  * candidate rows sharing this record's identity, each with its own
- * approval-state chip. Heading level comes from `RecordSidebar`'s
+ * approval-state chip ("Blocked" when that row's content cannot be
+ * decided, R-02). Heading level comes from `RecordSidebar`'s
  * scoped defaults; the list is not a tab stop itself (G-10).
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { SiblingOut } from "@/types/records";
-import { approvalStateLabel } from "@/utils/labels";
+import { approvalDisplayLabel } from "@/utils/labels";
 
 defineProps<{
   /** Other published/candidate rows sharing this record's identity. */
@@ -25,7 +26,15 @@ defineProps<{
         </router-link>
         <template #append>
           <StatusChip
-            v-bind="approvalStateLabel(sibling.approval_state, sibling.kind)"
+            v-bind="
+              approvalDisplayLabel(
+                {
+                  state: sibling.approval_state,
+                  approvable: sibling.approvable,
+                },
+                sibling.kind,
+              )
+            "
           />
         </template>
       </v-list-item>

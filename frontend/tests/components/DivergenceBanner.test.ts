@@ -11,17 +11,24 @@ import vuetify from "@/plugins/vuetify";
 import DivergenceBanner from "@/components/DivergenceBanner.vue";
 import type { CompetingCandidateOut } from "@/types/approval";
 
-function candidate(): CompetingCandidateOut {
+function candidate(
+  overrides: Partial<CompetingCandidateOut> = {},
+): CompetingCandidateOut {
   return {
     id: "11111111-1111-1111-1111-111111111111",
     ref: "feature-x",
     path: "doc/decisions/2025-05-01-fix.md",
     digest: "sha256-v1:abc",
     approval_state: "pending",
+    approvable: true,
+    ...overrides,
   };
 }
 
-async function mountBanner(recordKind: "decision" | "erratum") {
+async function mountBanner(
+  recordKind: "decision" | "erratum",
+  overrides: Partial<CompetingCandidateOut> = {},
+) {
   const router: Router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -33,7 +40,7 @@ async function mountBanner(recordKind: "decision" | "erratum") {
   const wrapper = mount(DivergenceBanner, {
     props: {
       divergence: null,
-      competingCandidates: [candidate()],
+      competingCandidates: [candidate(overrides)],
       recordKind,
     },
     global: { plugins: [router, vuetify] },
@@ -61,4 +68,16 @@ describe("DivergenceBanner", () => {
     expect(wrapper.text()).toContain("Pending approval");
     expect(wrapper.text()).not.toContain("Reported");
   });
+
+  it.each(["decision", "erratum"] as const)(
+    "shows the neutral 'Blocked' for an unapprovable competing " +
+      "candidate on a %s page (R-02)",
+    async (recordKind) => {
+      const wrapper = await mountBanner(recordKind, { approvable: false });
+
+      expect(wrapper.text()).toContain("Blocked");
+      expect(wrapper.text()).not.toContain("Pending approval");
+      expect(wrapper.text()).not.toContain("Reported");
+    },
+  );
 });

@@ -45,7 +45,11 @@ from typing import Protocol
 from pydantic import BaseModel, ValidationError
 
 from app.domain.frontmatter import JsonValue
-from app.sources.port import SourceAdapter, SourceConfigError
+from app.sources.port import (
+    ConfigErrorCode,
+    SourceAdapter,
+    SourceConfigError,
+)
 from app.validation_messages import describe_validation_error
 
 #: Source types of Product Phase 1 (see ``phases/DECISIONS.md``).
@@ -186,11 +190,13 @@ class SourceTypeRegistry:
         if settings.type in self._pending:
             raise SourceConfigError(
                 f"source type {settings.type!r} is not available yet in "
-                f"this build (its adapter is not implemented)"
+                f"this build (its adapter is not implemented)",
+                config_code=ConfigErrorCode.TYPE_UNAVAILABLE,
             )
         known = ", ".join(sorted(self._pending | set(self._validators)))
         raise SourceConfigError(
-            f"unknown source type {settings.type!r}; supported: {known}"
+            f"unknown source type {settings.type!r}; supported: {known}",
+            config_code=ConfigErrorCode.UNKNOWN_TYPE,
         )
 
 
@@ -209,7 +215,10 @@ def parse_options[M: BaseModel](
     try:
         return model.model_validate(dict(data))
     except ValidationError as exc:
-        raise SourceConfigError(describe_validation_error(exc, prefix)) from exc
+        raise SourceConfigError(
+            describe_validation_error(exc, prefix),
+            config_code=ConfigErrorCode.INVALID_SETTINGS,
+        ) from exc
 
 
 def default_registry() -> SourceTypeRegistry:

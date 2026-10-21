@@ -1,6 +1,7 @@
 """Integration tests for the search sort orders (``SearchSort``)."""
 
 import dataclasses
+import datetime
 import uuid
 
 import pytest
@@ -21,6 +22,9 @@ from tests.storage.conftest import put_record
 POLICY = Policy(id="global", version=1)
 ALL = SearchFilters()
 NEEDS_APPROVAL = SearchFilters(needs_approval=True)
+#: A fixed past instant; pinned ``updated_at`` values count up from it,
+#: so every later real ``now()`` is newer than all of them.
+EPOCH = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
 
 
 def titles(
@@ -56,8 +60,9 @@ def store_one(
     """
     Store one published record in its own unit of work.
 
-    Each unit of work is one transaction, so every call gets a later
-    ``now()`` and therefore a later ``updated_at`` for new content.
+    The store sets ``updated_at`` to the transaction's ``now()``; tests
+    that depend on the order pin it with :func:`pin_updated_at` instead
+    of relying on distinct ``now()`` values per transaction.
 
     :param provider: Provider.
     :param path: File path.
@@ -74,21 +79,47 @@ def store_one(
     return write
 
 
+def pin_updated_at(engine: Engine, *paths: str) -> None:
+    """
+    Set ``updated_at`` explicitly, oldest first, in the order given.
+
+    The record at ``paths[n]`` gets :data:`EPOCH` plus *n* minutes.
+
+    :param engine: Test database engine.
+    :param paths: Record paths, oldest first.
+    """
+    with engine.begin() as connection:
+        for offset, path in enumerate(paths):
+            connection.execute(
+                text("UPDATE record SET updated_at = :at WHERE path = :path"),
+                {
+                    "at": EPOCH + datetime.timedelta(minutes=offset),
+                    "path": path,
+                },
+            )
+
+
 @pytest.fixture
-def timeline(provider: PostgresStoreProvider) -> PostgresStoreProvider:
+def timeline(
+    provider: PostgresStoreProvider, engine: Engine
+) -> PostgresStoreProvider:
     """
     Store Alpha, Bravo, Charlie in turn, then touch Alpha and edit Bravo.
 
-    Alpha is re-stored unchanged (only ``last_seen_at`` moves) and
-    Bravo's body changes (``updated_at`` moves), so the "recent" order
-    is Bravo, Charlie, Alpha.
+    Their ``updated_at`` is pinned to Alpha < Bravo < Charlie (all in
+    the past). Alpha is then re-stored unchanged (only
+    ``last_seen_at`` moves, so it keeps its pinned value) and Bravo's
+    body changes (``updated_at`` moves to the real ``now()``), so the
+    "recent" order is Bravo, Charlie, Alpha.
 
     :param provider: Clean provider.
+    :param engine: Test database engine.
     :returns: The provider.
     """
     store_one(provider, path="a.md", title="Alpha", body="First.")
     store_one(provider, path="b.md", title="Bravo", body="First.")
     store_one(provider, path="c.md", title="Charlie", body="First.")
+    pin_updated_at(engine, "a.md", "b.md", "c.md")
     store_one(provider, path="a.md", title="Alpha", body="First.")
     store_one(provider, path="b.md", title="Bravo", body="Edited.")
     return provider
@@ -115,19 +146,24 @@ def test_title_and_relevance_without_query(
 
 
 @pytest.fixture
-def ranked(provider: PostgresStoreProvider) -> PostgresStoreProvider:
+def ranked(
+    provider: PostgresStoreProvider, engine: Engine
+) -> PostgresStoreProvider:
     """
     Store body hits Alpha and Mike around the title hit Zulu.
 
-    Stored oldest to newest: Alpha, Zulu Caching, Mike.
+    ``updated_at`` is pinned oldest to newest: Alpha, Zulu Caching,
+    Mike, Nothing.
 
     :param provider: Clean provider.
+    :param engine: Test database engine.
     :returns: The provider.
     """
     store_one(provider, path="a.md", title="Alpha", body="caching")
     store_one(provider, path="z.md", title="Zulu Caching", body="other")
     store_one(provider, path="m.md", title="Mike", body="caching")
     store_one(provider, path="n.md", title="Nothing", body="unrelated")
+    pin_updated_at(engine, "a.md", "z.md", "m.md", "n.md")
     return provider
 
 
@@ -267,7 +303,7 @@ def accept(provider: PostgresStoreProvider, write: RecordWrite) -> None:
 
 
 def test_recent_with_needs_approval_and_record_kind(
-    provider: PostgresStoreProvider,
+    provider: PostgresStoreProvider, engine: Engine
 ) -> None:
     """Ensure ``recent`` keeps its order under every other filter."""
     accepted = store_one(
@@ -280,6 +316,7 @@ def test_recent_with_needs_approval_and_record_kind(
             dataclasses.replace(erratum, record_kind=RecordKind.ERRATUM)
         )
     store_one(provider, path="n.md", title="Newer", body="Two.")
+    pin_updated_at(engine, "a.md", "o.md", "e.md", "n.md")
     accept(provider, accepted)
     decisions = SearchFilters(record_kind=RecordKind.DECISION)
     pending_decisions = SearchFilters(

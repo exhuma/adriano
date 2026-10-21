@@ -52,6 +52,7 @@ from app.domain.approval import ApprovalStateCode, Policy
 from app.domain.issues import Issue, Severity
 from app.domain.relationships import RecordSummary, RelationshipIndex
 from app.domain.values import Identity, Links, LinkType, RecordKind
+from app.services.approval_view import is_approvable
 from app.storage.port import (
     CatalogStore,
     RecordState,
@@ -112,6 +113,9 @@ class CatalogSearchItem:
     :param kind: Published or candidate.
     :param record_kind: Decision or erratum.
     :param approval_state: Approval state of the current digest.
+    :param approvable: Whether the content can be decided at all (same
+        rule as the record detail,
+        :func:`app.services.approval_view.is_approvable`).
     :param issue_counts: Stored validation issue counts.
     :param erratum_for_title: For an erratum, the title of the
         decision it corrects, when that resolves.
@@ -126,6 +130,7 @@ class CatalogSearchItem:
     kind: RecordState
     record_kind: RecordKind
     approval_state: ApprovalStateCode
+    approvable: bool
     issue_counts: IssueCounts
     erratum_for_title: str | None
 
@@ -236,6 +241,7 @@ def _search_item(
         kind=item.kind,
         record_kind=item.record_kind,
         approval_state=item.approval_state,
+        approvable=is_approvable(item),
         issue_counts=_issue_counts(item.issues),
         erratum_for_title=erratum_for_title,
     )

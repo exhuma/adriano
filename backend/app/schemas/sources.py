@@ -11,6 +11,7 @@ import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.frontmatter import JsonValue
+from app.sources.port import ConfigErrorCode
 from app.storage.port import IntakeKind, PollStatus
 
 
@@ -23,6 +24,7 @@ class SourceOut(BaseModel):
     type: str
     enabled: bool
     config_error: str | None
+    config_error_code: ConfigErrorCode | None
     intake: list[IntakeKind]
     published_ref: str
     last_attempt_at: datetime.datetime | None

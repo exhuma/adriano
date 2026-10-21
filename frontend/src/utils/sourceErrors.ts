@@ -7,6 +7,7 @@
  * (`{"source_error": ...}`, `{"message": ...}`, a bare string) are
  * also handled, with a generic, still-readable fallback last.
  */
+import type { ConfigErrorCode } from "@/types/sources";
 
 /** One problem entry from a `problems[]` array, display-ready. */
 export interface SourceProblemItem {
@@ -20,7 +21,8 @@ export interface SourceProblemItem {
 export type SourceProblemDisplay =
   | { kind: "none" }
   | { kind: "text"; text: string }
-  | { kind: "list"; items: SourceProblemItem[] };
+  | { kind: "list"; items: SourceProblemItem[] }
+  | { kind: "config"; code: ConfigErrorCode | null; text: string };
 
 const FALLBACK_TEXT = "See server logs (details unavailable).";
 

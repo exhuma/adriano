@@ -13,6 +13,7 @@ from app.catalog_config import (
 from app.composition import log_problems
 from app.domain.approval import PolicyStatus
 from app.domain.issues import Severity
+from app.sources.port import ConfigErrorCode
 from app.sources.registry import SourceTypeRegistry, default_registry
 from app.storage.values import IntakeKind
 from tests.fakes import FakeSource, FakeSourceType
@@ -114,7 +115,9 @@ sources:
     assert not bad.enabled and not bad.pollable
     assert bad.config_error is not None
     assert "published_ref" in bad.config_error
+    assert bad.config_error_code is ConfigErrorCode.INVALID_SETTINGS
     assert good.enabled
+    assert good.config_error_code is None
     assert config.has_errors
     stored = {item.id: item for item in config.registration_configs()}
     assert stored["bad"].enabled is False
@@ -143,6 +146,13 @@ sources:
     assert "unknown world" in errors["c"]
     assert "extra" in errors["d"]
     assert not any(s.enabled for s in config.sources)
+    codes = {s.id: s.config_error_code for s in config.sources}
+    assert codes == {
+        "a": ConfigErrorCode.UNKNOWN_TYPE,
+        "b": ConfigErrorCode.INVALID_SETTINGS,
+        "c": ConfigErrorCode.OTHER,
+        "d": ConfigErrorCode.INVALID_SETTINGS,
+    }
 
 
 def test_pending_source_type_is_reported_as_not_available(
@@ -160,6 +170,9 @@ def test_pending_source_type_is_reported_as_not_available(
     )
 
     assert "not available yet" in (config.sources[0].config_error or "")
+    assert (
+        config.sources[0].config_error_code is ConfigErrorCode.TYPE_UNAVAILABLE
+    )
 
 
 def test_entries_without_usable_id_are_reported_not_stored(
@@ -298,6 +311,7 @@ def test_example_configuration_is_valid_apart_from_unset_secrets() -> None:
     assert central.enabled and central.config_error is None
     assert gitlab.config_error is not None
     assert "ADRIANO_GITLAB_TOKEN_PLATFORM is not set" in gitlab.config_error
+    assert gitlab.config_error_code is ConfigErrorCode.TOKEN_ENV_MISSING
 
 
 def test_example_configuration_gitlab_entry_is_valid_with_a_token() -> None:

@@ -118,6 +118,7 @@ class ErratumInfo:
     :param corrected_html: "Corrected text" HTML.
     :param notes_html: Notes HTML.
     :param approval_state: Approval state of the erratum's own digest.
+    :param approvable: Whether the erratum's content can be decided.
     :param digest: The erratum's current digest.
     :param updated_at: When the erratum's content last changed.
     :param has_content: Whether structured content is stored.
@@ -138,6 +139,7 @@ class ErratumInfo:
     corrected_html: str
     notes_html: str | None
     approval_state: ApprovalStateCode
+    approvable: bool
     digest: str
     updated_at: datetime.datetime
     has_content: bool
@@ -210,14 +212,21 @@ def erratum_content(
     )
 
 
-def _info(row: ErratumRow, state: ApprovalStateCode) -> ErratumInfo:
+def _info(
+    row: ErratumRow,
+    policy: Policy | None,
+    events: Sequence[DecisionEventView],
+) -> ErratumInfo:
     """
-    Build one :class:`ErratumInfo`.
+    Build one :class:`ErratumInfo` with its own approval state.
 
     :param row: The erratum row.
-    :param state: Its approval state.
+    :param policy: The configured policy, or ``None``.
+    :param events: Decision events of the erratum's identity.
     :returns: The value.
     """
+    approvable = is_approvable(row)
+    state = evaluate(policy, events, row.digest, approvable).state
     content = row.erratum
     return ErratumInfo(
         id=row.id,
@@ -235,6 +244,7 @@ def _info(row: ErratumRow, state: ApprovalStateCode) -> ErratumInfo:
         corrected_html=content.corrected_html if content else "",
         notes_html=content.notes_html if content else None,
         approval_state=state,
+        approvable=approvable,
         digest=row.digest,
         updated_at=row.updated_at,
         has_content=content is not None,
@@ -279,13 +289,5 @@ def build_errata(
     events: dict[Identity, list[DecisionEventView]] = defaultdict(list)
     for event in store.list_decisions_for(identities):
         events[event.identity].append(event.as_view())
-    errata = tuple(
-        _info(
-            row,
-            evaluate(
-                policy, events[row.identity], row.digest, is_approvable(row)
-            ).state,
-        )
-        for row in rows
-    )
+    errata = tuple(_info(row, policy, events[row.identity]) for row in rows)
     return ErrataView(errata=errata, summary=_summary(errata))

@@ -122,6 +122,7 @@ describe("SearchView", () => {
           kind: "published",
           record_kind: "decision",
           approval_state: "pending",
+          approvable: true,
           issue_counts: { error: 0, warning: 1 },
           erratum_for_title: null,
         },
@@ -148,6 +149,37 @@ describe("SearchView", () => {
     expect(countRegion?.text()).toContain("Showing 1–1 of 1 record.");
   });
 
+  it("shows the neutral 'Blocked' status, not 'Pending approval', " +
+    "for a row whose content cannot be decided (R-02)", async () => {
+    const page: SearchPage = {
+      items: [
+        {
+          id: "66666666-6666-6666-6666-666666666666",
+          title: "No UUID here",
+          source_id: "central",
+          project: "platform",
+          path: "doc/decisions/2023-01-11-no-uuid.md",
+          ref: "local",
+          kind: "published",
+          record_kind: "decision",
+          approval_state: "pending",
+          approvable: false,
+          issue_counts: { error: 1, warning: 0 },
+          erratum_for_title: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    };
+    searchRecords.mockResolvedValue(page);
+
+    const { wrapper } = await mountSearchView("/");
+
+    expect(wrapper.text()).toContain("Blocked");
+    expect(wrapper.text()).not.toContain("Pending approval");
+  });
+
   it("hides the 'Published' chip (the default state) but shows 'Candidate' (S-02)", async () => {
     const base: SearchPage["items"][number] = {
       id: "22222222-2222-2222-2222-222222222222",
@@ -159,6 +191,7 @@ describe("SearchView", () => {
       kind: "published",
       record_kind: "decision",
       approval_state: "pending",
+      approvable: true,
       issue_counts: { error: 0, warning: 0 },
       erratum_for_title: null,
     };
@@ -206,6 +239,7 @@ describe("SearchView", () => {
           kind: "published",
           record_kind: "decision",
           approval_state: "pending",
+          approvable: true,
           issue_counts: { error: 0, warning: 0 },
           erratum_for_title: null,
         },
@@ -219,6 +253,7 @@ describe("SearchView", () => {
           kind: "published",
           record_kind: "decision",
           approval_state: "changed_since_acceptance",
+          approvable: true,
           issue_counts: { error: 0, warning: 0 },
           erratum_for_title: null,
         },
@@ -259,6 +294,7 @@ describe("SearchView", () => {
           kind: "published",
           record_kind: "erratum",
           approval_state: "pending",
+          approvable: true,
           issue_counts: { error: 0, warning: 0 },
           erratum_for_title: "Use PostgreSQL",
         },
@@ -298,6 +334,7 @@ describe("SearchView", () => {
           kind: "published",
           record_kind: "erratum",
           approval_state: "pending",
+          approvable: true,
           issue_counts: { error: 0, warning: 0 },
           erratum_for_title: null,
         },
