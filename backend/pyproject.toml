@@ -1,6 +1,6 @@
 [project]
 name = "adriano-backend"
-version = "0.1.0"
+version = "2026.10.21a1"
 description = "ADR governance catalog backend (adriano)"
 requires-python = ">=3.14"
 dependencies = [
