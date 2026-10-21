@@ -35,14 +35,14 @@ Restore
 -------
 
 Stop everything that writes to the database first:
-the backend and the scheduled poll.
+Adriano and the scheduled poll.
 A write during the restore can corrupt it or be lost.
 
-#. Stop the backend and pause the poll schedule:
+#. Stop Adriano and pause the poll schedule:
 
    .. code-block:: sh
 
-      docker compose stop backend frontend
+      docker compose stop adriano
 
 #. Restore the dump:
 
@@ -58,9 +58,12 @@ A write during the restore can corrupt it or be lost.
 
    .. code-block:: sh
 
-      docker compose run --rm migrate
+      docker compose run --rm --no-deps adriano adriano migrate
 
-#. Start the services and resume the poll schedule:
+   On Kubernetes, scale the Deployment to zero first and run
+   ``adriano migrate`` as a one-off job with the same image.
+
+#. Start Adriano and resume the poll schedule:
 
    .. code-block:: sh
 
@@ -107,8 +110,8 @@ same owning user.
 That is fine for evaluation, but not tamper resistant.
 For production, use two users:
 
-- the **owner**, used only by the schema update (``migrate``);
-- an **application user** for the backend that owns nothing and may
+- the **owner**, used only by the schema update (``adriano migrate``);
+- an **application user** for Adriano that owns nothing and may
   only add to the approval history.
 
 Create the application user once, as the owner:
@@ -122,13 +125,15 @@ Create the application user once, as the owner:
      ON source_registration, record, intake_run TO adriano_app;
    GRANT SELECT, INSERT ON revision, decision_event TO adriano_app;
 
-Then give the backend the application user and ``migrate`` the owner
-(see :ref:`operator/install:Using your own PostgreSQL` for how to set
-different addresses per service).
+Then give the running container the application user, set
+:envvar:`ADRIANO_MIGRATE_ON_START` to ``false`` and run
+``adriano migrate`` with the owner's :envvar:`ADRIANO_DATABASE_URL`
+(on Kubernetes, give the ``migrate`` init container a Secret with the
+owner's address; on Compose, see :doc:`deploy/docker-compose`).
 Re-check the grants after every upgrade:
 a table added by a new release needs its own grant,
 and a missing one shows up as ``permission denied`` errors in the
-backend log.
+application log.
 
 Even then, the database is not cryptographic evidence:
 a database administrator can still rewrite history,
