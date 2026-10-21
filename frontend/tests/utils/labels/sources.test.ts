@@ -11,9 +11,11 @@ import {
   configErrorLabel,
   pollProblemLabel,
   pollStatusLabel,
+  recoveryHint,
   staleStatusText,
 } from "@/utils/labels";
 import type { ConfigErrorCode, PollStatus } from "@/types/sources";
+import type { SourceProblemDisplay } from "@/utils/sourceErrors";
 
 describe("pollStatusLabel", () => {
   it.each([
@@ -112,5 +114,105 @@ describe("configErrorLabel", () => {
 
   it("returns null when the backend sent no code", () => {
     expect(configErrorLabel(null)).toBeNull();
+  });
+});
+
+describe("recoveryHint", () => {
+  const configCodes: ConfigErrorCode[] = [
+    "invalid_settings",
+    "unknown_type",
+    "type_unavailable",
+    "invalid_published_ref",
+    "token_env_missing",
+    "removed_from_config",
+    "other",
+  ];
+
+  it.each(configCodes)(
+    "gives a non-empty hint for every config error code: %s",
+    (code) => {
+      const problem: SourceProblemDisplay = { kind: "config", code, text: "x" };
+      expect(recoveryHint(problem, "gitlab")?.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("never tells the operator to check a token env var for " +
+    "removed_from_config", () => {
+    const problem: SourceProblemDisplay = {
+      kind: "config",
+      code: "removed_from_config",
+      text: "x",
+    };
+    const hint = recoveryHint(problem, "gitlab");
+    expect(hint).not.toContain("token env var");
+    expect(hint).toContain("catalog.yaml");
+  });
+
+  it("mentions the token env var only for token_env_missing", () => {
+    const problem: SourceProblemDisplay = {
+      kind: "config",
+      code: "token_env_missing",
+      text: "x",
+    };
+    expect(recoveryHint(problem, "gitlab")).toContain(
+      "access token's environment variable",
+    );
+  });
+
+  it("falls back to a source-type hint for an unrecognised config " +
+    "code (null)", () => {
+    const problem: SourceProblemDisplay = {
+      kind: "config",
+      code: null,
+      text: "x",
+    };
+    expect(recoveryHint(problem, "gitlab")).toContain("catalog.yaml");
+  });
+
+  it("gives a non-empty hint for every known poll-problem code, " +
+    "except not_pollable which needs no fix", () => {
+    const codes = [
+      "source_error",
+      "internal_error",
+      "projects_incomplete",
+      "listing_failed",
+      "listing_incomplete",
+      "fetch_failed",
+      "ownership_conflict",
+    ];
+    for (const code of codes) {
+      const problem: SourceProblemDisplay = {
+        kind: "list",
+        items: [{ code, message: "x" }],
+      };
+      expect(recoveryHint(problem, "gitlab")?.length).toBeGreaterThan(0);
+    }
+
+    const notPollable: SourceProblemDisplay = {
+      kind: "list",
+      items: [{ code: "not_pollable", message: "x" }],
+    };
+    expect(recoveryHint(notPollable, "gitlab")).toBeNull();
+  });
+
+  it("falls back to a source-type hint for an unrecognised " +
+    "poll-problem code", () => {
+    const problem: SourceProblemDisplay = {
+      kind: "list",
+      items: [{ code: "some_future_code", message: "x" }],
+    };
+    expect(recoveryHint(problem, "filesystem")).toContain("root path");
+  });
+
+  it("falls back to a source-type hint for a text-kind problem " +
+    "with no code at all", () => {
+    const problem: SourceProblemDisplay = { kind: "text", text: "x" };
+    expect(recoveryHint(problem, "filesystem")).toContain("root path");
+    expect(recoveryHint(problem, "gitlab")).toContain("token env var");
+  });
+
+  it("recommends nothing for a healthy row", () => {
+    const problem: SourceProblemDisplay = { kind: "none" };
+    expect(recoveryHint(problem, "gitlab")).toBeNull();
   });
 });

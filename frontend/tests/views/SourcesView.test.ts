@@ -8,8 +8,14 @@
  * default-size "Poll now", the problem/recovery sub-row, the
  * tooltip/screen-reader-accessible absolute dates, and the "Only
  * operators…" hint sitting below the table rather than above it.
+ * Also covers the Batch A4 follow-up (P11-R-11/R-21): the Type/
+ * Intake/Published-ref columns folding into the Registration cell
+ * below the `sm` breakpoint so the Action column stays reachable
+ * without horizontal scroll, and the date tooltips becoming
+ * keyboard-focusable.
  */
 import { flushPromises, mount } from "@vue/test-utils";
+import { ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api";
@@ -32,6 +38,19 @@ vi.mock("@/api/sources", () => ({
 vi.mock("@/composables/useAuth", () => ({
   useAuth: () => ({ can: (permission: string) => permission === "operate" && canOperate }),
 }));
+
+// `SourcesView.vue` reads the breakpoint via Vuetify's `useDisplay()`,
+// which under jsdom always resolves against a real `window` size
+// rather than anything a test can easily resize (same approach as
+// `tests/App.test.ts`). Mock only `useDisplay` on the "vuetify"
+// package entry and drive it with a plain ref the narrow-width tests
+// below can flip; every other test leaves it `false`, matching the
+// default (wide) jsdom viewport.
+const smAndDownRef = ref(false);
+vi.mock("vuetify", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("vuetify")>();
+  return { ...actual, useDisplay: () => ({ smAndDown: smAndDownRef }) };
+});
 
 const baseSource: SourceOut = {
   id: "central",
@@ -62,6 +81,7 @@ async function mountView() {
 describe("SourcesView", () => {
   beforeEach(() => {
     canOperate = true;
+    smAndDownRef.value = false;
     listSources.mockReset();
     pollAllSources.mockReset();
     pollSource.mockReset();
@@ -361,5 +381,92 @@ describe("SourcesView", () => {
     const hintIndex = html.indexOf("Only operators can trigger polling");
     expect(tableIndex).toBeGreaterThan(-1);
     expect(hintIndex).toBeGreaterThan(tableIndex);
+  });
+
+  it("makes the date-tooltip spans keyboard-focusable (P11-R-21)", async () => {
+    listSources.mockResolvedValue([
+      { ...baseSource, last_attempt_at: "2026-01-01T00:00:00Z" },
+    ]);
+    const wrapper = await mountView();
+
+    const activator = wrapper.find(".date-tooltip-activator");
+    expect(activator.exists()).toBe(true);
+    expect(activator.attributes("tabindex")).toBe("0");
+  });
+
+  it(
+    "no longer wraps the table in a redundant scroll div (P11-R-10)",
+    async () => {
+      listSources.mockResolvedValue([baseSource]);
+      const wrapper = await mountView();
+
+      expect(wrapper.find(".sources-table-scroll").exists()).toBe(false);
+    },
+  );
+
+  it("folds Type/Intake/Published ref into the Registration cell and " +
+    "keeps Action reachable below the sm breakpoint (P11-R-11)", async () => {
+    smAndDownRef.value = true;
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        type: "filesystem",
+        intake: ["poll"],
+        published_ref: "local",
+      },
+    ]);
+    const wrapper = await mountView();
+
+    const headers = wrapper.findAll("th[scope='col']").map((h) => h.text());
+    expect(headers).not.toContain("Type");
+    expect(headers).not.toContain("Intake");
+    expect(headers).not.toContain("Published ref");
+    expect(headers).toContain("Registration");
+    expect(headers).toContain("Status");
+
+    const registrationCell = wrapper.find("th[scope='row']");
+    expect(registrationCell.text()).toContain("filesystem");
+    expect(registrationCell.text()).toContain("poll");
+    expect(registrationCell.text()).toContain("local");
+
+    const pollNowButton = wrapper
+      .findAll("button")
+      .find((btn) => btn.text().includes("Poll now"));
+    expect(pollNowButton).toBeDefined();
+    expect(pollNowButton!.exists()).toBe(true);
+  });
+
+  it("shows the normal Type/Intake/Published ref columns at md " +
+    "and up", async () => {
+    smAndDownRef.value = false;
+    listSources.mockResolvedValue([baseSource]);
+    const wrapper = await mountView();
+
+    const headers = wrapper.findAll("th[scope='col']").map((h) => h.text());
+    expect(headers).toContain("Type");
+    expect(headers).toContain("Intake");
+    expect(headers).toContain("Published ref");
+  });
+
+  it("spans the problem sub-row across every visible column when " +
+    "columns are folded (sm)", async () => {
+    smAndDownRef.value = true;
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        last_status: "failed",
+        stale: false,
+        last_error: {
+          problems: [{ code: "source_error", message: "fake source is down" }],
+        },
+      },
+    ]);
+    const wrapper = await mountView();
+
+    const rows = wrapper.findAll("tbody > tr");
+    expect(rows.length).toBe(2);
+    const subRowCell = rows[1].find("td");
+    // Registration, Status, Last attempt, Last success, Action.
+    expect(subRowCell.attributes("colspan")).toBe("5");
   });
 });

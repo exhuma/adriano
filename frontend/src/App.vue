@@ -343,11 +343,16 @@ async function handleSignOut(): Promise<void> {
    four everywhere in the app; unscoped because it has to reach
    markup rendered by other components, not just this file's own
    template (text fields/selects already show a border change on
-   focus, and the app uses no tabs component, so neither needs this). */
+   focus, and the app uses no tabs component, so neither needs this).
+   `.date-tooltip-activator` (SourcesView's relative-date spans, made
+   focusable with `tabindex="0"` so keyboard users can reveal the
+   absolute date in their `v-tooltip`, P11-R-21) is a plain `<span>`,
+   not a Vuetify component, so it needs the same treatment. */
 .v-btn:focus-visible,
 .v-chip__close:focus-visible,
 .v-list-item:focus-visible,
-.v-chip--link:focus-visible {
+.v-chip--link:focus-visible,
+.date-tooltip-activator:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
 }

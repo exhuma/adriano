@@ -1,11 +1,13 @@
 /**
  * Source/registration view-model helpers: the poll-status chip, its
- * secondary staleness text, and plain-language headlines for poll
- * problems and source configuration errors (operator-only detail;
- * decision 3, Task 8). Split from the former `utils/labels.ts` by
+ * secondary staleness text, plain-language headlines for poll
+ * problems and source configuration errors, and a per-problem
+ * recovery hint (operator-only detail; decision 3, Task 8; Batch A4
+ * follow-up for the hint). Split from the former `utils/labels.ts` by
  * domain (module-code-structure-limits); see `index.ts`.
  */
 import type { ConfigErrorCode, PollStatus } from "@/types/sources";
+import type { SourceProblemDisplay } from "@/utils/sourceErrors";
 
 import type { StatusLabel } from "./shared";
 
@@ -141,4 +143,114 @@ export function configErrorLabel(code: ConfigErrorCode | null): string | null {
     return null;
   }
   return CONFIG_ERROR_HEADLINES[code] ?? null;
+}
+
+/**
+ * Per-config-error-code next step for an operator (Batch B/A4
+ * follow-up to R-10): the generic per-source-type sentence this
+ * replaced ("check the token env var, base_url, and scope...") was
+ * wrong for codes that have nothing to do with it -- most sharply
+ * `removed_from_config`, where there is no catalog.yaml entry left to
+ * check at all, and `invalid_published_ref`, where the token is fine
+ * but the ref setting is not.
+ */
+const CONFIG_ERROR_HINTS: Record<ConfigErrorCode, string> = {
+  invalid_settings:
+    "Fix this registration's settings in catalog.yaml, then restart " +
+    "the backend.",
+  unknown_type:
+    "Set this registration's type to one the backend supports " +
+    "(filesystem or gitlab) in catalog.yaml, then restart the backend.",
+  type_unavailable:
+    "Deploy a backend build that supports this source type, or change " +
+    "the registration's type in catalog.yaml, then restart the backend.",
+  invalid_published_ref:
+    "Fix this registration's published_ref in catalog.yaml, then " +
+    "restart the backend.",
+  token_env_missing:
+    "Set the access token's environment variable, then restart the " +
+    "backend.",
+  removed_from_config:
+    "This registration is no longer in catalog.yaml. Restore it " +
+    "there if it should keep polling; otherwise, no action is needed.",
+  other:
+    "Check this registration's settings in catalog.yaml, then restart " +
+    "the backend.",
+};
+
+/**
+ * Per-poll-problem-code next step for an operator, keyed the same way
+ * as {@link pollProblemLabel}. `null` means the code describes an
+ * outcome rather than something to fix (`not_pollable`: there is
+ * nothing wrong with the registration, it simply cannot be polled).
+ */
+const POLL_PROBLEM_HINTS: Record<string, string | null> = {
+  source_error:
+    "Check connectivity to the source and the credentials or path in " +
+    "catalog.yaml, then poll again.",
+  internal_error: "Check the backend logs, then poll again.",
+  projects_incomplete:
+    "Poll again; if it keeps happening, check the source's rate " +
+    "limits or permissions.",
+  listing_failed:
+    "Check the path and permissions for this project in catalog.yaml, " +
+    "then poll again.",
+  listing_incomplete:
+    "Poll again; if it keeps happening, check the source's rate " +
+    "limits or permissions.",
+  fetch_failed:
+    "Poll again; if it keeps failing, check whether the file still " +
+    "exists at that path and ref.",
+  ownership_conflict:
+    "Remove the overlapping scope from one of the registrations in " +
+    "catalog.yaml.",
+  not_pollable: null,
+};
+
+/** Fallback next step when no stable code names a more specific one
+ *  (an unrecognised code, or a `text`-kind problem with no code at
+ *  all) -- the sentence this whole function replaces as the default,
+ *  kept only as a last resort. */
+const GENERIC_SOURCE_TYPE_HINTS: Record<string, string> = {
+  gitlab:
+    "Check the token env var, base_url, and scope in catalog.yaml, " +
+    "then poll again.",
+  filesystem:
+    "Check the root path and scope in catalog.yaml, then poll again.",
+};
+
+/**
+ * A concrete next step for the operator, tailored to the specific
+ * problem rather than one generic per-source-type sentence
+ * (docs/ui-review R-10; Batch B/A4 follow-up). Codes that carry no
+ * useful specific advice (an unrecognised code, a `text`-kind problem
+ * with none at all) fall back to the source type, same as before.
+ *
+ * :param problem: The row's problem display.
+ * :param sourceType: The registration's source type (`"gitlab"`,
+ *     `"filesystem"`), used only as the last-resort fallback.
+ * :returns: A next step, or `null` when there is nothing to
+ *     recommend (a healthy row, or `not_pollable`).
+ */
+export function recoveryHint(
+  problem: SourceProblemDisplay,
+  sourceType: string,
+): string | null {
+  if (problem.kind === "config") {
+    return CONFIG_ERROR_HINTS[problem.code ?? "other"] ??
+      GENERIC_SOURCE_TYPE_HINTS[sourceType] ?? null;
+  }
+  if (problem.kind === "list") {
+    for (const item of problem.items) {
+      const hint = POLL_PROBLEM_HINTS[item.code ?? ""];
+      if (hint !== undefined) {
+        return hint;
+      }
+    }
+    return GENERIC_SOURCE_TYPE_HINTS[sourceType] ?? null;
+  }
+  if (problem.kind === "text") {
+    return GENERIC_SOURCE_TYPE_HINTS[sourceType] ?? null;
+  }
+  return null;
 }

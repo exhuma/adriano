@@ -50,6 +50,7 @@ export {
   configErrorLabel,
   pollProblemLabel,
   pollStatusLabel,
+  recoveryHint,
   staleStatusText,
 } from "./sources";
 

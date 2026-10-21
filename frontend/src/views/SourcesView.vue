@@ -13,6 +13,7 @@
  * status and dates only (phases/11-ui-ux-updates.md decision 3).
  */
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { useDisplay } from "vuetify";
 
 import { ApiError } from "@/api";
 import { listSources, pollAllSources, pollSource } from "@/api/sources";
@@ -25,13 +26,28 @@ import { withLoading } from "@/composables/useLoading";
 import type { SourceOut } from "@/types/sources";
 import { formatDateTime, formatRelativeTime } from "@/utils/dates";
 import { errorDetail, forbiddenText, isForbidden } from "@/utils/apiErrors";
-import { pollStatusLabel, staleStatusText, type StatusLabel } from "@/utils/labels";
+import {
+  pollStatusLabel,
+  recoveryHint,
+  staleStatusText,
+  type StatusLabel,
+} from "@/utils/labels";
 import { describeLastError, type SourceProblemDisplay } from "@/utils/sourceErrors";
 
 type LoadState = "loading" | "loaded" | "error";
 
 const { can } = useAuth();
 const canOperate = computed(() => can("operate"));
+
+// Vuetify display breakpoints (step 4 of the "Vuetify first" ladder),
+// not a custom media query: at `smAndDown` (<960px -- the 200%-zoom
+// review viewport of 683 CSS px falls in `sm`) the Type/Intake/
+// Published-ref columns fold into the Registration cell as secondary
+// text instead of their own columns, so the row's remaining columns
+// (Registration, Status, Last attempt, Last success, and an
+// operator's Action) fit without the table ever needing to scroll
+// horizontally to reach "Poll now" (P11-R-11).
+const { smAndDown } = useDisplay();
 
 const loadState = ref<LoadState>("loading");
 const errorText = ref<string | null>(null);
@@ -181,15 +197,21 @@ function problemDisplay(source: SourceOut): SourceProblemDisplay {
   return describeLastError(source.last_error);
 }
 
-/** A concrete next step for the operator, or `null` when healthy. */
-function recoveryHint(source: SourceOut, problem: SourceProblemDisplay): string | null {
+/** A concrete next step for the operator, or `null` when healthy.
+ *  Tailored per problem code (`recoveryHint` in `utils/labels/sources
+ *  .ts`), not a single per-source-type sentence: that generic text
+ *  used to recommend checking a token env var even for e.g.
+ *  `removed_from_config`, which has no catalog.yaml entry left to
+ *  check at all (Batch B follow-up to Task 8/R-10). */
+function nextStep(
+  source: SourceOut,
+  problem: SourceProblemDisplay,
+): string | null {
   const hasProblem = problem.kind !== "none";
   if (!hasProblem && source.last_status !== "failed" && source.last_status !== "partial") {
     return null;
   }
-  return source.type === "gitlab"
-    ? "Check the token env var, base_url, and scope in catalog.yaml, then poll again."
-    : "Check the root path and scope in catalog.yaml, then poll again.";
+  return recoveryHint(problem, source.type);
 }
 
 /** Resolve the display-ready fields for one registration row once,
@@ -197,7 +219,7 @@ function recoveryHint(source: SourceOut, problem: SourceProblemDisplay): string 
  *  the recursive `JsonValue` type of `last_error` itself). */
 function toRow(source: SourceOut): SourceRow {
   const problem = problemDisplay(source);
-  const hint = recoveryHint(source, problem);
+  const hint = nextStep(source, problem);
   return {
     id: source.id,
     type: source.type,
@@ -227,11 +249,14 @@ function toRow(source: SourceOut): SourceRow {
 
 const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
 
-// Registration, Type, Intake, Published ref, Status, Last attempt,
-// Last success, plus Action for an operator -- used as the problem
-// sub-row's `colspan` so it always spans every visible column
+// Registration, Status, Last attempt, Last success are always their
+// own columns; Type/Intake/Published ref fold into Registration below
+// `sm` (P11-R-11); Action is an operator's own column. Used as the
+// problem sub-row's `colspan` so it always spans every visible column
 // (docs/ui-review O-03).
-const columnCount = computed(() => (canOperate.value ? 8 : 7));
+const columnCount = computed(
+  () => 4 + (smAndDown.value ? 0 : 3) + (canOperate.value ? 1 : 0),
+);
 </script>
 
 <template>
@@ -263,20 +288,32 @@ const columnCount = computed(() => (canOperate.value ? 8 : 7));
     />
 
     <template v-else>
-      <div v-if="rows.length > 0" class="sources-table-scroll">
+      <div v-if="rows.length > 0">
         <v-table>
           <thead>
             <tr>
               <th scope="col" class="text-label-large text-medium-emphasis">
                 Registration
               </th>
-              <th scope="col" class="text-label-large text-medium-emphasis">
+              <th
+                v-if="!smAndDown"
+                scope="col"
+                class="text-label-large text-medium-emphasis"
+              >
                 Type
               </th>
-              <th scope="col" class="text-label-large text-medium-emphasis">
+              <th
+                v-if="!smAndDown"
+                scope="col"
+                class="text-label-large text-medium-emphasis"
+              >
                 Intake
               </th>
-              <th scope="col" class="text-label-large text-medium-emphasis">
+              <th
+                v-if="!smAndDown"
+                scope="col"
+                class="text-label-large text-medium-emphasis"
+              >
                 Published ref
               </th>
               <th scope="col" class="text-label-large text-medium-emphasis">
@@ -300,10 +337,22 @@ const columnCount = computed(() => (canOperate.value ? 8 : 7));
           <tbody>
             <template v-for="row in rows" :key="row.id">
               <tr>
-                <th scope="row">{{ row.id }}</th>
-                <td>{{ row.type }}</td>
-                <td>{{ row.intake }}</td>
-                <td>{{ row.publishedRef }}</td>
+                <th scope="row">
+                  {{ row.id }}
+                  <div
+                    v-if="smAndDown"
+                    class="text-body-small text-medium-emphasis"
+                  >
+                    {{
+                      [row.type, row.intake, row.publishedRef]
+                        .filter((part) => part)
+                        .join(" · ")
+                    }}
+                  </div>
+                </th>
+                <td v-if="!smAndDown">{{ row.type }}</td>
+                <td v-if="!smAndDown">{{ row.intake }}</td>
+                <td v-if="!smAndDown">{{ row.publishedRef }}</td>
                 <td>
                   <StatusChip v-bind="row.statusLabel" />
                   <div
@@ -314,7 +363,11 @@ const columnCount = computed(() => (canOperate.value ? 8 : 7));
                   </div>
                 </td>
                 <td>
-                  <span v-if="row.lastAttempt">
+                  <span
+                    v-if="row.lastAttempt"
+                    tabindex="0"
+                    class="date-tooltip-activator"
+                  >
                     {{ row.lastAttempt.relative }}
                     <span class="d-sr-only">
                       ({{ row.lastAttempt.absolute }})
@@ -328,7 +381,11 @@ const columnCount = computed(() => (canOperate.value ? 8 : 7));
                   <span v-else>Never</span>
                 </td>
                 <td>
-                  <span v-if="row.lastSuccess">
+                  <span
+                    v-if="row.lastSuccess"
+                    tabindex="0"
+                    class="date-tooltip-activator"
+                  >
                     {{ row.lastSuccess.relative }}
                     <span class="d-sr-only">
                       ({{ row.lastSuccess.absolute }})
@@ -407,12 +464,11 @@ const columnCount = computed(() => (canOperate.value ? 8 : 7));
   </section>
 </template>
 
-<style scoped>
-/* Scroll horizontally inside the table's own container, never the
- * page, so a wide table (long registration ids, many columns) never
- * causes page-level horizontal scroll and never clips the trailing
- * Action column (module-ux-principles accessibility; audit S3). */
-.sources-table-scroll {
-  overflow-x: auto;
-}
-</style>
+<!-- No local <style> block: `v-table`'s own `.v-table__wrapper` already
+     scrolls horizontally (`overflow: auto` in Vuetify's VTable.css), so
+     the formerly-added `.sources-table-scroll` wrapper only duplicated
+     that scroll container without changing behaviour (P11-R-10). The
+     `smAndDown` column fold above keeps every column, including the
+     operator's Action button, reachable without any horizontal scroll
+     at the 200%-zoom width that prompted it (P11-R-11); the table's
+     built-in scroll remains the fallback for any still-wider content. -->

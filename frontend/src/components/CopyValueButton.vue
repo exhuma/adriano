@@ -7,8 +7,16 @@
  * copy behaviour has one implementation. Its focus-visible ring
  * comes from `App.vue`'s app-wide `.v-btn:focus-visible` rule
  * (P11-R-04), not a local style here.
+ *
+ * The visible "Copied!" text alone is not announced to assistive
+ * tech (P11-R-21): a `v-if`-toggled node carries no `aria-live`, and
+ * even if it did, a live region usually has to already exist in the
+ * DOM before its text changes to be picked up reliably. A permanent,
+ * screen-reader-only `aria-live="polite"` region carries the
+ * announcement instead; the visible text stays `aria-hidden` so nothing
+ * is announced twice.
  */
-import { ref } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 
 const props = defineProps<{
   /** Exact value written to the clipboard. */
@@ -19,20 +27,44 @@ const props = defineProps<{
 }>();
 
 const copied = ref(false);
+/** Text of the screen-reader-only live region; empty outside the
+ *  "just copied" window so the next copy -- even of the same value --
+ *  is still a change assistive tech picks up. */
+const liveMessage = ref("");
+let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Copy `value`, with a brief "Copied!" note on success. */
+/** Clear any pending "hide the confirmation" timer. Idempotent, so
+ *  it is safe to call both before starting a new timer and on
+ *  unmount. */
+function clearHideTimer(): void {
+  if (hideTimer !== null) {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+  }
+}
+
+/** Copy `value`, with a brief "Copied!" note on success, announced
+ *  through the live region. */
 async function copy(): Promise<void> {
   try {
     await navigator.clipboard.writeText(props.value);
     copied.value = true;
-    setTimeout(() => {
+    liveMessage.value = `${props.label} copied to clipboard.`;
+    clearHideTimer();
+    hideTimer = setTimeout(() => {
       copied.value = false;
+      liveMessage.value = "";
+      hideTimer = null;
     }, 2000);
   } catch {
     // Clipboard API unavailable (e.g. insecure context); the value
     // is already visible or in a tooltip, so this is a soft failure.
   }
 }
+
+// A pending timer otherwise fires after the component is gone,
+// touching refs nothing reads any more (P11-R-21).
+onBeforeUnmount(clearHideTimer);
 </script>
 
 <template>
@@ -47,6 +79,9 @@ async function copy(): Promise<void> {
       "
       @click="copy"
     />
-    <span v-if="copied" class="text-success">Copied!</span>
+    <span v-if="copied" class="text-success" aria-hidden="true">Copied!</span>
+    <span class="d-sr-only" role="status" aria-live="polite">
+      {{ liveMessage }}
+    </span>
   </span>
 </template>
