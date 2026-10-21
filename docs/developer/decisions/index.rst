@@ -34,3 +34,4 @@ the status line then says which entry supersedes it.
    0017-vuetify-first
    0018-read-time-relationship-issues
    0019-approval-state-derived-on-read
+   0020-single-image
