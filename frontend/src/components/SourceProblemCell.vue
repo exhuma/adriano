@@ -2,8 +2,12 @@
 /**
  * One Sources-table cell: a registration's problem (readable text or
  * a list, never raw JSON -- audit finding S3) plus its recovery
- * hint. Extracted from `SourcesView.vue` to keep that view within
- * the component-size target.
+ * hint. Rendered by `SourcesView.vue` inside a full-width sub-row
+ * under a failing registration, not a dedicated table column
+ * (docs/ui-review O-03: a far-right "Problem & recovery" column was
+ * the one most likely to be scrolled out of view, and the operator
+ * needs it most). Extracted to keep that view within the
+ * component-size target.
  *
  * Each `list`-kind item's stable `code`, when recognised, is shown
  * as a plain-language headline (docs/ui-review R-10) with the

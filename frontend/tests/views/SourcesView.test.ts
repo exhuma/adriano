@@ -3,12 +3,17 @@
  * `operate` permission (otherwise a short explanation), that a
  * successful poll shows a snackbar and refreshes the status a few
  * times, and that poll/list errors (403/404/409) are shown with
- * actionable text.
+ * actionable text. Also covers the docs/ui-review O-01/O-02/O-03/O-04
+ * fixes: one status chip per row with staleness as secondary text, a
+ * default-size "Poll now", the problem/recovery sub-row, the
+ * tooltip/screen-reader-accessible absolute dates, and the "Only
+ * operators…" hint sitting below the table rather than above it.
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api";
+import StatusChip from "@/components/StatusChip.vue";
 import vuetify from "@/plugins/vuetify";
 import SourcesView from "@/views/SourcesView.vue";
 import type { SourceOut } from "@/types/sources";
@@ -235,5 +240,86 @@ describe("SourcesView", () => {
 
     resolvePoll({ accepted: ["central"], message: "Poll started for central" });
     await flushPromises();
+  });
+
+  it("shows exactly one status chip per row, with staleness as " +
+    "secondary text rather than a second chip (O-01)", async () => {
+    listSources.mockResolvedValue([
+      { ...baseSource, enabled: false, last_status: "disabled", stale: true },
+    ]);
+    const wrapper = await mountView();
+
+    expect(wrapper.findAllComponents(StatusChip)).toHaveLength(1);
+    const chipText = wrapper.findComponent(StatusChip).text();
+    expect(chipText).toBe("Disabled");
+    expect(chipText).not.toContain("stale");
+    expect(wrapper.text()).toContain("Stale");
+  });
+
+  it("renders the problem/recovery detail as a full-width sub-row " +
+    "under the failing source, not a same-row column (O-03)", async () => {
+    listSources.mockResolvedValue([
+      {
+        ...baseSource,
+        last_status: "failed",
+        stale: false,
+        last_error: {
+          problems: [{ code: "source_error", message: "fake source is down" }],
+        },
+      },
+    ]);
+    const wrapper = await mountView();
+
+    const rows = wrapper.findAll("tbody > tr");
+    expect(rows.length).toBe(2);
+    expect(rows[0].text()).not.toContain("fake source is down");
+    expect(rows[1].text()).toContain("fake source is down");
+    const subRowCell = rows[1].find("td");
+    expect(subRowCell.attributes("colspan")).toBe("8");
+  });
+
+  it("does not add a problem sub-row for a healthy source", async () => {
+    listSources.mockResolvedValue([baseSource]);
+    const wrapper = await mountView();
+
+    expect(wrapper.findAll("tbody > tr")).toHaveLength(1);
+  });
+
+  it("shows the absolute date in a tooltip and to screen readers, " +
+    "not as a second visible line (O-03)", async () => {
+    listSources.mockResolvedValue([
+      { ...baseSource, last_attempt_at: "2026-01-01T00:00:00Z" },
+    ]);
+    const wrapper = await mountView();
+
+    const srOnly = wrapper.find(".d-sr-only");
+    expect(srOnly.exists()).toBe(true);
+    expect(srOnly.text()).toContain("2026");
+    const tooltip = wrapper.findComponent({ name: "VTooltip" });
+    expect(tooltip.exists()).toBe(true);
+    expect(tooltip.props("text")).toContain("2026");
+  });
+
+  it("renders Poll now at the default size with the primary colour (O-02)", async () => {
+    listSources.mockResolvedValue([baseSource]);
+    const wrapper = await mountView();
+
+    const pollNowButton = wrapper
+      .findAllComponents({ name: "VBtn" })
+      .find((btn) => btn.text().includes("Poll now"));
+    expect(pollNowButton!.props("size")).toBe("default");
+    expect(pollNowButton!.props("color")).toBe("primary");
+  });
+
+  it("shows the operator hint below the table, not above it (O-04)", async () => {
+    canOperate = false;
+    listSources.mockResolvedValue([baseSource]);
+    const wrapper = await mountView();
+
+    const html = wrapper.html();
+    const tableIndex = html.indexOf("Registration");
+    const hintIndex = html.indexOf("Only operators can trigger polling");
+    expect(tableIndex).toBeGreaterThan(-1);
+    expect(hintIndex).toBeGreaterThan(tableIndex);
   });
 });

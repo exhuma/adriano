@@ -561,10 +561,19 @@ export function searchErratumStatusLabel(
 /**
  * Describe a registration's last poll outcome for display.
  *
+ * Staleness is *not* folded into this chip's text (docs/ui-review
+ * O-01: a stale, disabled registration used to render "Disabled
+ * (stale)" here, plus a second, fully redundant "Disabled" chip
+ * derived from the raw `enabled` flag next to it -- two chips for
+ * one state). The icon and colour still shift to the stale pair so
+ * the chip alone is never ambiguous for someone going by icon/colour
+ * only; the word itself is carried by {@link staleStatusText} as
+ * secondary text next to the chip, not a second chip.
+ *
  * :param status: Outcome of the latest poll.
  * :param stale: Whether freshness has crossed the configured
  *     threshold (or the registration is disabled/never succeeded).
- * :returns: Icon, label text, and colour.
+ * :returns: Icon, label text, and colour -- one chip's worth.
  */
 export function pollStatusLabel(status: PollStatus, stale: boolean): StatusLabel {
   const base = ((): StatusLabel => {
@@ -584,9 +593,27 @@ export function pollStatusLabel(status: PollStatus, stale: boolean): StatusLabel
     }
   })();
   if (stale && status !== "failed") {
-    return { icon: "mdi-clock-alert-outline", text: `${base.text} (stale)`, color: "warning" };
+    return { ...base, icon: "mdi-clock-alert-outline", color: "warning" };
   }
   return base;
+}
+
+/**
+ * Secondary, muted text reporting staleness next to a registration's
+ * status chip (docs/ui-review O-01), instead of a second chip or a
+ * suffix folded into the status chip's own text.
+ *
+ * :param status: Outcome of the latest poll.
+ * :param stale: Whether freshness has crossed the configured
+ *     threshold.
+ * :returns: A short note, or `null` when there is nothing to add (not
+ *     stale, or a failed poll already explains the age).
+ */
+export function staleStatusText(status: PollStatus, stale: boolean): string | null {
+  if (!stale || status === "failed") {
+    return null;
+  }
+  return "Stale — past the freshness threshold.";
 }
 
 /**

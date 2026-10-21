@@ -5,12 +5,12 @@
  *
  * "Poll all" and per-row "Poll now" are shown only to callers with
  * the `operate` permission (`useAuth().can("operate")`); everyone
- * else sees a short note naming who can poll instead of a disabled,
- * unexplained control (module-ux-principles "Write recovery messages
- * for humans"). The same permission gates the problem/recovery
- * column's content (env-var names, recovery steps -- `SourceProblemCell`'s
- * `canOperate` prop): a reader sees status and dates only
- * (phases/11-ui-ux-updates.md decision 3).
+ * else sees a short note, below the table, naming who can poll
+ * instead of a disabled, unexplained control (module-ux-principles
+ * "Write recovery messages for humans"). The same permission gates
+ * the problem/recovery sub-row's content (env-var names, recovery
+ * steps -- `SourceProblemCell`'s `canOperate` prop): a reader sees
+ * status and dates only (phases/11-ui-ux-updates.md decision 3).
  */
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 
@@ -25,7 +25,7 @@ import { withLoading } from "@/composables/useLoading";
 import type { SourceOut } from "@/types/sources";
 import { formatDateTime, formatRelativeTime } from "@/utils/dates";
 import { errorDetail, forbiddenText, isForbidden } from "@/utils/apiErrors";
-import { pollStatusLabel, type StatusLabel } from "@/utils/labels";
+import { pollStatusLabel, staleStatusText, type StatusLabel } from "@/utils/labels";
 import { describeLastError, type SourceProblemDisplay } from "@/utils/sourceErrors";
 
 type LoadState = "loading" | "loaded" | "error";
@@ -66,10 +66,16 @@ interface SourceRow {
   enabled: boolean;
   pollable: boolean;
   statusLabel: StatusLabel;
+  /** Secondary staleness note shown next to the status chip, or
+   *  `null` -- never a second chip (docs/ui-review O-01). */
+  staleText: string | null;
   lastAttempt: { relative: string; absolute: string } | null;
   lastSuccess: { relative: string; absolute: string } | null;
   problem: SourceProblemDisplay;
   hint: string | null;
+  /** Whether this row has operator-relevant problem/recovery detail
+   *  to show as a full-width sub-row (docs/ui-review O-03). */
+  hasProblemDetail: boolean;
 }
 
 function describeError(error: unknown): string {
@@ -187,6 +193,7 @@ function recoveryHint(source: SourceOut, problem: SourceProblemDisplay): string 
  *  the recursive `JsonValue` type of `last_error` itself). */
 function toRow(source: SourceOut): SourceRow {
   const problem = problemDisplay(source);
+  const hint = recoveryHint(source, problem);
   return {
     id: source.id,
     type: source.type,
@@ -195,6 +202,7 @@ function toRow(source: SourceOut): SourceRow {
     enabled: source.enabled,
     pollable: source.enabled && source.intake.includes("poll"),
     statusLabel: pollStatusLabel(source.last_status, source.stale),
+    staleText: staleStatusText(source.last_status, source.stale),
     lastAttempt: source.last_attempt_at
       ? {
           relative: formatRelativeTime(source.last_attempt_at) ?? "",
@@ -208,16 +216,23 @@ function toRow(source: SourceOut): SourceRow {
         }
       : null,
     problem,
-    hint: recoveryHint(source, problem),
+    hint,
+    hasProblemDetail: problem.kind !== "none" || hint !== null,
   };
 }
 
 const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
+
+// Registration, Type, Intake, Published ref, Status, Last attempt,
+// Last success, plus Action for an operator -- used as the problem
+// sub-row's `colspan` so it always spans every visible column
+// (docs/ui-review O-03).
+const columnCount = computed(() => (canOperate.value ? 8 : 7));
 </script>
 
 <template>
   <section aria-labelledby="sources-heading">
-    <div class="sources-header mb-4">
+    <div class="d-flex flex-wrap align-center justify-space-between ga-3 mb-4">
       <h1 id="sources-heading" class="text-headline-medium font-weight-medium">
         Sources
       </h1>
@@ -234,11 +249,6 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
       </v-btn>
     </div>
 
-    <p v-if="!canOperate" class="text-body-medium text-medium-emphasis mb-4">
-      Only operators can trigger polling. Ask an administrator for a role
-      that grants the "operate" permission.
-    </p>
-
     <LoadingState v-if="loadState === 'loading'" text="Loading source status…" />
 
     <ErrorState
@@ -253,73 +263,114 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
         <v-table>
           <thead>
             <tr>
-              <th scope="col">Registration</th>
-              <th scope="col">Type</th>
-              <th scope="col">Intake</th>
-              <th scope="col">Published ref</th>
-              <th scope="col">Status</th>
-              <th scope="col">Last attempt</th>
-              <th scope="col">Last success</th>
-              <th scope="col" class="problem-column">Problem &amp; recovery</th>
-              <th v-if="canOperate" scope="col">Action</th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Registration
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Type
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Intake
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Published ref
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Status
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Last attempt
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Last success
+              </th>
+              <th
+                v-if="canOperate"
+                scope="col"
+                class="text-label-large text-medium-emphasis"
+              >
+                Action
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
-              <th scope="row">{{ row.id }}</th>
-              <td>{{ row.type }}</td>
-              <td>{{ row.intake }}</td>
-              <td>{{ row.publishedRef }}</td>
-              <td>
-                <StatusChip v-bind="row.statusLabel" />
-                <span v-if="!row.enabled" class="ml-2">
-                  <StatusChip icon="mdi-pause-circle-outline" text="Disabled" />
-                </span>
-              </td>
-              <td>
-                <span v-if="row.lastAttempt">
-                  {{ row.lastAttempt.relative }}
-                  <br>
-                  <span class="text-body-small text-medium-emphasis">
-                    {{ row.lastAttempt.absolute }}
+            <template v-for="row in rows" :key="row.id">
+              <tr>
+                <th scope="row">{{ row.id }}</th>
+                <td>{{ row.type }}</td>
+                <td>{{ row.intake }}</td>
+                <td>{{ row.publishedRef }}</td>
+                <td>
+                  <StatusChip v-bind="row.statusLabel" />
+                  <div
+                    v-if="row.staleText"
+                    class="text-body-small text-medium-emphasis mt-1"
+                  >
+                    {{ row.staleText }}
+                  </div>
+                </td>
+                <td>
+                  <span v-if="row.lastAttempt">
+                    {{ row.lastAttempt.relative }}
+                    <span class="d-sr-only">
+                      ({{ row.lastAttempt.absolute }})
+                    </span>
+                    <v-tooltip
+                      activator="parent"
+                      location="bottom"
+                      :text="row.lastAttempt.absolute"
+                    />
                   </span>
-                </span>
-                <span v-else>Never</span>
-              </td>
-              <td>
-                <span v-if="row.lastSuccess">
-                  {{ row.lastSuccess.relative }}
-                  <br>
-                  <span class="text-body-small text-medium-emphasis">
-                    {{ row.lastSuccess.absolute }}
+                  <span v-else>Never</span>
+                </td>
+                <td>
+                  <span v-if="row.lastSuccess">
+                    {{ row.lastSuccess.relative }}
+                    <span class="d-sr-only">
+                      ({{ row.lastSuccess.absolute }})
+                    </span>
+                    <v-tooltip
+                      activator="parent"
+                      location="bottom"
+                      :text="row.lastSuccess.absolute"
+                    />
                   </span>
-                </span>
-                <span v-else>Never</span>
-              </td>
-              <td class="problem-column">
-                <SourceProblemCell
-                  :problem="row.problem"
-                  :hint="row.hint"
-                  :can-operate="canOperate"
-                />
-              </td>
-              <td v-if="canOperate">
-                <v-btn
-                  v-if="row.pollable"
-                  size="small"
-                  variant="tonal"
-                  prepend-icon="mdi-cloud-sync-outline"
-                  :loading="pollingIds.includes(row.id)"
-                  :disabled="pollingIds.includes(row.id)"
-                  @click="pollOne(row.id)"
-                >
-                  Poll now
-                </v-btn>
-                <span v-else class="text-body-small text-medium-emphasis">
-                  Not pollable
-                </span>
-              </td>
-            </tr>
+                  <span v-else>Never</span>
+                </td>
+                <td v-if="canOperate">
+                  <v-btn
+                    v-if="row.pollable"
+                    color="primary"
+                    variant="tonal"
+                    prepend-icon="mdi-cloud-sync-outline"
+                    :loading="pollingIds.includes(row.id)"
+                    :disabled="pollingIds.includes(row.id)"
+                    @click="pollOne(row.id)"
+                  >
+                    Poll now
+                  </v-btn>
+                  <span v-else class="text-body-small text-medium-emphasis">
+                    Not pollable
+                  </span>
+                </td>
+              </tr>
+              <!-- Problem & recovery as a full-width sub-row, not a
+                   ninth column (docs/ui-review O-03): at 200% zoom the
+                   table no longer has to grow a dedicated, far-right
+                   column to show it -- the detail a failing source's
+                   operator needs most sits directly under that row
+                   instead, and healthy rows (the common case) add no
+                   row at all. -->
+              <tr v-if="canOperate && row.hasProblemDetail">
+                <td :colspan="columnCount" class="pt-0 pb-4">
+                  <SourceProblemCell
+                    :problem="row.problem"
+                    :hint="row.hint"
+                    :can-operate="canOperate"
+                  />
+                </td>
+              </tr>
+            </template>
           </tbody>
         </v-table>
       </div>
@@ -328,6 +379,15 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
         No source registrations are configured yet.
       </p>
     </template>
+
+    <p
+      v-if="!canOperate"
+      class="text-body-small text-medium-emphasis mt-4 d-flex align-center ga-1"
+    >
+      <v-icon icon="mdi-information-outline" size="16" aria-hidden="true" />
+      Only operators can trigger polling. Ask an administrator for a role
+      that grants the "operate" permission.
+    </p>
 
     <v-snackbar
       :model-value="snackbar !== null"
@@ -344,27 +404,11 @@ const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
 </template>
 
 <style scoped>
-.sources-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
 /* Scroll horizontally inside the table's own container, never the
  * page, so a wide table (long registration ids, many columns) never
  * causes page-level horizontal scroll and never clips the trailing
  * Action column (module-ux-principles accessibility; audit S3). */
 .sources-table-scroll {
   overflow-x: auto;
-}
-
-/* Bound the problem/recovery column and let its text wrap instead of
- * growing the column (and the table) without limit. */
-.problem-column {
-  max-width: 22rem;
-  white-space: normal;
-  overflow-wrap: break-word;
 }
 </style>

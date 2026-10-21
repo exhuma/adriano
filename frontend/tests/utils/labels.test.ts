@@ -27,6 +27,7 @@ import {
   searchApprovalStateLabel,
   searchErratumStatusLabel,
   searchRecordStateLabel,
+  staleStatusText,
   validationIssueText,
 } from "@/utils/labels";
 import type {
@@ -288,15 +289,35 @@ describe("pollStatusLabel", () => {
     expect(pollStatusLabel(status, false).text).toBe(expected);
   });
 
-  it("appends a stale marker for a stale non-failed status", () => {
+  it("shifts icon and colour, but not text, for a stale non-failed " +
+    "status (docs/ui-review O-01: staleness is secondary text, not a " +
+    "second chip or a suffix on this one)", () => {
     const label = pollStatusLabel("ok", true);
-    expect(label.text).toContain("stale");
+    expect(label.text).toBe("OK");
     expect(label.color).toBe("warning");
+    expect(label.icon).toBe("mdi-clock-alert-outline");
   });
 
   it("does not duplicate the failure state when stale and failed", () => {
     const label = pollStatusLabel("failed", true);
     expect(label.text).toBe("Failed");
+    expect(label.color).toBe("error");
+  });
+});
+
+describe("staleStatusText", () => {
+  it("returns null when not stale", () => {
+    expect(staleStatusText("ok", false)).toBeNull();
+  });
+
+  it("returns null for a failed poll (the chip already explains it)", () => {
+    expect(staleStatusText("failed", true)).toBeNull();
+  });
+
+  it("returns a secondary stale note for any other stale status", () => {
+    expect(staleStatusText("disabled", true)).toContain("Stale");
+    expect(staleStatusText("ok", true)).toContain("Stale");
+    expect(staleStatusText("never", true)).toContain("Stale");
   });
 });
 
