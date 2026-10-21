@@ -11,11 +11,13 @@ Adriano is a catalog for architecture decision records (ADRs).
 It collects the decisions your teams write down, wherever they keep
 them, and shows them in one searchable place.
 
-Decisions start out as candidates.
-A reviewer accepts or rejects each one, and the catalog keeps the
-history, so you can always see what was decided, by whom and when.
-Once a decision is published, it stays easy to find and easy to
-correct.
+Adriano shows both the published decisions on each team's main line
+and the candidates still proposed on a branch.
+A reviewer accepts or rejects the exact text of each one, and the
+catalog keeps that history, so you can always see what was decided,
+by whom and when.
+Errata let anyone report a correction without rewriting the
+decision.
 
 The point is trust: anyone can look up what was decided and why,
 and can tell a settled decision from a proposal that is still

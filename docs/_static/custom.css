@@ -23,3 +23,13 @@ pre.mermaid {
   border-radius: 0.25rem;
   padding: 0.5rem;
 }
+
+/*
+ * The sidebar logo is the same figure as the landing-page hero; at
+ * furo's default (full sidebar width) it dominates every page. Furo
+ * has no variable for the logo size, so it is capped here (the
+ * container prefix outranks furo's own `.sidebar-logo` rule).
+ */
+.sidebar-logo-container .sidebar-logo {
+  max-width: 6rem;
+}
