@@ -1,0 +1,25 @@
+/*
+ * Hero sizing only. Furo's theme variables cannot size a content
+ * image, so the landing-page identity image is capped here. Colours
+ * come from furo's variables (see conf.py), never from this file.
+ */
+.adriano-hero {
+  text-align: center;
+  margin: 1rem 0 2rem;
+}
+
+.adriano-hero img {
+  max-width: min(100%, 18rem);
+  height: auto;
+}
+
+/*
+ * Mermaid diagrams use one fixed Okabe-Ito theme with dark text (see
+ * conf.py). A white panel keeps them readable in furo's dark mode,
+ * which furo's colour variables cannot do for generated SVG.
+ */
+pre.mermaid {
+  background: #ffffff;
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+}

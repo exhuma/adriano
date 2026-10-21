@@ -27,6 +27,13 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.17.1",
 ]
+docs = [
+    "furo>=2024.8.6",
+    "sphinx>=8.1",
+    "sphinx-autodoc-typehints>=3.0",
+    "sphinxcontrib-mermaid>=1.0",
+    "sphinxcontrib-openapi>=0.8",
+]
 
 [build-system]
 requires = ["hatchling"]

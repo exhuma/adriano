@@ -222,6 +222,23 @@ tasks:
           --base-url http://localhost:8100 --out bench-results.json \
           {{.CLI_ARGS}}
 
+  docs:
+    desc: >-
+      Build the Sphinx documentation site into docs/_build/html
+      (warnings are errors, like in CI).
+    cmds:
+      - >-
+        uv run --project backend --group docs
+        sphinx-build -W -b html docs docs/_build/html
+
+  docs:serve:
+    desc: >-
+      Build the documentation, then serve it on
+      http://localhost:8765 (8000 is often taken).
+    deps: [docs]
+    cmds:
+      - python3 -m http.server 8765 --directory docs/_build/html
+
   lint:
     desc: Lint and format-check the backend and the frontend.
     cmds:

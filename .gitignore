@@ -24,6 +24,9 @@ frontend/dist/
 # screenshots (e.g. under docs/) out of this pattern by naming such
 # directories explicitly here when they are introduced.
 
+# Sphinx build output
+docs/_build/
+
 # Task runner checksum state (frontend:install sources/generates)
 .task/
 
