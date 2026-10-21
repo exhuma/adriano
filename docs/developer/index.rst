@@ -11,6 +11,13 @@ behind them and the reference for the backend code.
    :maxdepth: 2
    :caption: Design
 
+   architecture
+   decisions/index
+   domain/index
+   invariants
+   security
+   performance
+
 .. Guides and reference: getting started, frontend, testing,
    contributing, HTTP API, Python API.
 
