@@ -83,4 +83,5 @@ Container workers
    :envvar:`ADRIANO_WORKERS`.
    The old image started five worker processes; Adriano defaults to
    four.
-   Raise it if your traffic needs more.
+   Raise it if your traffic needs more; each worker needs memory and
+   database connections of its own.

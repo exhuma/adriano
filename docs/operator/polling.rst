@@ -14,7 +14,7 @@ Scheduling polls
 ----------------
 
 Run ``adriano poll`` on a schedule, as a one-off command next to the
-running backend.
+running container.
 Every 15 minutes is a reasonable start; set
 :envvar:`ADRIANO_STALE_AFTER_MINUTES` to a few poll intervals.
 
@@ -30,11 +30,12 @@ cron on the Docker host
 Kubernetes ``CronJob``
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Run the backend image with the command ``["adriano", "poll"]``,
+Run the Adriano image with the command ``["adriano", "poll"]``,
 with the same environment, secrets and catalog file mount as the
-backend deployment.
+Deployment.
 Set ``concurrencyPolicy: Forbid`` so a slow poll is not overlapped
 by the next one.
+The example in :doc:`deploy/kubernetes` does exactly this.
 
 Polling one registration
 ~~~~~~~~~~~~~~~~~~~~~~~~

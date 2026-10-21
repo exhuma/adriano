@@ -53,5 +53,25 @@ task demo:down           # discard it (own compose project: adriano-demo)
 Never enable the dev sign-in in production. See the
 [getting started guide](https://exhuma.github.io/adriano/developer/getting-started.html)
 for the details, and the
-[operator guide](https://exhuma.github.io/adriano/operator/install.html)
+[operator guide](https://exhuma.github.io/adriano/operator/deploy/index.html)
 for a real deployment.
+
+## Run the published image
+
+Releases are published as `ghcr.io/exhuma/adriano` (pin a full version
+such as `2026.10.1` in production). One container serves the web UI and
+the API on port 8000. It needs a PostgreSQL database, an OIDC identity
+provider and a `catalog.yaml`:
+
+```sh
+docker run --rm -p 8000:8000 \
+  -e ADRIANO_DATABASE_URL=postgresql://adriano:<password>@pg.example.com:5432/adriano \
+  -e ADRIANO_OIDC_AUTHORITY=https://idp.example.com/realms/adr \
+  -e ADRIANO_OIDC_CLIENT_ID=adriano-web \
+  -e ADRIANO_CONFIG_FILE=/etc/adriano/catalog.yaml \
+  -v "$PWD/catalog.yaml:/etc/adriano/catalog.yaml:ro" \
+  ghcr.io/exhuma/adriano:<version>
+```
+
+The [deployment guide](https://exhuma.github.io/adriano/operator/deploy/index.html)
+covers Docker Compose and Kubernetes (with example manifests).

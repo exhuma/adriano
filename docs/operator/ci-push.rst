@@ -24,14 +24,16 @@ Setting up a registration for pushes
         intake: [poll, push]
         push_tokens_env: [ADRIANO_PUSH_TOKEN_PLATFORM]
 
-#. Generate a token and add it to the backend environment
+#. Generate a token and add it to the container environment
    (:envvar:`ADRIANO_BACKEND_ENV_FILE`, ``.env`` by default):
 
    .. code-block:: sh
 
       echo "ADRIANO_PUSH_TOKEN_PLATFORM=$(openssl rand -hex 32)" >> .env
 
-#. Recreate the backend: ``docker compose up -d adriano``.
+#. Recreate the container: ``docker compose up -d adriano``
+   (Kubernetes: update the Secret, then
+   ``kubectl rollout restart deployment/adriano``).
 #. Check with ``adriano check-config``: there must be no warning
    ``push token env var ... is not set``.
 #. Store the same token as a masked, protected CI variable in the
@@ -48,9 +50,9 @@ List two variable names, so old and new token are valid at the same
 time:
 
 #. Add ``ADRIANO_PUSH_TOKEN_PLATFORM_NEXT`` to ``push_tokens_env``
-   and to the environment, then recreate the backend.
+   and to the environment, then recreate the container.
 #. Switch the CI variable to the new token.
-#. Remove the old name and its variable, then recreate the backend
+#. Remove the old name and its variable, then recreate the container
    again.
 
 The push request

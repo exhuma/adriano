@@ -7,9 +7,11 @@ The catalog file (``catalog.yaml``) says three things:
 - who may **approve** decisions (``approval_policy``),
 - what each identity-provider **role** may do (``rbac``).
 
-It is read once, when the backend starts.
-After editing it, validate it, then restart the backend
-(``docker compose restart adriano``).
+It is read once, when the container starts.
+After editing it, validate it, then restart the container
+(``docker compose restart adriano``, or
+``kubectl rollout restart deployment/adriano`` after updating the
+ConfigMap).
 Scheduled polls read it again on every run.
 
 A complete example

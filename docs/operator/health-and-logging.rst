@@ -5,22 +5,26 @@ The health endpoint
 -------------------
 
 ``GET /healthz`` needs no sign-in and returns no records or secrets.
-It is reachable through the web container
+It is reachable on the same address as the web UI
 (``https://<your Adriano address>/healthz``) and directly on the
-backend (port 8000).
+container's port 8000.
 
 .. code-block:: json
 
    {"status": "ok", "database": "ok", "config": "ok",
     "policy": "configured", "registrations": "synced",
-    "rbac": "configured", "auth": "oidc"}
+    "rbac": "configured", "auth": "oidc",
+    "version": "2026.10.1"}
 
 The HTTP status is **200** while the database is reachable and
 **503** when it is not.
 Only the database decides the HTTP status:
 configuration problems are reported in the body but keep the answer
 at 200, because restarting the container would not fix them.
-Wire probes to the HTTP status, and alert on the body fields.
+Wire readiness checks to the HTTP status, and alert on the body
+fields.
+Do not use it as a liveness check: restarting a container does not
+bring the database back.
 
 ``status``
    ``ok``, or ``degraded`` when the database is unreachable.
@@ -38,7 +42,7 @@ Wire probes to the HTTP status, and alert on the body fields.
    Whether the sources from the catalog file were stored at start-up:
    ``synced``; ``skipped`` (the catalog file could not be loaded);
    or ``failed`` (the database was unreachable at start-up).
-   The value is only updated when the backend restarts;
+   The value is only updated when the container restarts;
    restart it once the database is back (each ``adriano poll``
    stores the sources anyway).
 ``rbac``
@@ -51,25 +55,25 @@ Wire probes to the HTTP status, and alert on the body fields.
    active and **must never be seen in production**
    (see :doc:`authentication`).
 
-Any field reading ``unknown`` means the backend did not finish its
+``version``
+   The release the container runs (``dev`` for a local build).
+   Use it to confirm that a rollout reached every replica.
+
+Any field reading ``unknown`` means Adriano did not finish its
 start-up; check its log.
 
 The web UI reads the same endpoint.
-When the backend is degraded or unreachable, or the catalog file or
+When Adriano is degraded or unreachable, or the catalog file or
 approval policy has a problem, it shows a notice in the app bar.
 
-Container health checks
------------------------
+Container health check
+----------------------
 
-Both images declare a health check:
-
-``backend``
-   Calls ``/healthz`` every 10 seconds; unhealthy when it fails
-   (that is, when the database is unreachable).
-``frontend``
-   Checks that the web server answers.
-   It does not depend on the backend, so a backend outage shows in
-   ``/healthz`` rather than taking the web UI down too.
+The image declares a health check that calls ``/healthz`` every 10
+seconds; the container is unhealthy when it fails (that is, when the
+database is unreachable).
+Kubernetes ignores this check and uses probes instead; the example in
+:doc:`deploy/kubernetes` explains which probe uses which check.
 
 Check the state with ``docker compose ps`` or
 ``docker inspect --format='{{.State.Health.Status}}' <container>``.
@@ -77,8 +81,8 @@ Check the state with ``docker compose ps`` or
 Logs
 ----
 
-All services log to standard output and standard error;
-nothing is written to files inside the containers.
+The container logs to standard output and standard error;
+nothing is written to files inside the container.
 Collect them with your container platform's log driver:
 
 .. code-block:: sh

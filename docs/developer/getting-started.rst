@@ -184,14 +184,14 @@ The backend logs a warning at startup whenever the dev path is active.
 Demo stack
 ----------
 
-``task demo`` builds and starts the containerised stack (database,
-migrations, backend and a production frontend build), waits for it to
+``task demo`` builds and starts the containerised stack (the database
+and the single ``adriano`` image with the production web UI), waits for it to
 become healthy, polls the sample ADRs and prints how to sign in.
 It generates a gitignored ``.env.demo`` with dev auth enabled and a
 push token; never reuse those values outside a throwaway local demo.
 
-The stack publishes the frontend on http://localhost:8180.
-Because that frontend is a production build, it has no dev sign-in.
+The stack publishes Adriano on http://localhost:8180.
+Because that web UI is a production build, it has no dev sign-in.
 Run ``task demo:ui`` in another terminal for a Vite dev server on
 port 5180 with dev sign-in that proxies to the demo backend.
 ``task demo:poll`` re-polls the demo data and ``task demo:down``

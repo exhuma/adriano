@@ -3,7 +3,7 @@ Connecting sources
 
 A *source registration* tells Adriano where decision records live.
 There are two types: ``gitlab`` (projects on a GitLab instance) and
-``filesystem`` (a folder tree mounted into the backend).
+``filesystem`` (a folder tree mounted into the container).
 The fields every registration shares are in :doc:`catalog-file`;
 this page covers what is specific to each type.
 
@@ -77,7 +77,7 @@ choice.
 Mind its expiry date: when the token expires or is revoked, polls of
 this registration fail (HTTP 401 or 403 from GitLab) and its records
 are marked as possibly out of date until you replace the token and
-recreate the backend (``docker compose up -d adriano``).
+recreate the container (``docker compose up -d adriano``).
 
 What Adriano does with the projects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -101,7 +101,7 @@ Adriano always verifies the GitLab server's certificate;
 there is no setting to turn that off.
 If your GitLab (or identity provider) uses a certificate from an
 internal certificate authority, mount a PEM bundle that contains it
-into the backend and point :envvar:`SSL_CERT_FILE` at it.
+into the container and point :envvar:`SSL_CERT_FILE` at it.
 
 Filesystem
 ----------
@@ -129,17 +129,18 @@ Filesystem
 ``published_ref`` : required
    A free label for the published version, such as ``main``.
 
-Mount the folder read-only into the backend, for example in a
-``docker-compose.override.yml``:
+Mount the folder read-only into the container, for example in a
+``docker-compose.override.yml`` (on Kubernetes, add a volume to the
+Deployment and to the poll ``CronJob``):
 
 .. code-block:: yaml
 
    services:
-     backend:
+     adriano:
        volumes:
          - /srv/adr:/srv/adr:ro
 
-The backend runs as user ID 10001;
+The container runs as user ID 10001;
 the files must be readable by that user.
 
 What to expect:

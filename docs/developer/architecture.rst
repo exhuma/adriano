@@ -417,9 +417,10 @@ Authentication
    out (see :doc:`security`).
 
 Runtime configuration
-   The container entrypoint renders ``config.js`` from environment
-   variables (API base URL, OIDC settings) and renders the
-   Content-Security-Policy with the identity provider's origin.
+   The API process renders ``/config.js`` from its settings (OIDC
+   settings; the API is always on the same origin) and adds the
+   Content-Security-Policy with the identity provider's origin to every
+   response.
    The dev-login switch is a build-time literal and is never part of
    runtime configuration.
 
