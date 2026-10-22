@@ -29,11 +29,137 @@ export interface paths {
          *     :param runtime: Startup state of the catalog.
          *     :param settings: Application settings (auth status).
          *     :returns: A mapping with ``status``, ``database``, ``config``,
-         *         ``policy``, ``registrations``, ``rbac`` and ``auth`` keys.
+         *         ``policy``, ``registrations``, ``rbac``, ``auth`` and
+         *         ``version`` keys.
          */
         get: operations["healthz_healthz_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Login
+         * @description Start an OIDC sign-in.
+         *
+         *     :param request: The request (its origin builds the redirect URI).
+         *     :param return_to: Relative path to continue at after sign-in.
+         *     :param service: The sign-in flow.
+         *     :returns: A 302 to the IdP that sets the sign-in binding cookie.
+         */
+        get: operations["login_auth_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Callback
+         * @description Complete an OIDC sign-in.
+         *
+         *     :param request: The request (sign-in binding cookie).
+         *     :param code: Authorization code.
+         *     :param state: Sign-in state.
+         *     :param error: Error code of a refused authorization.
+         *     :param service: The sign-in flow.
+         *     :returns: The landing page with the session cookie, or the error
+         *         page (status 400).
+         */
+        get: operations["callback_auth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/landing.js": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Landing Script
+         * @description Serve the landing page's script.
+         *
+         *     :returns: The script.
+         */
+        get: operations["landing_script_auth_landing_js_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Status
+         * @description Tell the SPA whether it has a usable session.
+         *
+         *     :param request: The request (session cookie).
+         *     :param sessions: The session service.
+         *     :returns: The session state.
+         */
+        get: operations["session_status_auth_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description Sign out.
+         *
+         *     :param request: The request (session cookie, origin).
+         *     :param response: The response (clears the cookie).
+         *     :param sessions: The session service.
+         *     :param idp: The OIDC client, if configured.
+         *     :returns: The IdP's end-session URL, or ``null``.
+         */
+        post: operations["logout_auth_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -329,7 +455,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/dev/token": {
+    "/auth/dev/login": {
         parameters: {
             query?: never;
             header?: never;
@@ -339,15 +465,16 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Dev Token
-         * @description Mint a dev access token for the requested identity.
+         * Dev Login
+         * @description Create a dev session for the requested identity.
          *
          *     :param body: Subject, name, email and roles.
-         *     :param settings: Application settings.
-         *     :returns: The token and its lifetime in seconds.
-         *     :raises AuthUnavailableError: If the shared secret is not set.
+         *     :param settings: Application settings (issuer, roles claim path).
+         *     :param sessions: The session service.
+         *     :returns: 204 with the session cookie.
+         *     :raises AuthUnavailableError: If no session key is configured.
          */
-        post: operations["create_dev_token_auth_dev_token_post"];
+        post: operations["dev_login_auth_dev_login_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -365,7 +492,7 @@ export interface paths {
          * List Dev Roles
          * @description List the role names of the loaded catalog for dev sign-in presets.
          *
-         *     Unauthenticated like the token route: the dev dialog calls it
+         *     Unauthenticated like the login route: the dev dialog calls it
          *     before anyone is signed in. It exposes role names and permissions
          *     only, never reviewer users.
          *
@@ -562,6 +689,20 @@ export interface components {
             created_at: string;
         };
         /**
+         * DevLoginIn
+         * @description Identity of a dev session.
+         */
+        DevLoginIn: {
+            /** Sub */
+            sub: string;
+            /** Name */
+            name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Roles */
+            roles?: string[];
+        };
+        /**
          * DevRoleOut
          * @description One ``rbac`` role of the loaded catalog and what it grants.
          */
@@ -580,35 +721,6 @@ export interface components {
             roles: components["schemas"]["DevRoleOut"][];
             /** Reviewer Roles */
             reviewer_roles: string[];
-        };
-        /**
-         * DevTokenIn
-         * @description Identity to put into a dev token.
-         */
-        DevTokenIn: {
-            /** Sub */
-            sub: string;
-            /** Name */
-            name?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Roles */
-            roles?: string[];
-        };
-        /**
-         * DevTokenOut
-         * @description A minted dev access token (OAuth 2 token-response shape).
-         */
-        DevTokenOut: {
-            /** Access Token */
-            access_token: string;
-            /**
-             * Token Type
-             * @default Bearer
-             */
-            token_type: string;
-            /** Expires In */
-            expires_in: number;
         };
         /**
          * DiffEndpointOut
@@ -875,6 +987,14 @@ export interface components {
          * @enum {string}
          */
         LinkType: "updates" | "obsoletes" | "corrects";
+        /**
+         * LogoutOut
+         * @description Where to send the browser to end the IdP session too.
+         */
+        LogoutOut: {
+            /** End Session Url */
+            end_session_url: string | null;
+        };
         /**
          * MeOut
          * @description The authenticated caller and what they may do.
@@ -1144,6 +1264,19 @@ export interface components {
          */
         SearchSort: "relevance" | "title" | "recent";
         /**
+         * SessionOut
+         * @description Whether the browser has a usable session, and until when.
+         */
+        SessionOut: {
+            /** Authenticated */
+            authenticated: boolean;
+            /**
+             * Expires At
+             * @description When the session ends without further activity (never after its absolute expiry); omitted when not authenticated.
+             */
+            expires_at?: string | null;
+        };
+        /**
          * Severity
          * @description Severity of a validation issue.
          * @enum {string}
@@ -1253,6 +1386,147 @@ export interface operations {
                         [key: string]: string;
                     };
                 };
+            };
+        };
+    };
+    login_auth_login_get: {
+        parameters: {
+            query?: {
+                return_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OIDC is not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    callback_auth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description The sign-in failed (HTML page) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    landing_script_auth_landing_js_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    session_status_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+        };
+    };
+    logout_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutOut"];
+                };
+            };
+            /** @description CSRF check failed (csrf_failed) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1732,7 +2006,7 @@ export interface operations {
             };
         };
     };
-    create_dev_token_auth_dev_token_post: {
+    dev_login_auth_dev_login_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1741,18 +2015,23 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DevTokenIn"];
+                "application/json": components["schemas"]["DevLoginIn"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["DevTokenOut"];
+                content?: never;
+            };
+            /** @description CSRF check failed (csrf_failed) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

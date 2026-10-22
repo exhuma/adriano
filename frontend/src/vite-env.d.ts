@@ -4,18 +4,6 @@ interface ImportMetaEnv {
   /** Build-time fallback API base URL, used when no runtime config
    *  global is injected (local dev only). */
   readonly VITE_API_BASE_URL?: string;
-  /** Build-time fallback OIDC authority, used when no runtime config
-   *  global is injected (local dev only). */
-  readonly VITE_OIDC_AUTHORITY?: string;
-  /** Build-time fallback OIDC public client id (local dev only). */
-  readonly VITE_OIDC_CLIENT_ID?: string;
-  /** Build-time fallback OIDC redirect URI (local dev only). */
-  readonly VITE_OIDC_REDIRECT_URI?: string;
-  /** Build-time fallback OIDC post-logout redirect URI (local dev
-   *  only). */
-  readonly VITE_OIDC_POST_LOGOUT_REDIRECT_URI?: string;
-  /** Build-time fallback OIDC scope (local dev only). */
-  readonly VITE_OIDC_SCOPE?: string;
   /**
    * Dev-login opt-in. Deliberately **not** part of the runtime
    * config global (`RuntimeConfig` in `config.ts`): the dev-auth gate

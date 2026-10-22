@@ -1,20 +1,18 @@
 /**
- * Ensure `useAuth`/`initAuth` wire the API client's TokenProvider
- * seam correctly: a dev-login token (when set via `setDevSession`)
- * wins, otherwise the mocked OIDC `UserManager`'s unexpired user
- * supplies the token, and a missing/expired user yields `null` so no
- * `Authorization` header is sent.
+ * Ensure `useAuth` restores the session from the backend cookie on
+ * startup, builds the sign-in URL with a safe `return_to`, resolves
+ * 401s through the re-auth loop guard, and signs out by following the
+ * IdP's end-session URL when there is one.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-interface TokenProvider {
-  getToken(): string | null | Promise<string | null>;
-}
-
-const setTokenProvider = vi.fn();
+const apiGet = vi.fn();
+const apiPost = vi.fn();
 const setUnauthorizedHandler = vi.fn();
 const setAuthSuccessHandler = vi.fn();
-const getUser = vi.fn();
+const getMe = vi.fn();
+const assign = vi.fn();
+const oidc = vi.hoisted(() => ({ enabled: true }));
 
 // `useMe` (loaded transitively by `useAuth`) imports `ApiError` from
 // "@/api" too, so the mock must still provide it.
@@ -29,108 +27,294 @@ class MockApiError extends Error {
 }
 
 vi.mock("@/api", () => ({
-  setTokenProvider: (...args: unknown[]) => setTokenProvider(...args),
-  setUnauthorizedHandler: (...args: unknown[]) => setUnauthorizedHandler(...args),
-  setAuthSuccessHandler: (...args: unknown[]) => setAuthSuccessHandler(...args),
+  api: {
+    get: (...args: unknown[]) => apiGet(...args),
+    post: (...args: unknown[]) => apiPost(...args),
+  },
+  setUnauthorizedHandler: (...args: unknown[]) =>
+    setUnauthorizedHandler(...args),
+  setAuthSuccessHandler: (...args: unknown[]) =>
+    setAuthSuccessHandler(...args),
   ApiError: MockApiError,
 }));
 
-vi.mock("@/auth/oidc", () => ({
-  getUserManager: () => ({
-    getUser,
-    signinRedirect: vi.fn(),
-    signinRedirectCallback: vi.fn(),
-    removeUser: vi.fn(),
-  }),
-  oidcConfigured: true,
+vi.mock("@/config", () => ({
+  get oidcEnabled() {
+    return oidc.enabled;
+  },
 }));
 
 vi.mock("@/api/auth", () => ({
-  getMe: vi.fn().mockResolvedValue({
-    issuer: "adriano-dev",
-    subject: "alice",
-    display: "Alice",
-    email: null,
-    roles: ["admin"],
-    permissions: ["read", "operate"],
-    reviewer: { eligible: false, reason: "n/a" },
-  }),
+  getMe: (...args: unknown[]) => getMe(...args),
 }));
 
-function capturedProvider(): TokenProvider {
-  const call = setTokenProvider.mock.calls.at(-1);
-  if (!call) {
-    throw new Error("setTokenProvider was never called");
-  }
-  return call[0] as TokenProvider;
+const alice = {
+  issuer: "adriano-dev",
+  subject: "alice",
+  display: "Alice",
+  email: null,
+  roles: ["admin"],
+  permissions: ["read", "operate"],
+  reviewer: { eligible: false, reason: "n/a" },
+};
+
+/** Resolve `GET /auth/session` with the given authenticated flag. */
+function sessionIs(authenticated: boolean): void {
+  apiGet.mockImplementation(async (path: string) => {
+    if (path === "/auth/session") {
+      return { authenticated };
+    }
+    throw new Error(`unexpected GET ${path}`);
+  });
 }
 
-describe("useAuth token provider wiring", () => {
+async function loadAuth() {
+  return import("@/composables/useAuth");
+}
+
+describe("useAuth", () => {
+  const originalLocation = window.location;
+
   beforeEach(() => {
     vi.resetModules();
-    setTokenProvider.mockClear();
-    setUnauthorizedHandler.mockClear();
-    setAuthSuccessHandler.mockClear();
-    getUser.mockReset();
+    apiGet.mockReset();
+    apiPost.mockReset();
+    setUnauthorizedHandler.mockReset();
+    setAuthSuccessHandler.mockReset();
+    getMe.mockReset().mockResolvedValue(alice);
+    assign.mockReset();
+    oidc.enabled = true;
+    sessionStorage.clear();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { pathname: "/records/42", search: "?tab=diff", assign },
+    });
   });
 
   afterEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
     vi.restoreAllMocks();
   });
 
-  it("returns null when no dev token and no OIDC user is present", async () => {
-    getUser.mockResolvedValue(null);
-    const { initAuth } = await import("@/composables/useAuth");
-    initAuth();
+  describe("startup session restore", () => {
+    it("loads the identity when the backend reports a session", async () => {
+      sessionIs(true);
+      const { initAuth, useAuth } = await loadAuth();
+      const auth = useAuth();
 
-    expect(setTokenProvider).toHaveBeenCalledOnce();
-    await expect(capturedProvider().getToken()).resolves.toBeNull();
+      expect(auth.sessionChecked.value).toBe(false);
+      initAuth();
+      await vi.waitFor(() => expect(auth.sessionChecked.value).toBe(true));
+
+      expect(apiGet).toHaveBeenCalledWith("/auth/session", {
+        trackAuth: false,
+      });
+      expect(getMe).toHaveBeenCalledOnce();
+      expect(auth.me.value?.display).toBe("Alice");
+      expect(auth.authMode.value).toBe("oidc");
+    });
+
+    it("stays signed out without loading /me when there is no session", async () => {
+      sessionIs(false);
+      const { initAuth, useAuth } = await loadAuth();
+      const auth = useAuth();
+
+      initAuth();
+      await vi.waitFor(() => expect(auth.sessionChecked.value).toBe(true));
+
+      expect(getMe).not.toHaveBeenCalled();
+      expect(auth.me.value).toBeNull();
+      expect(auth.authMode.value).toBeNull();
+    });
+
+    it("treats a failed session check as signed out and finishes checking", async () => {
+      apiGet.mockRejectedValue(new Error("network down"));
+      const { initAuth, useAuth } = await loadAuth();
+      const auth = useAuth();
+
+      initAuth();
+      await vi.waitFor(() => expect(auth.sessionChecked.value).toBe(true));
+
+      expect(auth.me.value).toBeNull();
+    });
+
+    it("keeps reporting 'checking' while the request is pending", async () => {
+      apiGet.mockReturnValue(new Promise(() => {}));
+      const { initAuth, useAuth } = await loadAuth();
+      const auth = useAuth();
+
+      initAuth();
+      await Promise.resolve();
+
+      expect(auth.sessionChecked.value).toBe(false);
+    });
+
+    it("initAuth is idempotent: a second call neither re-registers nor re-checks", async () => {
+      sessionIs(false);
+      const { initAuth } = await loadAuth();
+      initAuth();
+      initAuth();
+
+      expect(setUnauthorizedHandler).toHaveBeenCalledOnce();
+      expect(setAuthSuccessHandler).toHaveBeenCalledOnce();
+      expect(apiGet).toHaveBeenCalledOnce();
+    });
   });
 
-  it("returns the OIDC access token when the user is present and unexpired", async () => {
-    getUser.mockResolvedValue({ expired: false, access_token: "oidc-token" });
-    const { initAuth } = await import("@/composables/useAuth");
-    initAuth();
+  describe("sign-in", () => {
+    it("navigates to /auth/login with the current path as return_to", async () => {
+      const { signInWithOidc } = await loadAuth();
 
-    await expect(capturedProvider().getToken()).resolves.toBe("oidc-token");
+      signInWithOidc();
+
+      expect(assign).toHaveBeenCalledWith(
+        `/auth/login?return_to=${encodeURIComponent("/records/42?tab=diff")}`,
+      );
+    });
+
+    it("does nothing when OIDC is not available", async () => {
+      oidc.enabled = false;
+      const { signInWithOidc } = await loadAuth();
+
+      signInWithOidc();
+
+      expect(assign).not.toHaveBeenCalled();
+    });
   });
 
-  it("returns null for an expired OIDC user", async () => {
-    getUser.mockResolvedValue({ expired: true, access_token: "stale-token" });
-    const { initAuth } = await import("@/composables/useAuth");
-    initAuth();
+  describe("401 handling", () => {
+    async function unauthorized(): Promise<void> {
+      sessionIs(false);
+      const { initAuth } = await loadAuth();
+      initAuth();
+      const handler = setUnauthorizedHandler.mock.calls[0]?.[0] as () => void;
+      handler();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
 
-    await expect(capturedProvider().getToken()).resolves.toBeNull();
+    it("redirects to the sign-in once, with the return path", async () => {
+      await unauthorized();
+
+      expect(assign).toHaveBeenCalledOnce();
+      expect(assign.mock.calls[0]?.[0]).toContain("/auth/login?return_to=");
+    });
+
+    it("stops redirecting after one failed attempt and surfaces a blocking error", async () => {
+      const guard = await import("@/auth/reauthGuard");
+      guard._resetReauthGuardForTests();
+      await unauthorized();
+      const handler = setUnauthorizedHandler.mock.calls[0]?.[0] as () => void;
+      // Let the first redirect settle, then a second 401 arrives
+      // without any intervening success.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      handler();
+
+      expect(assign).toHaveBeenCalledOnce();
+      expect(guard.authError.value).not.toBeNull();
+    });
+
+    it("falls back to the sign-in screen when OIDC is not available", async () => {
+      oidc.enabled = false;
+      const guard = await import("@/auth/reauthGuard");
+      guard._resetReauthGuardForTests();
+      await unauthorized();
+
+      expect(assign).not.toHaveBeenCalled();
+    });
   });
 
-  it("prefers a dev-login token over any OIDC user", async () => {
-    getUser.mockResolvedValue({ expired: false, access_token: "oidc-token" });
-    const { initAuth, setDevSession } = await import("@/composables/useAuth");
-    initAuth();
-    await setDevSession("dev-token");
+  describe("sign-out", () => {
+    it("posts the logout, clears the identity and follows end_session_url", async () => {
+      sessionIs(true);
+      apiPost.mockResolvedValue({ end_session_url: "https://idp/logout?x=1" });
+      const { initAuth, signOut, useAuth } = await loadAuth();
+      const auth = useAuth();
+      initAuth();
+      await vi.waitFor(() => expect(auth.me.value).not.toBeNull());
 
-    await expect(capturedProvider().getToken()).resolves.toBe("dev-token");
+      await signOut();
+
+      expect(apiPost).toHaveBeenCalledWith("/auth/logout", undefined, {
+        trackAuth: false,
+      });
+      expect(auth.me.value).toBeNull();
+      expect(assign).toHaveBeenCalledWith("https://idp/logout?x=1");
+    });
+
+    it("stays on the app (sign-in screen) when end_session_url is null", async () => {
+      sessionIs(true);
+      apiPost.mockResolvedValue({ end_session_url: null });
+      const { initAuth, signOut, useAuth } = await loadAuth();
+      const auth = useAuth();
+      initAuth();
+      await vi.waitFor(() => expect(auth.me.value).not.toBeNull());
+
+      await signOut();
+
+      expect(auth.me.value).toBeNull();
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it("still leaves the signed-in state when the logout request fails", async () => {
+      sessionIs(true);
+      apiPost.mockRejectedValue(new Error("network down"));
+      const { initAuth, signOut, useAuth } = await loadAuth();
+      const auth = useAuth();
+      initAuth();
+      await vi.waitFor(() => expect(auth.me.value).not.toBeNull());
+
+      await signOut();
+
+      expect(auth.me.value).toBeNull();
+      expect(assign).not.toHaveBeenCalled();
+    });
   });
 
-  it("clearDevSession drops the dev token so the provider falls through to OIDC", async () => {
-    getUser.mockResolvedValue({ expired: false, access_token: "oidc-token" });
-    const { initAuth, setDevSession, clearDevSession } = await import(
-      "@/composables/useAuth"
-    );
-    initAuth();
-    await setDevSession("dev-token");
-    clearDevSession();
+  describe("dev session", () => {
+    it("setDevSession re-runs the session check, loads /me and marks the mode", async () => {
+      sessionIs(true);
+      const { setDevSession, useAuth } = await loadAuth();
+      const auth = useAuth();
 
-    await expect(capturedProvider().getToken()).resolves.toBe("oidc-token");
-  });
+      await setDevSession();
 
-  it("initAuth is idempotent: a second call does not re-register", async () => {
-    getUser.mockResolvedValue(null);
-    const { initAuth } = await import("@/composables/useAuth");
-    initAuth();
-    const callsBefore = setTokenProvider.mock.calls.length;
-    initAuth();
+      expect(apiGet).toHaveBeenCalledWith("/auth/session", {
+        trackAuth: false,
+      });
+      expect(auth.me.value?.display).toBe("Alice");
+      expect(auth.authMode.value).toBe("dev");
+    });
 
-    expect(setTokenProvider.mock.calls.length).toBe(callsBefore);
+    it("remembers the dev mode across a reload", async () => {
+      sessionIs(true);
+      const first = await loadAuth();
+      await first.setDevSession();
+      vi.resetModules();
+
+      const second = await loadAuth();
+      second.initAuth();
+      await vi.waitFor(() =>
+        expect(second.useAuth().sessionChecked.value).toBe(true),
+      );
+
+      expect(second.useAuth().authMode.value).toBe("dev");
+    });
+
+    it("signs out of a dev session through the regular logout", async () => {
+      sessionIs(true);
+      apiPost.mockResolvedValue({ end_session_url: null });
+      const { setDevSession, signOut, useAuth } = await loadAuth();
+      await setDevSession();
+
+      await signOut();
+
+      expect(apiPost).toHaveBeenCalledWith("/auth/logout", undefined, {
+        trackAuth: false,
+      });
+      expect(useAuth().authMode.value).toBeNull();
+    });
   });
 });
