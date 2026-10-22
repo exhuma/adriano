@@ -8,10 +8,10 @@
 [![docs](https://github.com/exhuma/adriano/actions/workflows/docs.yml/badge.svg)](https://github.com/exhuma/adriano/actions/workflows/docs.yml)
 
 Adriano is a governance catalog for architecture decision records
-(ADRs). It indexes ADRs from GitLab and filesystem sources, tells
-published decisions from candidates, enforces a reviewer approval
-workflow, and tracks errata. The backend is FastAPI on PostgreSQL;
-the frontend is Vue 3 and Vuetify.
+(ADRs). It indexes ADRs from pluggable sources (currently GitLab and
+the filesystem), tells published decisions from candidates, enforces a
+reviewer approval workflow, and tracks errata. The backend is FastAPI
+on PostgreSQL; the frontend is Vue 3 and Vuetify.
 
 **Documentation: <https://exhuma.github.io/adriano/>**
 

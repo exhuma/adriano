@@ -70,7 +70,8 @@ class Settings(BaseSettings):
         ``/config.js`` (see :mod:`app.web`); unset, it serves the API
         only.
     :cvar tls_verify: Whether outbound HTTPS calls (OIDC discovery,
-        the JWKS endpoint, GitLab) verify the server certificate.
+        the JWKS endpoint, network sources such as GitLab) verify the
+        server certificate.
         ``False`` disables verification entirely; meant only as a
         stop-gap for non-production instances behind an internal CA.
     :cvar migrate_on_start: Whether ``adriano serve`` applies the

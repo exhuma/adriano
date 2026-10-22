@@ -72,8 +72,9 @@ def load_catalog(settings: Settings) -> CatalogConfig:
     """
     if not settings.tls_verify:
         logger.warning(
-            "ADRIANO_TLS_VERIFY is false: certificates of GitLab "
-            "instances are NOT verified. Never use this in production."
+            "ADRIANO_TLS_VERIFY is false: certificates of network "
+            "sources (such as GitLab) are NOT verified. Never use this "
+            "in production."
         )
     return load_catalog_config(
         settings.config_file,
