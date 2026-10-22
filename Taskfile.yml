@@ -148,14 +148,6 @@ tasks:
         {{.RESOLVE_CONFIG}}
         uv run --project backend adriano check-config
 
-  mint-dev-token:
-    desc: >-
-      Print a dev-only HS256 access token signed with
-      ADRIANO_DEV_SHARED_SECRET (from .env), e.g.
-      `task mint-dev-token -- --sub alice --roles admin`.
-    cmds:
-      - uv run --project backend adriano mint-dev-token {{.CLI_ARGS}}
-
   bench:seed:
     desc: >-
       Reset and migrate the ephemeral dev database (NEVER the test
@@ -198,6 +190,9 @@ tasks:
         export ADRIANO_DEV_AUTH_ENABLED=true
         export ADRIANO_DEV_SHARED_SECRET="$(python3 -c \
           'import secrets; print(secrets.token_hex(32))')"
+        export ADRIANO_SESSION_KEY="$(uv run --project backend python \
+          -c 'from cryptography.fernet import Fernet; \
+          print(Fernet.generate_key().decode())')"
         export ADRIANO_WORKERS=4
         uv run --project backend uvicorn app.main:app \
           --host 0.0.0.0 --port 8100 --workers "$ADRIANO_WORKERS" \
@@ -292,7 +287,7 @@ tasks:
   demo:env:
     internal: true
     desc: >-
-      Generate the gitignored .env.demo (dev auth + a push token) for
+      Generate the gitignored .env.demo (dev auth, a session key and a push token) for
       the local demo stack, if it does not already exist. Never
       commit this file.
     status:
@@ -300,6 +295,7 @@ tasks:
     cmds:
       - |
         python3 - <<'PY'
+        import base64
         import secrets
 
         with open(".env.demo", "w", encoding="utf-8") as fh:
@@ -312,6 +308,11 @@ tasks:
             fh.write(
                 f"ADRIANO_DEV_SHARED_SECRET={secrets.token_hex(32)}\n"
             )
+            # A Fernet key is 32 random bytes, urlsafe-base64 encoded.
+            session_key = base64.urlsafe_b64encode(
+                secrets.token_bytes(32)
+            ).decode()
+            fh.write(f"ADRIANO_SESSION_KEY={session_key}\n")
             fh.write(
                 "ADRIANO_PUSH_TOKEN_CENTRAL="
                 f"{secrets.token_urlsafe(32)}\n"
@@ -377,10 +378,6 @@ tasks:
         echo "UI). To sign in interactively, run" \
           "\`task demo:ui\` in another terminal (a Vite dev server" \
           "with dev login, proxying to this same demo container)."
-        echo
-        echo "Or mint a token on the command line:"
-        echo '  {{.DEMO_COMPOSE}} exec adriano adriano mint-dev-token \'
-        echo '    --sub alice --roles admin'
         echo
         echo "Push a candidate (CI push demo; see samples/push-" \
           "candidate.sh and docs/operator/ci-push.rst):"
