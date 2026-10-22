@@ -248,7 +248,7 @@ erratum-page-reader.png
 erratum-proposed-on-decision.png
    Shows a decision with a proposed erratum: header line "1 proposed
    erratum - View errata" and a "Proposed errata" group with a
-   "Reported - Proposed (branch ...)" chip.
+   "Reported - Proposed (ref ...)" chip.
    Reviewer (Bob), light theme, 1280x900.
    Suits: user guide (errata coming from a branch).
    Alt: A decision page with a Proposed errata group listing an
@@ -264,7 +264,7 @@ erratum-verify-dialog.png
 
 erratum-verified.png
    Shows an erratum right after verification: status "Verified -
-   Proposed (branch ...)", the text "This erratum was verified for
+   Proposed (ref ...)", the text "This erratum was verified for
    this exact content." and a decision history row.
    Reviewer (Bob), light theme, 1280x900.
    Suits: user guide (errata).

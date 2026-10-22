@@ -11,7 +11,7 @@
 # that registration (with a readable `config_error`), and a missing or
 # invalid approval_policy blocks decisions until it is fixed.
 #
-# Secrets referenced below (GitLab tokens, CI push tokens) are
+# Secrets referenced below (source access tokens, CI push tokens) are
 # environment variable NAMES, resolved at startup. Never put an
 # actual secret value in this file.
 #
@@ -27,10 +27,9 @@
 # yield the same file, the first one in this list keeps it.
 
 sources:
-  # A filesystem source reads ADR files from a folder on disk. It
-  # is a phase-1 convenience adapter (authorized as a deviation from
-  # the spec's GitLab-only requirement) so the catalog can be
-  # demoed without an external GitLab instance.
+  # A filesystem source reads ADR files from a folder mounted into
+  # the container. It suits folder-only deployments as well as demos
+  # and tests.
   - id: central
     type: filesystem
     # Relative paths are resolved against this file's directory.

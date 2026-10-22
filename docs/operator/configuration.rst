@@ -148,7 +148,8 @@ Application settings
    :Example: ``/etc/adriano/ca-bundle.pem``
 
    Path inside the container of a PEM file with the certificate
-   authorities to trust for GitLab and the identity provider.
+   authorities to trust for the identity provider and for network
+   sources (such as GitLab).
    It *replaces* the standard set, so include the public authorities
    too if you still need them.
    Mount the file read-only.
@@ -163,7 +164,7 @@ Application settings
 
    Whether Adriano verifies the server certificate when it calls the
    identity provider (discovery document and signing keys) and
-   GitLab.
+   network sources (such as GitLab).
    ``false`` turns all certificate checks off: anyone who can
    intercept that traffic can then impersonate the identity provider
    and get any token accepted, or feed false content into the catalog.
@@ -392,13 +393,14 @@ Secrets named by the catalog file
 
 The catalog file never contains secret values.
 It names environment variables instead,
-for GitLab access tokens (``token_env``) and CI push tokens
-(``push_tokens_env``).
+for source access tokens (``token_env``, used by the ``gitlab``
+type) and CI push tokens (``push_tokens_env``).
 You choose those names; by convention they start with
 ``ADRIANO_GITLAB_TOKEN_`` and ``ADRIANO_PUSH_TOKEN_``.
 
 .. code-block:: sh
 
+   # only needed for a gitlab source
    ADRIANO_GITLAB_TOKEN_PLATFORM=<GitLab access token>
    ADRIANO_PUSH_TOKEN_PLATFORM=<long random token>
 
@@ -410,7 +412,7 @@ You choose those names; by convention they start with
   (``docker compose up -d adriano``, or
   ``kubectl rollout restart deployment/adriano``; a plain Compose
   restart keeps the old values).
-- A missing GitLab token disables only that source;
+- A missing source token (``token_env``) disables only that source;
   a missing push token makes that source refuse every push.
   ``adriano check-config`` names the missing variable.
 - Secret values are never logged or shown; messages only name the

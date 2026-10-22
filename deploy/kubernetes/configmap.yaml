@@ -45,8 +45,8 @@ metadata:
     app.kubernetes.io/part-of: adriano
 data:
   catalog.yaml: |
-    # Minimal example: one GitLab group, a review policy and two
-    # roles. See docs/operator/catalog-file.rst for the reference.
+    # Minimal example: one source (a GitLab group), a review policy
+    # and two roles. See docs/operator/catalog-file.rst for the reference.
     sources:
       - id: gitlab-platform
         type: gitlab
@@ -58,6 +58,18 @@ data:
         published_ref: "@project-default"
         intake: [poll, push]
         push_tokens_env: [ADRIANO_PUSH_TOKEN_PLATFORM]
+      # Or a folder of records mounted into the pod (no access token
+      # needed; add a volume mount for it to the Deployment and the
+      # CronJob, and the push token to the Secret):
+      # - id: central
+      #   type: filesystem
+      #   root: /srv/adr-root
+      #   scope:
+      #     projects: [platform]
+      #   path: doc/decisions
+      #   published_ref: local
+      #   intake: [poll, push]
+      #   push_tokens_env: [ADRIANO_PUSH_TOKEN_CENTRAL]
     approval_policy:
       id: global
       version: 1

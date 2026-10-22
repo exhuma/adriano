@@ -12,14 +12,17 @@ You do not upload anything.
 There are two ways your file gets in:
 
 Published decisions
-   Merge the file into your repository's main line.
+   Publish the file where your team's source reads from, for
+   example the published branch of the Git project or the shared
+   folder.
    The catalog reads its sources regularly and picks the file up on
    the next read.
 
 Proposals (candidates)
-   Your team's pipeline can send a file from a branch.
-   It then appears as a **Candidate** with the branch name, so
-   reviewers can accept it before the branch is merged.
+   Your team's pipeline can send a file from any ref, for example a
+   branch.
+   It then appears as a **Candidate** with its ref, so
+   reviewers can accept it before it is published.
 
 Whichever way it arrives, the catalog never changes your file.
 To change a decision, edit the file and let it be collected again.
@@ -32,8 +35,10 @@ How sources and pipelines are set up is described in the
 Where to put the file
 ---------------------
 
-Save the file in your repository under ``doc/decisions/``
+Save the file in your team's source under ``doc/decisions/``
 (subfolders are fine).
+This is the default folder; an operator may configure another one,
+so ask if your team uses a different location.
 The name must start with the date, then a short description:
 
 .. code-block:: text

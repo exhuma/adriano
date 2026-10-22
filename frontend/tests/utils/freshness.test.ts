@@ -35,12 +35,12 @@ function freshness(overrides: Partial<FreshnessOut> = {}): FreshnessOut {
 }
 
 describe("provenanceText", () => {
-  it("describes a candidate by submission branch and time, never polling", () => {
+  it("describes a candidate by submission ref and time, never polling", () => {
     const text = provenanceText(
       "candidate",
       provenance({ ref: "feature/x", updated_at: "2026-02-03T10:00:00Z" }),
     );
-    expect(text).toContain("Submitted from branch feature/x");
+    expect(text).toContain("Submitted from ref feature/x");
     expect(text.toLowerCase()).not.toContain("poll");
     expect(text.toLowerCase()).not.toContain("published revision");
   });

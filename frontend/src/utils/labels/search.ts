@@ -41,7 +41,7 @@ export function searchRecordStateLabel(kind: RecordState): StatusLabel | null {
  * :param kind: Lifecycle state of the record row.
  * :param ref: Source ref (branch/label).
  * :returns: `null` for a published record or a missing ref;
- *     otherwise "Branch: <ref>".
+ *     otherwise "Ref: <ref>".
  */
 export function candidateBranchText(
   kind: RecordState,
@@ -50,7 +50,7 @@ export function candidateBranchText(
   if (kind !== "candidate" || !ref) {
     return null;
   }
-  return `Branch: ${ref}`;
+  return `Ref: ${ref}`;
 }
 
 /**
@@ -122,7 +122,7 @@ export function searchApprovalStateLabel(
  * {@link import("./errata").erratumStatusLabel}: same 1-2 word and
  * neutral-pending rules as {@link searchApprovalStateLabel}
  * (RFC-style report/verify/reject wording), and the candidate
- * "Proposed (branch …)" suffix is dropped -- it is covered by
+ * "Proposed (ref …)" suffix is dropped -- it is covered by
  * {@link searchRecordStateLabel} and {@link candidateBranchText}
  * instead, so the branch is not repeated twice on one row (S-05).
  *

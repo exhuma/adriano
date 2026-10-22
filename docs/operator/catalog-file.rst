@@ -17,6 +17,9 @@ Scheduled polls read it again on every run.
 A complete example
 ------------------
 
+The two sources below are examples of the two source types.
+A deployment may use only one type, for example folders only.
+
 .. code-block:: yaml
 
    sources:

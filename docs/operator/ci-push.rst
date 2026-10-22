@@ -1,13 +1,16 @@
 Pushing candidates from CI
 ==========================
 
-Polling only sees the published branch.
+Polling only sees the published ref.
 To show a decision record while it is still under review,
 for example on a merge-request branch, a CI job can *push* it to
 Adriano as a **candidate**.
-Reviewers can then accept or reject it before it is merged.
-When the identical file later appears on the published branch,
+Reviewers can then accept or reject it before it is published.
+When the identical file later appears on the published ref,
 the next poll recognises it and the earlier decision carries over.
+
+Push works for every source type, folders included.
+Any job or script that can send an HTTP request can push.
 
 Pushes never change published records and never touch the approval
 history.
@@ -19,7 +22,7 @@ Setting up a registration for pushes
 
    .. code-block:: yaml
 
-      - id: gitlab-platform
+      - id: central
         # ... other fields ...
         intake: [poll, push]
         push_tokens_env: [ADRIANO_PUSH_TOKEN_PLATFORM]
@@ -65,13 +68,14 @@ JSON body:
    The registration ``id``.
 ``project`` : required
    The project path, as Adriano knows it (for GitLab, the full
-   project path).
+   project path; for a folder source, the name of the subfolder
+   below ``root``).
    It must be inside the registration's ``scope``.
 ``adr_uuid`` : required
    The ``uuid`` from the record's frontmatter.
    It must match the content.
 ``ref`` : required
-   The branch the content comes from.
+   The ref the content comes from, for example a branch.
    It may not be the registration's ``published_ref``.
 ``content`` : required
    The complete Markdown file, at most 1 MiB.
@@ -89,7 +93,7 @@ JSON body:
    only way Adriano can tell that a reviewer is the author.
 
 ``PUT`` creates the candidate or replaces the previous content for
-the same project, record and branch.
+the same project, record and ref.
 ``POST`` with the same body only creates, and answers
 ``409 candidate_exists`` if the candidate is already there.
 
@@ -108,14 +112,18 @@ JSON body correctly (including escaping) and sends it:
      platform feature/redis-cache central "$CI_PIPELINE_ID" \
      doc/decisions/2026-01-05-use-redis-for-caching.md
 
-Its arguments are the file, project, branch, and optionally the
+Its arguments are the file, project, ref, and optionally the
 registration ID, delivery ID and path.
 It reads the token from ``ADRIANO_PUSH_TOKEN_<REGISTRATION ID>``
 (upper case); a registration ID containing ``-`` or ``.`` therefore
 needs your own script.
 
-GitLab CI job
-~~~~~~~~~~~~~
+Example: GitLab CI job
+~~~~~~~~~~~~~~~~~~~~~~
+
+The same request from a GitLab CI job.
+Other CI systems work the same way:
+send the same body, or call the example script above.
 
 .. code-block:: yaml
 
@@ -202,8 +210,7 @@ Errors carry a ``code`` and a ``hint``:
 ``422 invalid_request``
    The body is not valid JSON, misses a field or has an unknown one.
 ``422 published_ref_not_allowed``
-   ``ref`` is the published branch; candidates come from other
-   branches.
+   ``ref`` is the published ref; candidates come from other refs.
 ``422 invalid_document``
    The file has no usable frontmatter or uuid; the answer lists the
    problems.
@@ -214,7 +221,8 @@ Errors carry a ``code`` and a ``hint``:
 
 .. note::
 
-   With ``published_ref: "@project-default"``, Adriano does not know
+   For a ``gitlab`` source with ``published_ref: "@project-default"``,
+   Adriano does not know
    each project's default branch when a push arrives,
    so a push from the default branch is accepted as a candidate.
    Limit the CI job to other branches, as in the example above.

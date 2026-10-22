@@ -125,7 +125,7 @@ const CONFIG_ERROR_HEADLINES: Record<ConfigErrorCode, string> = {
     "This registration's settings in catalog.yaml are not valid",
   unknown_type: "This registration uses a source type the catalog doesn't know",
   type_unavailable: "This source type isn't available in this build yet",
-  invalid_published_ref: "The published branch setting is not valid",
+  invalid_published_ref: "The published ref setting is not valid",
   token_env_missing: "The access token's environment variable is not set",
   removed_from_config: "This registration was removed from catalog.yaml",
   other: "This registration's configuration has a problem",

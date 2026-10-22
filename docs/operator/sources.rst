@@ -2,12 +2,13 @@ Connecting sources
 ==================
 
 A *source registration* tells Adriano where decision records live.
-There are two types: ``gitlab`` (projects on a GitLab instance) and
+Adriano supports these source types:
+``gitlab`` (projects on a GitLab instance) and
 ``filesystem`` (a folder tree mounted into the container).
 The fields every registration shares are in :doc:`catalog-file`;
 this page covers what is specific to each type.
 
-In both types, Adriano indexes the Markdown files below the
+In every type, Adriano indexes the Markdown files below the
 registration's ``path`` whose names look like
 ``2024-01-10-use-postgresql.md``.
 Adriano only reads from sources; it never writes to them.
@@ -94,16 +95,6 @@ What Adriano does with the projects
 - Temporary GitLab errors and rate limits are retried a few times
   with increasing waits before a request counts as failed.
 
-TLS
-~~~
-
-Adriano verifies the GitLab server's certificate.
-If your GitLab (or identity provider) uses a certificate from an
-internal certificate authority, mount a PEM bundle that contains it
-into the container and point :envvar:`SSL_CERT_FILE` at it.
-On a test or staging instance only, :envvar:`ADRIANO_TLS_VERIFY`
-can turn the checks off instead.
-
 Filesystem
 ----------
 
@@ -155,3 +146,14 @@ What to expect:
   changes.
 - Folder records have no author, so the self-approval check of the
   approval policy cannot apply to them.
+
+TLS for network sources
+-----------------------
+
+Adriano verifies the server certificate of every network source,
+such as GitLab.
+If a source (or the identity provider) uses a certificate from an
+internal certificate authority, mount a PEM bundle that contains it
+into the container and point :envvar:`SSL_CERT_FILE` at it.
+On a test or staging instance only, :envvar:`ADRIANO_TLS_VERIFY`
+can turn the checks off instead.

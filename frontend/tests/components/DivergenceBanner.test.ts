@@ -59,7 +59,7 @@ describe("DivergenceBanner", () => {
   it("uses the erratum chip vocabulary for a competing candidate on an erratum page", async () => {
     const wrapper = await mountBanner("erratum");
 
-    expect(wrapper.text()).toContain("Reported — Proposed (branch feature-x)");
+    expect(wrapper.text()).toContain("Reported — Proposed (ref feature-x)");
   });
 
   it("uses the plain decision chip vocabulary for a competing candidate on a decision page", async () => {

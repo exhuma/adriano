@@ -47,8 +47,8 @@ services:
     # what the operator configured. Later files win: the committed
     # defaults first, then the operator's file (default ./.env;
     # `task demo` points it at the generated .env.demo). Catalog-
-    # referenced secrets (ADRIANO_GITLAB_TOKEN_*, ADRIANO_PUSH_TOKEN_*,
-    # ...) belong in that file as well.
+    # referenced secrets (ADRIANO_GITLAB_TOKEN_* for gitlab sources,
+    # ADRIANO_PUSH_TOKEN_*, ...) belong in that file as well.
     env_file:
       - path: ./deploy/compose.defaults.env
         required: true

@@ -28,7 +28,7 @@ Intake
    pushed from a pipeline, or both.
 
 Published ref
-   The branch the catalog treats as published.
+   The branch or label the catalog treats as published.
 
 Status
    The result of the last attempt; see below.

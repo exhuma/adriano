@@ -4,7 +4,7 @@ Searching the catalog
 Use search to find a decision, narrow a long list, or list everything
 that still needs a review.
 Searching only reads what the catalog has already collected, so it
-is fast and never contacts a team's repository.
+is fast and never contacts a team's source.
 
 .. figure:: /_static/screenshots/search-landing.png
    :alt: The catalog search page listing decision records with their
@@ -28,7 +28,7 @@ Without words, they are sorted alphabetically by title.
 
 Each result shows its title, source and project, and a few chips:
 
-* **Candidate** with the branch name, if it is a proposal rather than
+* **Candidate** with its ref, if it is a proposal rather than
   the published version.
 * The approval state, such as "Pending approval" or "Accepted".
   For a correction it reads "Reported" or "Verified" instead.

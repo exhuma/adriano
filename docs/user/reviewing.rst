@@ -70,7 +70,7 @@ What your verdict means
   If the text changes, a new verdict can be recorded for the new
   text.
 * Accepting a candidate does not accept anything else.
-  When the same text is later merged and published, the published
+  When the same text is later published, the published
   version is accepted automatically with the same history.
 * A rejected candidate stays rejected.
   A revised proposal has different text and needs its own decision.
@@ -115,7 +115,7 @@ The **Approval** card lists every verdict ever recorded for the
 decision.
 Each row shows the action (Accepted or Rejected), the reviewer, the
 time, the comment, a short digest of the text it applied to and
-which source and branch it came from.
+which source and ref it came from.
 
 When you cannot decide
 ----------------------

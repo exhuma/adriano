@@ -21,7 +21,7 @@ import { formatDateTime } from "@/utils/dates";
 export function provenanceText(kind: RecordState, provenance: ProvenanceOut): string {
   if (kind === "candidate") {
     const at = formatDateTime(provenance.updated_at) ?? "an unknown time";
-    return `Submitted from branch ${provenance.ref} at ${at} ` +
+    return `Submitted from ref ${provenance.ref} at ${at} ` +
       `(${provenance.source_id} / ${provenance.project}).`;
   }
   return `Published from ${provenance.source_id} / ${provenance.project}.`;

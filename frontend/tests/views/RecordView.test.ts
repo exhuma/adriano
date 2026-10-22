@@ -203,7 +203,7 @@ describe("RecordView approval controls", () => {
 
     const wrapper = await mountRecordView();
 
-    expect(wrapper.text()).toContain("Submitted from branch feature/x");
+    expect(wrapper.text()).toContain("Submitted from ref feature/x");
     expect(wrapper.text()).toContain(
       "Accepted — this candidate is authoritative for implementation " +
         "before publication.",

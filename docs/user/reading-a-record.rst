@@ -106,8 +106,9 @@ Metadata
    as inferred.
 
 Provenance
-   Where the decision came from: source, project, file path and
-   branch, and when the catalog last refreshed it (**Freshness**).
+   Where the decision came from: source, project, file path and ref
+   (shown as **Path & ref**), a link to the **Source location** where
+   available, and when the catalog last refreshed it (**Freshness**).
 
 Related decisions
    Links to decisions this one updates or obsoletes.
@@ -120,8 +121,8 @@ Referenced by
    obsolete this one.
 
 Other revisions
-   Other versions of the same decision, such as a candidate on a
-   branch next to the published version.
+   Other versions of the same decision, such as a candidate from
+   another ref next to the published version.
 
 Legacy sign-off (unverified)
    See `Legacy sign-off`_.
@@ -129,12 +130,12 @@ Legacy sign-off (unverified)
 Published, candidate and which is current
 -----------------------------------------
 
-The title line shows "Candidate" with a branch name if you are
+The title line shows "Candidate" with its ref if you are
 looking at a proposal.
-A published decision is the version on the team's main line.
+A published decision is the version your team has published.
 If both exist, **Other revisions** links between them.
 
-After a candidate is merged, the published version appears with the
+After a candidate is published, the published version appears with the
 same text.
 If a reviewer already accepted that exact text, the published
 version is accepted too, and keeps the same decision history.

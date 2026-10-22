@@ -39,7 +39,7 @@ describe("candidateBranchText", () => {
 
   it("formats the branch once for a candidate with a ref", () => {
     expect(candidateBranchText("candidate", "feature-x")).toBe(
-      "Branch: feature-x",
+      "Ref: feature-x",
     );
   });
 });
@@ -113,7 +113,7 @@ describe("searchErratumStatusLabel", () => {
     expect(label.color).toBeUndefined();
   });
 
-  it("drops the 'Proposed (branch …)' suffix kept by " +
+  it("drops the 'Proposed (ref …)' suffix kept by " +
     "erratumStatusLabel", () => {
     expect(searchErratumStatusLabel("accepted").text).toBe("Verified");
   });
