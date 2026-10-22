@@ -35,6 +35,16 @@ Commands:
   with ``ADRIANO_WORKERS`` workers (and ``ADRIANO_FORWARDED_ALLOW_IPS``
   as ``--forwarded-allow-ips`` when set).
 
+Outbound TLS: ``check-config``, ``poll``, ``seed-synthetic`` and
+``serve`` build the shared outbound TLS context (:mod:`app.tls`) before
+doing anything else, so an unloadable ``ADRIANO_EXTRA_CA_CERTS`` entry
+stops them with exit code 2 (``serve`` before migrating). ``migrate``
+and ``mint-dev-token`` make no outbound HTTPS calls and do not load
+it: a broken CA mount must not block the schema migration (the server
+container still refuses to start). Every command except
+``mint-dev-token`` logs to stderr at INFO, which includes the list of
+extra CA certificates.
+
 Scheduling is external (cron, Kubernetes CronJob); see
 ``docs/developer/decisions/0008-external-poll-job.rst``. This module
 only phrases results; the work is done by :mod:`app.services`.
@@ -73,10 +83,17 @@ from app.services.seed_synthetic import (
 )
 from app.storage.port import PollStatus
 from app.storage.postgres.migrations import upgrade_to_head
+from app.tls import ssl_context_from_settings
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
 EXIT_USAGE = 2
+
+#: Commands that can make outbound HTTPS calls (OIDC, network
+#: sources); they load the outbound TLS context first.
+OUTBOUND_COMMANDS = frozenset(
+    {"check-config", "poll", "seed-synthetic", "serve"}
+)
 
 #: Address and port ``adriano serve`` binds (the image's EXPOSE).
 SERVE_HOST = "0.0.0.0"
@@ -195,6 +212,22 @@ def _mint(settings: Settings, args: argparse.Namespace, out: TextIO) -> int:
         sub=args.sub, name=args.name, email=args.email, roles=roles
     )
     print(mint_dev_token(settings, identity, minutes=args.minutes), file=out)
+    return EXIT_OK
+
+
+def _load_outbound_tls(settings: Settings) -> int:
+    """
+    Build the outbound TLS context, so a bad CA file fails early.
+
+    :param settings: Application settings.
+    :returns: Exit code: :data:`EXIT_OK`, or :data:`EXIT_USAGE` when
+        an ``ADRIANO_EXTRA_CA_CERTS`` entry cannot be loaded.
+    """
+    try:
+        ssl_context_from_settings(settings)
+    except ConfigurationError as exc:
+        print(f"error: {exc.message}", file=sys.stderr)
+        return EXIT_USAGE
     return EXIT_OK
 
 
@@ -494,13 +527,17 @@ def main(
     args = _parser().parse_args(argv)
     settings = settings or get_settings()
     stream = out or sys.stdout
-    if args.command == "check-config":
-        return _check_config(settings, stream)
     if args.command == "mint-dev-token":
         return _mint(settings, args, stream)
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
     )
+    if args.command in OUTBOUND_COMMANDS:
+        code = _load_outbound_tls(settings)
+        if code != EXIT_OK:
+            return code
+    if args.command == "check-config":
+        return _check_config(settings, stream)
     if args.command == "seed-synthetic":
         return _seed_synthetic(settings, args, stream)
     if args.command == "migrate":

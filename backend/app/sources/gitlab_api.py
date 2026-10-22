@@ -2,8 +2,10 @@
 GitLab REST API v4 transport: client setup, retries, pagination, errors.
 
 Used only by :mod:`app.sources.gitlab`. :func:`open_client` builds the
-``httpx.AsyncClient`` (TLS verification on, timeouts, connection
-limits, no redirects, token in the ``PRIVATE-TOKEN`` header).
+``httpx.AsyncClient`` (the shared outbound TLS context of
+:mod:`app.tls`, so certificates are verified unless
+``ADRIANO_TLS_VERIFY`` is false; timeouts, connection limits, no
+redirects, token in the ``PRIVATE-TOKEN`` header).
 :class:`GitLabApi` wraps it:
 
 - **Bounded concurrency:** every HTTP request holds one permit of a
@@ -41,6 +43,7 @@ import asyncio
 import datetime
 import email.utils
 import logging
+import ssl
 from collections.abc import Awaitable, Callable, Mapping
 
 import httpx
@@ -52,6 +55,7 @@ from app.sources.port import (
     SourceNotFoundError,
     SourceUnavailableError,
 )
+from app.tls import outbound_ssl_context
 
 #: Concurrent HTTP requests per adapter (also the connection pool size).
 MAX_CONCURRENT_REQUESTS = 4
@@ -93,7 +97,7 @@ def open_client(
     token: str,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
-    tls_verify: bool = True,
+    ssl_context: ssl.SSLContext | None = None,
 ) -> httpx.AsyncClient:
     """
     Build the HTTP client of one poll.
@@ -102,8 +106,8 @@ def open_client(
     :param token: Access token (sent as ``PRIVATE-TOKEN``).
     :param transport: Transport override (tests use
         ``httpx.MockTransport``); ``None`` uses the default transport.
-    :param tls_verify: Whether to verify the instance's certificate
-        (``ADRIANO_TLS_VERIFY``).
+    :param ssl_context: TLS context (see :mod:`app.tls`); ``None``
+        uses the default outbound context.
     :returns: The client; the caller closes it.
     """
     return httpx.AsyncClient(
@@ -114,7 +118,7 @@ def open_client(
             max_connections=MAX_CONCURRENT_REQUESTS,
             max_keepalive_connections=MAX_CONCURRENT_REQUESTS,
         ),
-        verify=tls_verify,
+        verify=ssl_context or outbound_ssl_context(),
         follow_redirects=False,
         transport=transport,
     )

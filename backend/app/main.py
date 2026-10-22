@@ -7,7 +7,10 @@ factory; nothing is registered at import time outside of it.
 The lifespan loads ``catalog.yaml`` and syncs source registrations
 (:func:`app.composition.start_catalog`). Startup never fails because of
 the configuration or the database: problems are logged and reported by
-``/healthz``.
+``/healthz``. The one exception is the outbound TLS context
+(:mod:`app.tls`): :func:`create_app` builds it, so an unloadable
+``ADRIANO_EXTRA_CA_CERTS`` entry stops every worker at startup instead
+of failing the first sign-in or poll.
 
 Authentication: every ``/api/v1`` route requires a bearer token
 (:mod:`app.auth`) -- an OIDC/dev JWT, except candidate intake
@@ -43,6 +46,7 @@ from app.routers import (
     records,
     sources,
 )
+from app.tls import ssl_context_from_settings
 from app.web import mount_spa
 
 logger = logging.getLogger(__name__)
@@ -121,9 +125,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     :returns: A fully configured :class:`~fastapi.FastAPI` instance
         with routers and exception handlers registered.
     :raises ConfigurationError: If ``static_dir`` is set but holds no
-        ``index.html``.
+        ``index.html``, or an extra CA path cannot be loaded.
     """
     settings = settings or get_settings()
+    ssl_context_from_settings(settings)
     app = FastAPI(
         title="adriano",
         version=settings.version,

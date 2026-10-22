@@ -50,6 +50,12 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            # Optional internal CA (see ADRIANO_EXTRA_CA_CERTS in
+            # configmap.yaml). The init container needs it too: the
+            # path must exist in every container.
+            # - name: ca
+            #   mountPath: /etc/adriano-ca
+            #   readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -79,6 +85,10 @@ spec:
             - name: catalog
               mountPath: /etc/adriano
               readOnly: true
+            # Optional internal CA, as in the migrate init container.
+            # - name: ca
+            #   mountPath: /etc/adriano-ca
+            #   readOnly: true
           # Memory grows with ADRIANO_WORKERS: budget roughly 100 to
           # 150 MiB per worker plus a base. Raise the limit together
           # with the worker count.
@@ -118,3 +128,8 @@ spec:
         - name: catalog
           configMap:
             name: adriano-catalog
+        # Optional internal CA: a ConfigMap with the PEM file(s), e.g.
+        # kubectl create configmap adriano-ca --from-file=internal-ca.pem
+        # - name: ca
+        #   configMap:
+        #     name: adriano-ca

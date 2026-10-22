@@ -22,6 +22,7 @@ BLANK_OPTIONAL = [
     "ADRIANO_DEV_SHARED_SECRET",
     "ADRIANO_STATIC_DIR",
     "ADRIANO_FORWARDED_ALLOW_IPS",
+    "ADRIANO_EXTRA_CA_CERTS",
 ]
 
 
@@ -210,3 +211,43 @@ def test_tls_verification_can_be_disabled(
     settings = Settings()
 
     assert settings.tls_verify is False
+
+
+def test_extra_ca_certs_are_unset_by_default() -> None:
+    """Ensure no extra CA certificates are trusted unless configured."""
+    settings = Settings()
+
+    assert settings.extra_ca_certs is None
+
+
+def test_extra_ca_certs_split_on_commas(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ensure ADRIANO_EXTRA_CA_CERTS takes comma-separated paths."""
+    bundle = tmp_path / "bundle.pem"
+    bundle.touch()
+    directory = tmp_path / "certs"
+    directory.mkdir()
+    monkeypatch.setenv("ADRIANO_EXTRA_CA_CERTS", f" {bundle} ,{directory},, ")
+
+    settings = Settings()
+
+    assert settings.extra_ca_certs == (bundle, directory)
+
+
+def test_extra_ca_certs_reject_missing_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ensure a path that does not exist fails validation, named."""
+    present = tmp_path / "ca.pem"
+    present.touch()
+    missing = tmp_path / "missing.pem"
+    monkeypatch.setenv("ADRIANO_EXTRA_CA_CERTS", f"{present},{missing}")
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings()
+
+    message = excinfo.value.errors()[0]["msg"]
+    assert "ADRIANO_EXTRA_CA_CERTS" in message
+    assert str(missing) in message
+    assert str(present) not in message

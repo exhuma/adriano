@@ -36,6 +36,7 @@ Public API: :data:`SUPPORTED_TYPES`, :class:`SourceSettings`,
 :func:`parse_options`, :func:`default_registry`.
 """
 
+import ssl
 from collections.abc import Callable, Collection, Mapping
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -222,7 +223,9 @@ def parse_options[M: BaseModel](
         ) from exc
 
 
-def default_registry(*, tls_verify: bool = True) -> SourceTypeRegistry:
+def default_registry(
+    *, ssl_context: ssl.SSLContext | None = None
+) -> SourceTypeRegistry:
     """
     Build the registry of the Phase 1 source types.
 
@@ -232,8 +235,8 @@ def default_registry(*, tls_verify: bool = True) -> SourceTypeRegistry:
     ``SourceSettings``, ``parse_options``); importing them at module
     level would be a circular import.
 
-    :param tls_verify: Whether network adapters verify server
-        certificates (``ADRIANO_TLS_VERIFY``).
+    :param ssl_context: TLS context of network adapters (see
+        :mod:`app.tls`); ``None`` uses the default outbound context.
     :returns: The registry.
     """
     from app.sources import filesystem, gitlab
@@ -241,6 +244,6 @@ def default_registry(*, tls_verify: bool = True) -> SourceTypeRegistry:
     registry = SourceTypeRegistry(pending=SUPPORTED_TYPES)
     registry.register("filesystem", filesystem.validate_settings)
     registry.register(
-        "gitlab", partial(gitlab.validate_settings, tls_verify=tls_verify)
+        "gitlab", partial(gitlab.validate_settings, ssl_context=ssl_context)
     )
     return registry

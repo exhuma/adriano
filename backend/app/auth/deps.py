@@ -165,6 +165,7 @@ def get_oidc_validator(
         settings.oidc_issuer,
         settings.oidc_audience,
         settings.tls_verify,
+        settings.extra_ca_certs or (),
     )
 
 

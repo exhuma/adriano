@@ -5,6 +5,8 @@ description = "ADR governance catalog backend (adriano)"
 requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.20.0",
+    "certifi>=2026.10.18",
+    "cryptography>=50.0.2",
     "fastapi>=0.148.0",
     "httpx>=0.28.1",
     "markdown-it-py>=4.2.0",

@@ -153,8 +153,42 @@ Application settings
    It *replaces* the standard set, so include the public authorities
    too if you still need them.
    Mount the file read-only.
+   To trust an internal certificate authority, prefer
+   :envvar:`ADRIANO_EXTRA_CA_CERTS`: it adds to the standard set
+   instead of replacing it.
+
+.. envvar:: ADRIANO_EXTRA_CA_CERTS
+
+   :Required: no; only for an internal certificate authority
+   :Default: none (only the standard set of public authorities is
+      trusted)
+   :Example: ``/etc/adriano-ca/internal-ca.pem``
+
+   One or more paths inside the container, separated by commas.
+   Each path is a PEM file (a bundle with several certificates is
+   fine) or a folder; from a folder, Adriano reads the ``*.pem`` and
+   ``*.crt`` files.
+   Adriano trusts these certificates **in addition to** the standard
+   set, so public endpoints keep working.
+   They apply to every outbound HTTPS call: the identity provider's
+   discovery document and signing keys, and network sources such as
+   GitLab.
    This is the way to trust an internal certificate authority;
    prefer it over :envvar:`ADRIANO_TLS_VERIFY`.
+   If :envvar:`SSL_CERT_FILE` (or ``SSL_CERT_DIR``) is set, it
+   replaces the standard set and these certificates are added to it.
+
+   Every path must exist in every container that runs Adriano,
+   including the ``adriano migrate`` init container.
+   A path that is not mounted there stops the container at start.
+   A file that cannot be read, holds no PEM certificate, or a folder
+   without ``*.pem`` or ``*.crt`` files stops the container too, with
+   exit code 2 and a message that names the file.
+   ``adriano check-config`` reports the same problems and logs the
+   subject of every certificate it added.
+   The certificates are public, so a ConfigMap is fine; mount them
+   read-only.
+   See :doc:`deploy/docker-compose` and :doc:`deploy/kubernetes`.
 
 .. envvar:: ADRIANO_TLS_VERIFY
 
@@ -170,9 +204,11 @@ Application settings
    and get any token accepted, or feed false content into the catalog.
    Use it only as a stop-gap on a test or staging instance, never in
    production; trust your certificate authority with
-   :envvar:`SSL_CERT_FILE` instead.
-   While it is ``false``, Adriano logs a warning at start-up and when
-   it first contacts the identity provider.
+   :envvar:`ADRIANO_EXTRA_CA_CERTS` instead.
+   While it is ``false``, :envvar:`ADRIANO_EXTRA_CA_CERTS` is ignored
+   and Adriano logs a warning.
+   It also logs a warning at start-up and when it first contacts the
+   identity provider.
 
 Sign-in settings
 ----------------
