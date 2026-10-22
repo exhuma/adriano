@@ -28,7 +28,12 @@ Sign in
 #. Use your usual company login.
 
 You return to the catalog when the login is done.
+You stay signed in when you reload the page or open a new tab.
+You are asked to sign in again after a period without activity,
+or after the maximum session length your administrators set.
 To leave, open the menu with your name and select **Sign out**.
+Signing out also ends your session at the company login, so the next
+sign-in asks for your credentials again.
 
 What you are allowed to do
 --------------------------

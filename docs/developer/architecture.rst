@@ -47,8 +47,9 @@ and runs an approval workflow on top of that copy.
 
 Readers and reviewers
    Use the single-page app in a browser.
-   They sign in at the organisation's OIDC provider;
-   the SPA sends the access token as a bearer token to the API.
+   They sign in at the organisation's OIDC provider through the
+   backend, which keeps the tokens and gives the browser a session
+   cookie.
 
 Operators
    Deploy Adriano, write ``catalog.yaml``,
@@ -98,7 +99,7 @@ and calls flow only downward:
      storage["app.storage<br/>store port, PostgreSQL implementation"]
      db[("PostgreSQL")]
 
-     ui -- "bearer token, JSON" --> routers
+     ui -- "session cookie, JSON" --> routers
      routers -- "authenticates and authorizes" --> auth
      routers -- "calls" --> services
      services -- "uses pure functions" --> domain
@@ -140,8 +141,14 @@ and calls flow only downward:
    flat ``{detail, code}`` body.
 
 :mod:`app.auth`
-   Token validation (:mod:`app.auth.tokens` picks the validator by the
-   token's ``alg``), claim mapping, RBAC and push-token checks.
+   Session-cookie authentication (:mod:`app.auth.deps`,
+   :mod:`app.auth.cookies`, :mod:`app.auth.csrf`), the OIDC client and
+   token validation (:mod:`app.auth.idp`, :mod:`app.auth.oidc`),
+   the configured-mechanism check (:mod:`app.auth.status`), claim
+   mapping, RBAC and push-token checks.
+   The session and sign-in services are in
+   :mod:`app.services.auth_sessions` and :mod:`app.services.oidc_login`;
+   the sessions are stored in PostgreSQL.
 
 :mod:`app.composition`
    The composition root.
@@ -349,8 +356,8 @@ Unique constraints as the arbiter
 Stateless replicas
 ~~~~~~~~~~~~~~~~~~
 
-The backend holds no state between requests:
-identity comes from the bearer token,
+The backend process holds no state between requests:
+identity comes from the session row in PostgreSQL,
 catalog data from PostgreSQL,
 and configuration from ``catalog.yaml`` and the environment at startup.
 Any number of replicas and Uvicorn workers can run against one database
@@ -412,15 +419,16 @@ API access
    into ``src/types/openapi.ts`` with ``npm run gen:types``.
 
 Authentication
-   ``oidc-client-ts`` runs Authorization Code + PKCE as a public client.
-   Tokens are kept in memory only, so a full page reload signs the user
-   out (see :doc:`security`).
+   The SPA holds no tokens.
+   It restores the session from ``GET /auth/session`` on load and
+   navigates to ``/auth/login`` to sign in; the backend is the OIDC
+   client (see :doc:`security` and
+   :doc:`decisions/0022-backend-for-frontend-session`).
 
 Runtime configuration
-   The API process renders ``/config.js`` from its settings (OIDC
-   settings; the API is always on the same origin) and adds the
-   Content-Security-Policy with the identity provider's origin to every
-   response.
+   The API process renders ``/config.js`` from its settings (whether
+   OIDC is enabled; the API is always on the same origin) and adds the
+   Content-Security-Policy to every response.
    The dev-login switch is a build-time literal and is never part of
    runtime configuration.
 

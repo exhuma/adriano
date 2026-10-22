@@ -137,10 +137,57 @@ Signed in, but every page says "permission required" (403)
    ``/healthz`` showing ``rbac: empty`` means no role grants
    anything.
 
-Users are signed out after reloading the page
-   Expected: sessions are kept in browser memory only.
-   With an active provider session, signing in again needs no
-   password.
+Sign-in fails with a "redirect URI mismatch" at the provider
+   *Cause:* Adriano builds the redirect address from the request's
+   scheme and ``Host`` header.
+   Behind a proxy that rewrites ``Host``, or that terminates TLS
+   without being trusted, the address differs from the registered
+   ``https://<address>/auth/callback``.
+
+   *Check:* the proxy passes ``Host`` unchanged;
+   :envvar:`ADRIANO_FORWARDED_ALLOW_IPS` includes the proxy so that
+   ``X-Forwarded-Proto`` is honoured (``X-Forwarded-Host`` is
+   ignored on purpose); the registered redirect URI matches exactly.
+
+Sign-in loops back to the sign-in screen
+   *Cause:* the browser does not keep the session cookie.
+   The cookie is ``Secure`` and uses the ``__Host-`` prefix, so it is
+   refused over plain HTTP (except ``http://localhost``) and when
+   cookies are blocked.
+
+   *Check:* the address in the browser starts with ``https://``;
+   the browser accepts cookies for it; the proxy does not strip
+   ``Set-Cookie`` headers.
+
+A change in the web UI fails with 403 ``csrf_failed``
+   *Cause:* the request lacked the ``X-Adriano-CSRF`` header, or its
+   ``Origin`` header differs from the address Adriano sees.
+   A proxy that rewrites ``Host`` or hides the original scheme causes
+   the second case.
+
+   *Check:* the same proxy settings as for the redirect URI.
+   Scripts that call the API must sign in through the browser flow
+   and send the header; the API accepts no bearer tokens for users.
+
+Users are asked to sign in again (401 ``session_expired``)
+   *Cause:* the session ended: idle for
+   :envvar:`ADRIANO_SESSION_IDLE_MINUTES`, older than
+   :envvar:`ADRIANO_SESSION_MAX_HOURS`, signed out elsewhere, the
+   provider refused to renew the access token, or
+   :envvar:`ADRIANO_SESSION_KEY` changed.
+
+   *Check:* this is normal at the limits.
+   If it happens sooner, check the provider's session and refresh
+   token lifetimes (rotation, ``offline_access``).
+
+The container exits at start-up naming ``ADRIANO_SESSION_KEY``
+   *Cause:* OIDC or the development sign-in is enabled and the key is
+   missing, or it is not a Fernet key.
+   :envvar:`ADRIANO_OIDC_CLIENT_SECRET` is required with OIDC too.
+
+   *Check:* generate a key with
+   ``python -c "from cryptography.fernet import Fernet;
+   print(Fernet.generate_key().decode())"`` and set it.
 
 ``/healthz`` shows ``auth: dev`` or ``auth: oidc+dev``
    *Cause:* :envvar:`ADRIANO_DEV_SHARED_SECRET` is set.

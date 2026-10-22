@@ -55,7 +55,7 @@ API client and generated types
 ------------------------------
 
 Every request goes through the client in ``api/index.ts``, which
-attaches the bearer token, shapes errors into ``ApiError`` and routes
+sends the session cookie and CSRF header, shapes errors into ``ApiError`` and routes
 401 responses to the re-authentication guard.
 Components never call ``fetch`` directly.
 
@@ -91,17 +91,19 @@ Authentication flow
 
 ``main.ts`` calls ``initAuth()`` from ``composables/useAuth.ts``
 before anything can issue a request.
-It wires the API client's token provider and its 401 handler.
+It restores the session with ``GET /auth/session`` and wires the API
+client's 401 handler.
 
-OIDC (``auth/oidc.ts``)
-   Authorization Code with PKCE through ``oidc-client-ts``.
-   It is configured only when runtime configuration supplies an
-   authority and a client id.
-   The signed-in user, including its tokens, is kept in memory, never
-   in ``localStorage``, so a page reload signs the user out.
-   Only the short-lived PKCE state survives the redirect round trip,
-   in ``sessionStorage``.
-   ``/auth/callback`` is the registered redirect target.
+Session
+   The backend is the OIDC client; the SPA holds no tokens, only an
+   HttpOnly cookie it cannot read.
+   While the session is being restored the app shows a neutral
+   loading state, so a reload keeps the user signed in.
+   Sign-in navigates to ``/auth/login?return_to=<path>``; sign-out
+   posts to ``/auth/logout`` and follows the returned
+   ``end_session_url``.
+   The API client sends same-origin credentials and the
+   ``X-Adriano-CSRF: 1`` header on unsafe methods.
 
 Dev sign-in (``auth/devAuth.ts``, ``auth/devPresets.ts``)
    Reached only through the dynamically imported ``DevLoginDialog``,
@@ -114,10 +116,10 @@ Dev sign-in (``auth/devAuth.ts``, ``auth/devPresets.ts``)
    dev-login markers appear in ``dist/``.
 
 Re-authentication guard (``auth/reauthGuard.ts``)
-   A 401 normally means the session expired and one redirect to the
-   identity provider fixes it.
-   A token can also be valid yet rejected by the backend, for example
-   because of its audience, and redirecting again would loop.
+   A 401 normally means the session ended and one redirect to
+   sign-in fixes it.
+   A session can also be valid yet rejected by the backend, for example
+   because of the token's audience, and redirecting again would loop.
    The guard allows one redirect per failure episode, counted in
    ``sessionStorage``, and then shows a blocking error instead.
 
@@ -132,12 +134,8 @@ or ``import.meta.env``; components import named values from it.
 In the container, the backend (``app/web.py``) renders ``/config.js``
 from its ``ADRIANO_*`` settings, and ``index.html`` loads it before the
 bundle.
-The settings are ``ADRIANO_OIDC_AUTHORITY``, ``ADRIANO_OIDC_CLIENT_ID``,
-``ADRIANO_OIDC_REDIRECT_URI``,
-``ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI`` and ``ADRIANO_OIDC_SCOPE``.
-The backend validates ``ADRIANO_OIDC_AUTHORITY`` strictly, because it
-is also placed into the content security policy, and refuses to start
-on an invalid value.
+The file carries only ``apiBaseUrl`` and ``oidcEnabled``; the
+OIDC client settings stay on the server.
 Operators find the consequences in :doc:`/operator/index`.
 
 In development, ``public/config.js`` is an empty stub, and

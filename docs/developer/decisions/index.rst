@@ -36,3 +36,4 @@ the status line then says which entry supersedes it.
    0019-approval-state-derived-on-read
    0020-single-image
    0021-extra-ca-certificates
+   0022-backend-for-frontend-session
