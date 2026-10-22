@@ -1,14 +1,18 @@
 """
-Request and response models for identity, dev tokens and poll triggers.
+Request and response models for identity, sessions and poll triggers.
 
 - :class:`MeOut` -- ``GET /api/v1/me``.
-- :class:`DevTokenIn` / :class:`DevTokenOut` -- ``POST /auth/dev/token``
-  (mounted only when dev auth is enabled).
+- :class:`SessionOut` -- ``GET /auth/session``.
+- :class:`LogoutOut` -- ``POST /auth/logout``.
+- :class:`DevLoginIn` -- ``POST /auth/dev/login`` (mounted only when
+  dev auth is enabled).
 - :class:`DevRoleOut` / :class:`DevRolesOut` -- ``GET /auth/dev/roles``
   (mounted only when dev auth is enabled).
 - :class:`PollAcceptedOut` -- ``POST /api/v1/sources/poll`` and
   ``POST /api/v1/sources/{id}/poll``.
 """
+
+import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,8 +40,26 @@ class MeOut(BaseModel):
     reviewer: ReviewerOut
 
 
-class DevTokenIn(BaseModel):
-    """Identity to put into a dev token."""
+class SessionOut(BaseModel):
+    """Whether the browser has a usable session, and until when."""
+
+    authenticated: bool
+    expires_at: datetime.datetime | None = Field(
+        default=None,
+        description="When the session ends without further activity "
+        "(never after its absolute expiry); omitted when not "
+        "authenticated.",
+    )
+
+
+class LogoutOut(BaseModel):
+    """Where to send the browser to end the IdP session too."""
+
+    end_session_url: str | None
+
+
+class DevLoginIn(BaseModel):
+    """Identity of a dev session."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -45,14 +67,6 @@ class DevTokenIn(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     email: str | None = Field(default=None, max_length=320)
     roles: list[str] = Field(default_factory=list, max_length=50)
-
-
-class DevTokenOut(BaseModel):
-    """A minted dev access token (OAuth 2 token-response shape)."""
-
-    access_token: str
-    token_type: str = "Bearer"
-    expires_in: int
 
 
 class DevRoleOut(BaseModel):

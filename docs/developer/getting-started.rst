@@ -50,10 +50,18 @@ Edit ``.env`` and set:
 
    ADRIANO_DEV_AUTH_ENABLED=true
    ADRIANO_DEV_SHARED_SECRET=<output of openssl rand -hex 32>
+   ADRIANO_SESSION_KEY=<output of the command below>
    VITE_DEV_AUTH=true
 
-The first two switch on the backend's dev-only HS256 token path and
-the ``/auth/dev`` routes.
+Generate the session key with:
+
+.. code-block:: sh
+
+   cd backend && uv run python -c \
+     "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+The first two switch on the backend's dev-only session path and
+the ``/auth/dev`` routes; dev sessions are encrypted with the third.
 ``VITE_DEV_AUTH`` shows the "Dev sign-in" dialog in the Vite dev
 server.
 Production builds never contain that dialog, whatever the variable
@@ -169,15 +177,21 @@ Operator.
 The presets are derived from the roles in the loaded
 ``catalog.yaml``, so a preset the catalog cannot satisfy is hidden.
 Roles can always be typed by hand.
-The dialog uses the backend's ``POST /auth/dev/token`` and
+The dialog uses the backend's ``POST /auth/dev/login`` and
 ``GET /auth/dev/roles`` routes.
+Login creates a server-side dev session and sets the session cookie,
+so a reload keeps you signed in.
 
-To call the API from the command line, mint a token:
+To call the API from the command line, sign in with a cookie jar
+(the cookie is ``Secure``, which ``curl`` honours for
+``localhost``):
 
 .. code-block:: sh
 
-   TOKEN=$(task mint-dev-token -- --sub alice --roles admin)
-   curl -H "Authorization: Bearer $TOKEN" localhost:8100/api/v1/me
+   curl -c jar -H 'X-Adriano-CSRF: 1' -H 'Content-Type: application/json' \
+     -d '{"sub": "alice", "roles": ["admin"]}' \
+     localhost:8100/auth/dev/login
+   curl -b jar localhost:8100/api/v1/me
 
 The backend logs a warning at startup whenever the dev path is active.
 
@@ -244,11 +258,6 @@ Pass extra arguments to the underlying command after ``--``.
 ``task check-config``
    Validate ``catalog.yaml`` and print the registrations, policy and
    any problems.
-
-``task mint-dev-token``
-   Print a dev-only HS256 access token signed with the dev secret from
-   ``.env``, for example
-   ``task mint-dev-token -- --sub alice --roles admin``.
 
 ``task bench:seed``
    Reset and migrate the dev database (never the test database) and

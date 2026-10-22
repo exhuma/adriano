@@ -82,25 +82,25 @@ A scheduler for polling
 Registering the client at your identity provider
 ------------------------------------------------
 
-Register one **public client** for the web UI: authorization code
-flow with PKCE, no client secret.
+Register one **confidential client** for Adriano: authorization code
+flow with PKCE, client authentication on.
 Configure:
 
 Redirect URI
    ``https://<your Adriano address>/auth/callback``
 Post-logout redirect URI
    ``https://<your Adriano address>/``
-Web origin (CORS)
-   ``https://<your Adriano address>``, if the provider restricts the
-   browser origins that may call its token and key endpoints.
+Refresh tokens
+   Allow ``offline_access`` and rotate refresh tokens.
 Access token audience and roles
    The access token must carry the audience in
    :envvar:`ADRIANO_OIDC_AUDIENCE` and a list of role names at
    :envvar:`ADRIANO_OIDC_ROLES_CLAIM`.
 
-Then set :envvar:`ADRIANO_OIDC_AUTHORITY` and
-:envvar:`ADRIANO_OIDC_CLIENT_ID`.
-Both are required together.
+Then set :envvar:`ADRIANO_OIDC_AUTHORITY`,
+:envvar:`ADRIANO_OIDC_CLIENT_ID`, :envvar:`ADRIANO_OIDC_CLIENT_SECRET`
+and :envvar:`ADRIANO_SESSION_KEY`.
+All four are required together.
 :doc:`/operator/authentication` describes the full contract.
 
 Image tags and channels
@@ -149,7 +149,9 @@ without Compose or Kubernetes:
    docker run --rm -p 8000:8000 \
      -e ADRIANO_DATABASE_URL=postgresql://adriano:<password>@pg.example.com:5432/adriano \
      -e ADRIANO_OIDC_AUTHORITY=https://idp.example.com/realms/adr \
-     -e ADRIANO_OIDC_CLIENT_ID=adriano-web \
+     -e ADRIANO_OIDC_CLIENT_ID=adriano \
+     -e ADRIANO_OIDC_CLIENT_SECRET=<client secret> \
+     -e ADRIANO_SESSION_KEY=<Fernet key> \
      -e ADRIANO_CONFIG_FILE=/etc/adriano/catalog.yaml \
      -v "$PWD/catalog.yaml:/etc/adriano/catalog.yaml:ro" \
      ghcr.io/exhuma/adriano:<version>
@@ -175,7 +177,10 @@ The container refuses to start, and logs why, when:
 - :envvar:`ADRIANO_DATABASE_URL` is missing or not a ``postgresql://``
   address;
 - :envvar:`ADRIANO_OIDC_AUTHORITY` is malformed, or only one of it and
-  :envvar:`ADRIANO_OIDC_CLIENT_ID` is set.
+  :envvar:`ADRIANO_OIDC_CLIENT_ID` is set;
+- OIDC or the development sign-in is enabled and
+  :envvar:`ADRIANO_SESSION_KEY` is missing or not a valid key, or OIDC
+  is enabled without :envvar:`ADRIANO_OIDC_CLIENT_SECRET`.
 
 :doc:`/operator/troubleshooting` lists the exact messages.
 

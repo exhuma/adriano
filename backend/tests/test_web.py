@@ -17,22 +17,16 @@ from app.config import Settings, get_settings
 from app.errors import ConfigurationError
 from app.main import create_app
 from app.web import IMMUTABLE, NO_CACHE, render_config_js
+from tests.auth_helpers import https_client
 
 AUTHORITY = "https://idp.example.com:8443/realms/adr"
 IDP_ORIGIN = "https://idp.example.com:8443"
-CLIENT_ID = "adriano-spa"
+CLIENT_ID = "adriano"
 INDEX_HTML = "<!doctype html><title>spa</title>"
 ASSET = "/assets/index-abc123.js"
 
 #: Keys of ``RuntimeConfig`` in ``frontend/src/config.ts``.
-RUNTIME_CONFIG_KEYS = {
-    "apiBaseUrl",
-    "oidcAuthority",
-    "oidcClientId",
-    "oidcRedirectUri",
-    "oidcPostLogoutRedirectUri",
-    "oidcScope",
-}
+RUNTIME_CONFIG_KEYS = {"apiBaseUrl", "oidcEnabled"}
 
 
 @pytest.fixture
@@ -80,7 +74,7 @@ def _client(settings: Settings) -> TestClient:
     """
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
-    return TestClient(app)
+    return https_client(app)
 
 
 @pytest.fixture
@@ -126,17 +120,25 @@ def _directive(csp: str, name: str) -> list[str]:
 def test_config_js_is_rendered_from_the_settings(
     spa_client: TestClient,
 ) -> None:
-    """Ensure /config.js carries the configured OIDC client values."""
+    """Ensure /config.js says OIDC is enabled and carries no client keys."""
     response = spa_client.get("/config.js")
 
     assert response.status_code == 200
     assert _config_object(response.text) == {
         "apiBaseUrl": "",
-        "oidcAuthority": AUTHORITY,
-        "oidcClientId": CLIENT_ID,
-        "oidcRedirectUri": "",
-        "oidcPostLogoutRedirectUri": "",
-        "oidcScope": "openid profile email",
+        "oidcEnabled": True,
+    }
+    assert AUTHORITY not in response.text
+    assert CLIENT_ID not in response.text
+
+
+def test_config_js_without_oidc(spa_settings: Settings) -> None:
+    """Ensure oidcEnabled is false when no authority is configured."""
+    settings = spa_settings.model_copy(update={"oidc_authority": None})
+
+    assert _config_object(render_config_js(settings)) == {
+        "apiBaseUrl": "",
+        "oidcEnabled": False,
     }
 
 
@@ -158,42 +160,30 @@ def test_config_js_has_exactly_the_runtime_config_keys(
 
     assert set(_config_object(script)) == RUNTIME_CONFIG_KEYS
     assert "dev" not in script.lower()
-
-
-def test_config_js_escapes_script_breaking_values(
-    spa_settings: Settings,
-) -> None:
-    """Ensure a value cannot close a <script> element in config.js."""
-    hostile = 'https://x.test/</script><script>alert("1")</script>'
-    settings = spa_settings.model_copy(update={"oidc_redirect_uri": hostile})
-
-    script = render_config_js(settings)
-
     assert "<" not in script
-    assert _config_object(script)["oidcRedirectUri"] == hostile
 
 
-def test_csp_allows_only_the_idp_origin(spa_client: TestClient) -> None:
-    """Ensure connect-src/frame-src add the IdP origin and nothing else."""
+def test_csp_names_no_idp_origin(spa_client: TestClient) -> None:
+    """Ensure the browser may only connect to this origin, frame nothing."""
     csp = spa_client.get("/").headers["content-security-policy"]
 
-    assert _directive(csp, "connect-src") == ["'self'", IDP_ORIGIN]
-    assert _directive(csp, "frame-src") == ["'self'", IDP_ORIGIN]
-    assert _directive(csp, "script-src") == ["'self'"]
-    assert "/realms" not in csp
-
-
-def test_csp_without_oidc_stays_self(spa_settings: Settings) -> None:
-    """Ensure no IdP source is added when OIDC is not configured."""
-    settings = spa_settings.model_copy(
-        update={"oidc_authority": None, "oidc_client_id": None}
-    )
-
-    with _client(settings) as client:
-        csp = client.get("/").headers["content-security-policy"]
-
     assert _directive(csp, "connect-src") == ["'self'"]
-    assert _directive(csp, "frame-src") == ["'self'"]
+    assert _directive(csp, "frame-src") == ["'none'"]
+    assert _directive(csp, "frame-ancestors") == ["'none'"]
+    assert _directive(csp, "script-src") == ["'self'"]
+    assert "idp.example.com" not in csp
+
+
+def test_auth_routes_win_over_the_spa(spa_client: TestClient) -> None:
+    """Ensure /auth/* backend routes are not shadowed by index.html."""
+    session = spa_client.get("/auth/session")
+    script = spa_client.get("/auth/landing.js")
+
+    assert session.json() == {"authenticated": False}
+    assert script.headers["content-type"].startswith("text/javascript")
+    assert script.headers["content-security-policy"].startswith(
+        "default-src 'self'"
+    )
 
 
 def test_security_headers_are_set_on_api_responses(
@@ -225,13 +215,11 @@ def test_api_docs_get_a_csp_allowing_their_cdn(
     assert _directive(csp, "frame-ancestors") == ["'none'"]
 
 
-@pytest.mark.parametrize(
-    "path", ["/", "/records/central/adr-1", "/auth/callback?code=x&state=y"]
-)
+@pytest.mark.parametrize("path", ["/", "/records/central/adr-1", "/sources"])
 def test_spa_routes_fall_back_to_index_html(
     spa_client: TestClient, path: str
 ) -> None:
-    """Ensure deep links and the OIDC callback serve index.html."""
+    """Ensure deep links serve index.html."""
     response = spa_client.get(path)
 
     assert response.status_code == 200
@@ -256,6 +244,8 @@ def test_head_on_a_deep_link_serves_index_headers(
         "/api/unknown",
         "/api/v1/nope",
         "/auth/dev/nope",
+        "/auth/nope",
+        "/auth",
         "/healthz/extra",
         "/assets/missing.js",
     ],

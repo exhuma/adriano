@@ -1,152 +1,221 @@
 /**
- * Singleton auth orchestration: wires the OIDC/dev-login token
- * sources into the API client's `TokenProvider`/401 seam, and
- * exposes sign-in/out actions for the app shell.
+ * Singleton auth orchestration for the Backend-for-Frontend session:
+ * restores the session on startup, wires the API client's 401/success
+ * seams into the re-auth loop guard, and exposes sign-in/out actions
+ * for the app shell.
+ *
+ * The browser holds no tokens. The backend keeps them in a
+ * server-side session and hands the browser an HttpOnly cookie, so
+ * "am I signed in?" is answered by `GET /auth/session` -- on every
+ * page load, which is what lets a reload keep the user signed in.
  *
  * Module-level state (no Pinia; `module-vue-vuetify` "State
  * management"). `initAuth()` is idempotent and called once from
  * `main.ts`.
  *
- * Deliberately has **no** dependency on `/auth/dev/token` or dev
- * token minting: that lives only in `src/auth/devAuth.ts`, reachable
- * only through the dynamically-imported `DevLoginDialog` (see
- * `App.vue`), so a production build's dead-code elimination can
- * remove the dev-login mechanism entirely (`module-dev-auth-bypass`).
- * `setDevSession`/`clearDevSession` below are the generic seam
- * `devAuth.ts` uses to report a dev sign-in/out; this module never
+ * Deliberately has **no** dependency on `/auth/dev/login` or any
+ * other dev-login code: that lives only in `src/auth/devAuth.ts`,
+ * reachable only through the dynamically-imported `DevLoginDialog`
+ * (see `App.vue`), so a production build's dead-code elimination
+ * can remove the dev-login mechanism entirely
+ * (`module-dev-auth-bypass`). `setDevSession` below is the generic
+ * seam `devAuth.ts` uses to report a dev sign-in; this module never
  * imports anything dev-specific.
  */
-import { readonly, ref } from "vue";
+import { computed, readonly, ref } from "vue";
 
 import {
+  api,
   setAuthSuccessHandler,
-  setTokenProvider,
   setUnauthorizedHandler,
 } from "@/api";
-import { authError, handleUnauthorized, notifyAuthSuccess } from "@/auth/reauthGuard";
-import { getUserManager, oidcConfigured } from "@/auth/oidc";
+import {
+  authError,
+  handleUnauthorized,
+  notifyAuthSuccess,
+} from "@/auth/reauthGuard";
+import { oidcEnabled } from "@/config";
 import { useMe } from "@/composables/useMe";
 
 export type AuthMode = "oidc" | "dev" | null;
 
-/** In-memory dev-login token (never `localStorage`/`sessionStorage`
- *  -- see `src/auth/oidc.ts` for why a page reload signing out is an
- *  accepted trade-off applied the same way to both auth modes). */
-const devToken = ref<string | null>(null);
-const authMode = ref<AuthMode>(null);
-let initialized = false;
+/** `GET /auth/session` response. */
+interface SessionStatus {
+  authenticated: boolean;
+  expires_at?: string | null;
+}
+
+/** `POST /auth/logout` response. */
+interface LogoutResult {
+  end_session_url: string | null;
+}
+
+/** `sessionStorage` key remembering that the current session is a
+ *  dev login, so the DEV LOGIN mode indicator survives a reload.
+ *  Holds a flag only, never any credential. */
+const DEV_SESSION_KEY = "adriano.devSession";
 
 const meState = useMe();
 
-async function currentToken(): Promise<string | null> {
-  if (devToken.value) {
-    return devToken.value;
-  }
-  const manager = getUserManager();
-  if (!manager) {
+/** `true` once the startup session check has finished, whatever its
+ *  outcome; the shell shows a neutral loading state until then so the
+ *  sign-in screen never flashes for a user who is signed in. */
+const sessionChecked = ref(false);
+const devSession = ref(readDevFlag());
+let initialized = false;
+
+/** Which kind of session is active, for the mode indicator. */
+const authMode = computed<AuthMode>(() => {
+  if (meState.me.value === null) {
     return null;
   }
-  const user = await manager.getUser();
-  return user && !user.expired ? user.access_token : null;
+  return devSession.value ? "dev" : "oidc";
+});
+
+function readDevFlag(): boolean {
+  try {
+    return sessionStorage.getItem(DEV_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeDevFlag(value: boolean): void {
+  devSession.value = value;
+  try {
+    if (value) {
+      sessionStorage.setItem(DEV_SESSION_KEY, "1");
+    } else {
+      sessionStorage.removeItem(DEV_SESSION_KEY);
+    }
+  } catch {
+    // The indicator then only lasts until the next reload.
+  }
+}
+
+/** Drop the cached identity and the dev flag. */
+function dropIdentity(): void {
+  writeDevFlag(false);
+  meState.clear();
+}
+
+/** Drop the local view of the session entirely: identity, dev flag,
+ *  and any blocking sign-in error with its re-auth counter. */
+function clearLocalSession(): void {
+  dropIdentity();
+  notifyAuthSuccess();
 }
 
 /**
- * Resolve a 401 by redirecting to the IdP, when one is configured
- * and this session is not a dev login. Otherwise there is no
- * redirect target: drop the session so the app falls back to the
+ * Ask the backend whether the browser has a session and, if so, load
+ * the caller's identity. Never throws: a failed check leaves the user
+ * signed out, which shows the sign-in screen.
+ *
+ * Does not take part in the re-auth loop guard (`trackAuth: false`):
+ * a valid session says nothing about whether the API accepts it.
+ */
+export async function restoreSession(): Promise<void> {
+  try {
+    const status = await api.get<SessionStatus>("/auth/session", {
+      trackAuth: false,
+    });
+    if (status.authenticated) {
+      await meState.load();
+    } else {
+      dropIdentity();
+    }
+  } catch {
+    dropIdentity();
+  } finally {
+    sessionChecked.value = true;
+  }
+}
+
+/**
+ * Build the backend sign-in URL for the page the user is on.
+ *
+ * :returns: ``/auth/login?return_to=<current path and query>``.
+ */
+function loginUrl(): string {
+  const here = window.location.pathname + window.location.search;
+  return `/auth/login?return_to=${encodeURIComponent(here)}`;
+}
+
+/**
+ * Resolve a 401 by sending the browser to the backend sign-in, when
+ * OIDC is available and this is not a dev session. Otherwise there is
+ * no redirect target: drop the session so the app falls back to the
  * sign-in screen (see `reauthGuard.ts` -- this carries no loop risk
  * because nothing retries automatically).
  *
- * :returns: Whether a redirect to the IdP was actually started.
+ * :returns: Whether a redirect to the sign-in was actually started.
  */
 async function redirectToSignIn(): Promise<boolean> {
-  const manager = getUserManager();
-  if (devToken.value || !manager) {
-    clearDevSession();
+  if (!oidcEnabled || devSession.value) {
+    clearLocalSession();
     return false;
   }
-  await manager.signinRedirect({ state: window.location.pathname });
+  window.location.assign(loginUrl());
   return true;
 }
 
-/** Wire the API client's auth seam. Safe to call more than once;
- *  only the first call has any effect. */
+/** Wire the API client's auth seams and start the startup session
+ *  check. Safe to call more than once; only the first call has any
+ *  effect. */
 export function initAuth(): void {
   if (initialized) {
     return;
   }
   initialized = true;
-  setTokenProvider({ getToken: currentToken });
   setUnauthorizedHandler(() => handleUnauthorized({ redirectToSignIn }));
   setAuthSuccessHandler(notifyAuthSuccess);
+  void restoreSession();
 }
 
-/** Begin the OIDC Authorization Code + PKCE sign-in redirect. No-op
- *  when OIDC is not configured. */
-export async function signInWithOidc(): Promise<void> {
-  const manager = getUserManager();
-  if (!manager) {
+/** Begin the OIDC sign-in: a full-page navigation to the backend,
+ *  which redirects to the IdP and returns to the current page. No-op
+ *  when OIDC is not available. */
+export function signInWithOidc(): void {
+  if (!oidcEnabled) {
     return;
   }
-  await manager.signinRedirect({ state: window.location.pathname });
+  window.location.assign(loginUrl());
 }
 
 /**
- * Complete the OIDC callback (`/auth/callback`) and load `/me`.
+ * Sign out: end the server-side session, drop the cached identity,
+ * and follow the IdP's end-session URL if the backend returned one.
+ * Otherwise the sign-in screen appears.
  *
- * :returns: The path to return to (the original path captured
- *     before the redirect), defaulting to `/`.
- * :throws Error: If OIDC is not configured, or the exchange fails
- *     (surfaced by the caller, `AuthCallbackView`).
+ * The local state is cleared even if the request fails (the server
+ * ends the session by expiry regardless), so the UI never claims a
+ * signed-in state the user just asked to leave.
  */
-export async function completeOidcCallback(): Promise<string> {
-  const manager = getUserManager();
-  if (!manager) {
-    throw new Error("OIDC is not configured");
-  }
-  const user = await manager.signinRedirectCallback();
-  authMode.value = "oidc";
-  await meState.load();
-  const state = user.state;
-  return typeof state === "string" && state.length > 0 ? state : "/";
-}
-
-/** Sign out of the active OIDC session (or dev login), clearing the
- *  cached identity. */
 export async function signOut(): Promise<void> {
-  if (devToken.value) {
-    clearDevSession();
-    return;
+  let endSessionUrl: string | null = null;
+  try {
+    const result = await api.post<LogoutResult>("/auth/logout", undefined, {
+      trackAuth: false,
+    });
+    endSessionUrl = result?.end_session_url ?? null;
+  } catch {
+    // Fall through: still leave the signed-in UI.
   }
-  const manager = getUserManager();
-  authMode.value = null;
-  meState.clear();
-  if (manager) {
-    const user = await manager.getUser();
-    if (user) {
-      await manager.removeUser();
-    }
+  clearLocalSession();
+  if (endSessionUrl) {
+    window.location.assign(endSessionUrl);
   }
 }
 
 /**
- * Record a successful dev-login sign-in and load `/me`. Called by
- * `src/auth/devAuth.ts` after minting a token; this module never
- * mints the token itself.
- *
- * :param token: The minted dev access token.
+ * Record a successful dev login: the backend has set the session
+ * cookie, so re-run the session check and load `/me`. Called by
+ * `src/auth/devAuth.ts`; this module never performs the dev login
+ * itself.
  */
-export async function setDevSession(token: string): Promise<void> {
-  devToken.value = token;
-  authMode.value = "dev";
-  await meState.load();
-}
-
-/** Drop the dev-login token and cached identity. */
-export function clearDevSession(): void {
-  devToken.value = null;
-  authMode.value = null;
-  meState.clear();
+export async function setDevSession(): Promise<void> {
+  writeDevFlag(true);
+  await restoreSession();
 }
 
 /** Singleton auth state and actions for the app shell and views. */
@@ -156,12 +225,12 @@ export function useAuth() {
     meLoading: meState.loading,
     meError: meState.error,
     can: meState.can,
-    authMode: readonly(authMode),
+    authMode,
     authError: readonly(authError),
-    oidcConfigured,
+    sessionChecked: readonly(sessionChecked),
+    oidcEnabled,
     initAuth,
     signInWithOidc,
-    completeOidcCallback,
     signOut,
   };
 }

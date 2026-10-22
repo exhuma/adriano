@@ -26,6 +26,39 @@ Upgrade steps
    not work against the new schema.
 #. Verify as after a fresh deployment, then resume the poll schedule.
 
+Upgrading to the BFF session
+----------------------------
+
+The release that introduced server-side sessions (ADR 0022) changes
+how people sign in.
+It is a breaking change; do these steps before rolling it out:
+
+#. Generate a session key and keep it secret:
+
+   .. code-block:: sh
+
+      python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+#. At your identity provider, switch the Adriano client to
+   **confidential** (client authentication on) and note its secret.
+   Make sure refresh tokens rotate and ``offline_access`` is allowed
+   (:doc:`authentication`).
+#. Set :envvar:`ADRIANO_SESSION_KEY` and
+   :envvar:`ADRIANO_OIDC_CLIENT_SECRET`.
+   Remove ``ADRIANO_OIDC_REDIRECT_URI`` and
+   ``ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI``; the addresses derive from
+   the request.
+#. Check that your proxy passes ``Host`` unchanged and that
+   :envvar:`ADRIANO_FORWARDED_ALLOW_IPS` trusts it.
+#. Roll out as usual.
+   The schema update adds the session tables.
+
+Every user signs in once after the upgrade.
+Scripts that called the user API with a bearer token stop working;
+CI push tokens are unaffected.
+The ``adriano mint-dev-token`` command and the ``/auth/dev/token``
+endpoint no longer exist.
+
 How the schema update runs
 --------------------------
 

@@ -131,7 +131,7 @@ def test_published_erratum_is_reported_then_verified_then_rejected(
         "proposed": 0,
     }
 
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, first, "accepted").status_code == 201
     assert decide(client, second, "rejected").status_code == 201
 
@@ -271,7 +271,7 @@ def test_search_record_type_filter(
     assert {item["erratum_for_title"] for item in errata} == {"Use a queue"}
     assert {item["id"] for item in both} == {target, first, second}
 
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, first, "accepted").status_code == 201
     needing = _search(client, record_type="erratum", needs_approval="true")
     assert [item["id"] for item in needing] == [second]

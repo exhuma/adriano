@@ -214,14 +214,33 @@ def test_invalid_body_with_bad_token_is_401(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_dev_jwt_is_refused_for_intake(client: TestClient) -> None:
-    """Ensure an OIDC/dev access token cannot push candidates."""
-    token = client.headers["Authorization"].removeprefix("Bearer ")
+def test_session_cookie_is_refused_as_push_token(client: TestClient) -> None:
+    """Ensure a user session (cookie value) cannot push candidates."""
+    cookie = client.cookies["__Host-adriano-session"]
 
-    response = push(client, candidate(ADR), token=token)
+    response = push(client, candidate(ADR), token=cookie)
 
     assert response.status_code == 401
     assert response.json()["code"] == "invalid_push_token"
+
+
+def test_session_alone_cannot_push(client: TestClient) -> None:
+    """Ensure intake ignores the session cookie (push token required)."""
+    response = push(client, candidate(ADR), token=None)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "not_authenticated"
+
+
+@pytest.mark.parametrize("method", ["PUT", "POST"])
+def test_push_is_exempt_from_csrf(client: TestClient, method: str) -> None:
+    """Ensure CI pushes need no CSRF header, even next to a cookie."""
+    client.event_hooks = {"request": [], "response": []}
+
+    response = push(client, candidate(ADR), method=method)
+
+    assert response.request.headers.get("X-Adriano-CSRF") is None
+    assert response.status_code in (200, 201)
 
 
 @pytest.mark.parametrize(
@@ -229,6 +248,8 @@ def test_dev_jwt_is_refused_for_intake(client: TestClient) -> None:
 )
 def test_push_token_cannot_read(client: TestClient, path: str) -> None:
     """Ensure a push token grants no catalog read access."""
+    client.cookies.clear()
+
     response = client.get(
         path, headers={"Authorization": f"Bearer {CENTRAL_TOKEN}"}
     )
@@ -329,7 +350,7 @@ def test_intake_decisions_and_diff_never_open_an_adapter(
     monkeypatch.setattr(filesystem.FilesystemAdapter, "__init__", _refuse)
 
     pushed = push(client, candidate(ADR)).json()
-    as_user(client, router_settings)
+    as_user(client)
     decided = decide(client, pushed["record_id"])
     diff = client.get(f"/api/v1/records/{pushed['record_id']}/diff")
     listed = client.get("/api/v1/records", params={"needs_approval": "true"})

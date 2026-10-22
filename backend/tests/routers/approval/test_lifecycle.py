@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from tests.auth_helpers import bearer
+from tests.auth_helpers import sign_in
 from tests.routers.approval.support import (
     ClientFactory,
     adr_text,
@@ -36,7 +36,7 @@ approval_policy:
 
 def _admin(client: TestClient, settings: Settings) -> None:
     """Switch the client back to an admin (read + operate)."""
-    client.headers.update(bearer(settings, roles=["admin"]))
+    sign_in(client, roles=["admin"])
 
 
 def _poll(client: TestClient, settings: Settings) -> None:
@@ -90,7 +90,7 @@ def accepted(client: TestClient, router_settings: Settings) -> dict[str, str]:
     :returns: The intake response body.
     """
     pushed = push(client, candidate(ADR, path=FILE)).json()
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, pushed["record_id"]).status_code == 201
     return pushed
 
@@ -219,7 +219,7 @@ def test_needs_approval_filter_across_states(
     changed = _published_id(client)
     pending = push(client, candidate(uuid.uuid4(), ref="feature/p")).json()
     rejected = push(client, candidate(uuid.uuid4(), ref="feature/r")).json()
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, rejected["record_id"], "rejected").status_code == 201
 
     def needing(test_client: TestClient) -> set[str]:

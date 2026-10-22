@@ -7,8 +7,9 @@ services, and the settings object is instantiated once per process
 through :func:`get_settings`.
 
 Invalid configuration fails loudly: a missing or malformed
-``ADRIANO_DATABASE_URL``, a malformed ``ADRIANO_OIDC_AUTHORITY`` or an
-incomplete SPA OIDC configuration raises a ``ValidationError`` when the
+``ADRIANO_DATABASE_URL``, a malformed ``ADRIANO_OIDC_AUTHORITY`` or
+``ADRIANO_SESSION_KEY``, an incomplete OIDC client configuration or dev
+auth without a session key raises a ``ValidationError`` when the
 settings are built, i.e. at process start.
 """
 
@@ -18,14 +19,20 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Self
 
-from pydantic import Field, PostgresDsn, field_validator, model_validator
+from cryptography.fernet import Fernet
+from pydantic import (
+    Field,
+    PostgresDsn,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 #: Accepted ``ADRIANO_OIDC_AUTHORITY`` shape: scheme ``http``/``https``,
 #: a DNS name or IPv4 host, an optional port and an optional plain
-#: path. No query, fragment, userinfo, quotes or spaces: the origin is
-#: written into the ``Content-Security-Policy`` header, where such
-#: characters could inject directives.
+#: path. No query, fragment, userinfo, quotes or spaces, so the
+#: discovery URL built from it is unambiguous.
 _AUTHORITY_PATTERN = re.compile(
     r"https?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?"
     r"(:[0-9]{1,5})?"
@@ -44,24 +51,37 @@ class Settings(BaseSettings):
     :cvar test_database_url: DSN used only by the test suite.
     :cvar config_file: Path to the ``catalog.yaml`` source and policy
         configuration file.
-    :cvar oidc_authority: OIDC discovery authority base URL, shared by
-        the backend (token validation) and the SPA (sign-in). Must be
+    :cvar oidc_authority: OIDC discovery authority base URL. Setting
+        it enables sign-in through the backend (a confidential client)
+        and requires :attr:`oidc_client_id`,
+        :attr:`oidc_client_secret` and :attr:`session_key`. Must be
         ``http(s)://host[:port][/path]``.
     :cvar oidc_issuer: Expected JWT ``iss`` claim.
-    :cvar oidc_audience: Expected JWT ``aud`` claim.
+    :cvar oidc_audience: Expected ``aud`` claim of access tokens.
     :cvar oidc_roles_claim: Dotted path to the roles claim in the
-        validated token payload.
-    :cvar oidc_client_id: Public OIDC client id the SPA signs in with
-        (served in ``/config.js``).
-    :cvar oidc_scope: OIDC scopes the SPA requests at sign-in.
-    :cvar oidc_redirect_uri: Redirect URI for the SPA's authorization
-        code callback; unset, the SPA uses ``<origin>/auth/callback``.
-    :cvar oidc_post_logout_redirect_uri: Where the IdP sends the
-        browser after sign-out; unset, the SPA uses its origin.
-    :cvar dev_auth_enabled: Whether the dev-only HS256 auth bypass is
-        mounted. Must be ``False`` in production.
-    :cvar dev_shared_secret: Shared secret for the dev-only auth
-        bypass. Has no default; must be explicitly configured.
+        validated access token payload.
+    :cvar oidc_client_id: Client id of the backend at the IdP; also
+        the expected ``aud`` of ID tokens.
+    :cvar oidc_client_secret: Client secret of the backend at the IdP
+        (confidential client). Never logged or served.
+    :cvar oidc_scope: Scopes requested at sign-in. ``offline_access``
+        asks for a refresh token, which keeps the session usable after
+        the first access token expires.
+    :cvar dev_auth_enabled: Whether the dev-only login
+        (``POST /auth/dev/login``) is mounted. Must be ``False`` in
+        production; requires :attr:`session_key`.
+    :cvar dev_shared_secret: Second, independent switch of the dev
+        login: the dev routes are mounted only when it is set as well.
+        Has no default; must be unset in production.
+    :cvar session_key: Fernet key encrypting the server-side sessions
+        (claims and IdP tokens) at rest. Required when OIDC or dev auth
+        is enabled. Generate one with ``python -c "from
+        cryptography.fernet import Fernet;
+        print(Fernet.generate_key().decode())"``.
+    :cvar session_idle_minutes: A session ends after this many minutes
+        without a request.
+    :cvar session_max_hours: A session ends this many hours after
+        sign-in, however active it is.
     :cvar stale_after_minutes: Minutes after the last successful poll
         of a registration before its freshness is reported as
         ``stale`` (see ``GET /api/v1/sources`` and the record detail
@@ -112,12 +132,15 @@ class Settings(BaseSettings):
     oidc_audience: str = "adr_viewer"
     oidc_roles_claim: str = "roles"
     oidc_client_id: str | None = None
-    oidc_scope: str = "openid profile email"
-    oidc_redirect_uri: str | None = None
-    oidc_post_logout_redirect_uri: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    oidc_scope: str = "openid profile email offline_access"
 
     dev_auth_enabled: bool = False
     dev_shared_secret: str | None = None
+
+    session_key: SecretStr | None = None
+    session_idle_minutes: int = Field(default=480, ge=1)
+    session_max_hours: int = Field(default=24, ge=1)
 
     stale_after_minutes: int = 120
 
@@ -133,9 +156,9 @@ class Settings(BaseSettings):
         "oidc_authority",
         "oidc_issuer",
         "oidc_client_id",
-        "oidc_redirect_uri",
-        "oidc_post_logout_redirect_uri",
+        "oidc_client_secret",
         "dev_shared_secret",
+        "session_key",
         "static_dir",
         "forwarded_allow_ips",
         mode="before",
@@ -216,40 +239,67 @@ class Settings(BaseSettings):
             )
         return value
 
-    @model_validator(mode="after")
-    def _check_spa_oidc(self) -> Self:
+    @field_validator("session_key")
+    @classmethod
+    def _check_session_key(cls, value: SecretStr | None) -> SecretStr | None:
         """
-        Require the SPA's OIDC settings as a pair when serving the SPA.
+        Reject a session key that is not a Fernet key.
 
-        An authority without a client id (or the reverse) would serve a
-        sign-in page that can never work.
+        :param value: The key, ``None`` when unset.
+        :returns: *value* unchanged.
+        :raises ValueError: If it is not 32 url-safe base64 bytes.
+        """
+        if value is None:
+            return value
+        try:
+            Fernet(value.get_secret_value().encode("ascii"))
+        except ValueError, UnicodeEncodeError:
+            raise ValueError(
+                "ADRIANO_SESSION_KEY must be a Fernet key (32 url-safe "
+                "base64-encoded bytes); generate one with "
+                "Fernet.generate_key()"
+            ) from None
+        return value
+
+    def _missing_auth_settings(self) -> list[str]:
+        """
+        List the settings the enabled sign-in mechanisms still need.
+
+        :returns: Environment variable names, empty when complete.
+        """
+        missing: list[str] = []
+        if self.oidc_authority is not None:
+            if self.oidc_client_id is None:
+                missing.append("ADRIANO_OIDC_CLIENT_ID")
+            if self.oidc_client_secret is None:
+                missing.append("ADRIANO_OIDC_CLIENT_SECRET")
+        enabled = self.oidc_authority is not None or self.dev_auth_enabled
+        if enabled and self.session_key is None:
+            missing.append("ADRIANO_SESSION_KEY")
+        return missing
+
+    @model_validator(mode="after")
+    def _check_auth(self) -> Self:
+        """
+        Require the client credentials and the session key.
+
+        OIDC sign-in needs the client id and secret (the backend is a
+        confidential client) and the session key; the dev login needs
+        the session key.
 
         :returns: The settings unchanged.
-        :raises ValueError: If exactly one of the two is set while
-            ``static_dir`` is set.
+        :raises ValueError: Naming every missing setting.
         """
-        if self.static_dir is None:
-            return self
-        if (self.oidc_authority is None) != (self.oidc_client_id is None):
+        missing = self._missing_auth_settings()
+        if missing:
             raise ValueError(
-                "ADRIANO_OIDC_AUTHORITY and ADRIANO_OIDC_CLIENT_ID must "
-                "be set together when ADRIANO_STATIC_DIR is set (the SPA "
-                "needs both to sign in); set the missing one or unset "
-                "both"
+                "incomplete authentication configuration: "
+                + ", ".join(missing)
+                + " must be set when ADRIANO_OIDC_AUTHORITY is set (client "
+                "id and secret, session key) or ADRIANO_DEV_AUTH_ENABLED "
+                "is true (session key)"
             )
         return self
-
-    @property
-    def oidc_origin(self) -> str | None:
-        """
-        The ``scheme://host[:port]`` origin of :attr:`oidc_authority`.
-
-        :returns: The origin, ``None`` when no authority is set.
-        """
-        if self.oidc_authority is None:
-            return None
-        scheme, _, rest = self.oidc_authority.partition("://")
-        return f"{scheme}://{rest.split('/', 1)[0]}"
 
 
 @lru_cache

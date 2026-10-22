@@ -1,15 +1,11 @@
-"""Unit tests for claim mapping, reviewer eligibility and the mint CLI."""
+"""Unit tests for claim mapping, dev claims and reviewer eligibility."""
 
-import io
-
-import jwt
 import pytest
 
 from app.auth.deps import principal_from_claims
-from app.auth.dev import DEV_ISSUER, decode_dev_token
+from app.auth.dev import DEV_ISSUER, DevIdentity, dev_claims
 from app.auth.rbac import reviewer_eligibility
 from app.catalog_config import PolicyConfig
-from app.cli import EXIT_OK, EXIT_USAGE, main
 from app.config import Settings
 from app.domain.approval import Policy, PolicyStatus
 from app.errors import AuthenticationError
@@ -77,61 +73,42 @@ def test_reviewer_eligibility(
     assert result.reason
 
 
-def test_mint_dev_token_cli_prints_a_valid_token(
-    test_settings: Settings,
-) -> None:
-    """Ensure the CLI mints a token the dev validator accepts."""
-    out = io.StringIO()
-
-    code = main(
-        [
-            "mint-dev-token",
-            "--sub",
-            "alice",
-            "--roles",
-            "admin, adr-reader",
-            "--minutes",
-            "5",
-        ],
-        settings=test_settings,
-        out=out,
+def test_dev_claims_map_like_real_claims(test_settings: Settings) -> None:
+    """Ensure dev-session claims go through the shared claim mapping."""
+    claims = dev_claims(
+        test_settings,
+        DevIdentity(
+            sub="alice", name="Alice", email="a@example.com", roles=["x"]
+        ),
     )
-    token = out.getvalue().strip()
-    claims = decode_dev_token(token, test_settings)
 
-    assert code == EXIT_OK
-    assert jwt.get_unverified_header(token)["alg"] == "HS256"
-    assert claims["iss"] == DEV_ISSUER
-    assert claims["aud"] == "adr_viewer"
-    assert claims["roles"] == ["admin", "adr-reader"]
-    assert claims["exp"] - claims["iat"] == 300
+    principal = principal_from_claims(claims, roles_claim="roles")
+
+    assert principal.issuer == DEV_ISSUER
+    assert principal.subject == "alice"
+    assert principal.display == "Alice"
+    assert principal.email == "a@example.com"
+    assert principal.roles == ("x",)
 
 
-def test_mint_dev_token_cli_nests_the_roles_claim(
-    test_settings: Settings,
-) -> None:
+def test_dev_claims_nest_the_roles_claim(test_settings: Settings) -> None:
     """Ensure roles are written at the configured dotted claim path."""
     settings = test_settings.model_copy(
         update={"oidc_roles_claim": "realm_access.roles"}
     )
-    out = io.StringIO()
 
-    main(
-        ["mint-dev-token", "--sub", "a", "--roles", "x"],
-        settings=settings,
-        out=out,
-    )
-    claims = decode_dev_token(out.getvalue().strip(), settings)
+    claims = dev_claims(settings, DevIdentity(sub="a", roles=["x"]))
 
     assert claims["realm_access"] == {"roles": ["x"]}
+    assert "name" not in claims
 
 
-def test_mint_dev_token_cli_needs_the_secret(test_settings: Settings) -> None:
-    """Ensure the CLI refuses to mint without the dev shared secret."""
-    settings = test_settings.model_copy(update={"dev_shared_secret": None})
-    out = io.StringIO()
+def test_dev_claims_use_the_configured_issuer(test_settings: Settings) -> None:
+    """Ensure a configured OIDC issuer becomes the dev issuer."""
+    settings = test_settings.model_copy(
+        update={"oidc_issuer": "https://idp.example"}
+    )
 
-    code = main(["mint-dev-token", "--sub", "a"], settings=settings, out=out)
+    claims = dev_claims(settings, DevIdentity(sub="a"))
 
-    assert code == EXIT_USAGE
-    assert out.getvalue() == ""
+    assert claims["iss"] == "https://idp.example"

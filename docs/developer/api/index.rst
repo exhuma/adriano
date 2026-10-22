@@ -32,19 +32,25 @@ Everything that is not part of a package below lives here.
 Authentication
 --------------
 
-Bearer-token validation, the dev-token path, push tokens and the
+The Backend-for-Frontend sign-in (confidential OIDC client, session
+cookies, CSRF), token validation, the dev login, push tokens and the
 role-based permission rules.
 
 .. toctree::
    :maxdepth: 1
 
    app.auth
+   app.auth.cipher
+   app.auth.cookies
+   app.auth.csrf
    app.auth.deps
    app.auth.dev
+   app.auth.idp
    app.auth.oidc
+   app.auth.pages
    app.auth.push
    app.auth.rbac
-   app.auth.tokens
+   app.auth.status
 
 Domain
 ------
@@ -78,6 +84,7 @@ to services.
    :maxdepth: 1
 
    app.routers
+   app.routers.auth
    app.routers.auth_dev
    app.routers.candidates
    app.routers.decisions
@@ -112,6 +119,7 @@ storage port.
 
    app.services
    app.services.approval_view
+   app.services.auth_sessions
    app.services.decisions
    app.services.dev_roles
    app.services.diff
@@ -119,6 +127,7 @@ storage port.
    app.services.ingest
    app.services.intake
    app.services.intake_checks
+   app.services.oidc_login
    app.services.poll_plan
    app.services.poll_trigger
    app.services.polling
@@ -126,6 +135,7 @@ storage port.
    app.services.record_relationships
    app.services.registrations
    app.services.search
+   app.services.session_values
    app.services.seed_synthetic
    app.services.seed_synthetic_errata
    app.services.seed_synthetic_gen
@@ -160,6 +170,7 @@ The storage port and its PostgreSQL implementation.
    app.storage
    app.storage.errata_values
    app.storage.port
+   app.storage.session_port
    app.storage.postgres
    app.storage.postgres.convert
    app.storage.postgres.errata
@@ -169,6 +180,7 @@ The storage port and its PostgreSQL implementation.
    app.storage.postgres.records
    app.storage.postgres.registrations
    app.storage.postgres.search
+   app.storage.postgres.sessions
    app.storage.postgres.store
    app.storage.values
 

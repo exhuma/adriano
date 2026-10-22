@@ -12,14 +12,17 @@ the configuration or the database: problems are logged and reported by
 ``ADRIANO_EXTRA_CA_CERTS`` entry stops every worker at startup instead
 of failing the first sign-in or poll.
 
-Authentication: every ``/api/v1`` route requires a bearer token
-(:mod:`app.auth`) -- an OIDC/dev JWT, except candidate intake
+Authentication: every ``/api/v1`` route requires the session cookie
+(:mod:`app.auth`, Backend-for-Frontend), except candidate intake
 (``/api/v1/candidates``), which accepts only per-registration CI push
 tokens (:mod:`app.auth.push`); ``/healthz`` and the OpenAPI schema/docs
 (``/openapi.json``, ``/api/docs``) are public -- they expose no record
-data or secrets. The dev-only ``/auth/dev`` router is imported and
-mounted only when ``ADRIANO_DEV_AUTH_ENABLED`` is true and
-``ADRIANO_DEV_SHARED_SECRET`` is set (see ``module-dev-auth-bypass``).
+data or secrets. The sign-in routes (``/auth/login``,
+``/auth/callback``, ``/auth/session``, ``/auth/logout``;
+:mod:`app.routers.auth`) are always mounted. The dev-only
+``/auth/dev`` router is imported and mounted only when
+``ADRIANO_DEV_AUTH_ENABLED`` is true and ``ADRIANO_DEV_SHARED_SECRET``
+is set (see ``module-dev-auth-bypass``).
 
 When ``ADRIANO_STATIC_DIR`` is set, the same process also serves the
 built SPA, its ``/config.js`` and the security headers
@@ -33,11 +36,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.auth.tokens import AuthStatus, auth_status
+from app.auth.status import AuthStatus, auth_status
 from app.composition import start_catalog
 from app.config import Settings, get_settings
 from app.errors import register_handlers
 from app.routers import (
+    auth,
     candidates,
     decisions,
     facets,
@@ -70,7 +74,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def _mount_dev_auth(app: FastAPI, settings: Settings) -> None:
     """
-    Mount the dev router (token, roles) only when it is enabled.
+    Mount the dev router (login, roles) only when it is enabled.
 
     :param app: The application under construction.
     :param settings: Application settings.
@@ -89,16 +93,15 @@ def _mount_dev_auth(app: FastAPI, settings: Settings) -> None:
 
     app.include_router(auth_dev.router)
     logger.warning(
-        "DEV AUTH ENABLED: /auth/dev/token and /auth/dev/roles are "
-        "mounted; the token route mints tokens "
-        "for any identity. Never enable ADRIANO_DEV_AUTH_ENABLED in "
-        "production."
+        "DEV AUTH ENABLED: /auth/dev/login and /auth/dev/roles are "
+        "mounted; the login route signs anyone in as any identity. "
+        "Never enable ADRIANO_DEV_AUTH_ENABLED in production."
     )
 
 
 def _log_auth_status(settings: Settings) -> None:
     """
-    Log which token validators are active.
+    Log which sign-in mechanisms are active.
 
     :param settings: Application settings.
     """
@@ -110,8 +113,9 @@ def _log_auth_status(settings: Settings) -> None:
         )
     elif status is not AuthStatus.OIDC:
         logger.warning(
-            "ADRIANO_DEV_SHARED_SECRET is set: dev HS256 tokens are "
-            "accepted. It must be unset in production."
+            "dev auth is active: dev sessions are accepted. "
+            "ADRIANO_DEV_AUTH_ENABLED and ADRIANO_DEV_SHARED_SECRET must be "
+            "unset in production."
         )
 
 
@@ -137,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(me.router)
     app.include_router(records.router)
     app.include_router(sources.router)
