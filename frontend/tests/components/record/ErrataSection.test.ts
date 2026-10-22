@@ -109,7 +109,7 @@ describe("ErrataSection", () => {
       erratum({ kind: "candidate", ref: "feature-x", approval_state: "pending" }),
     ]);
 
-    expect(wrapper.text()).toContain("Reported — Proposed (branch feature-x)");
+    expect(wrapper.text()).toContain("Reported — Proposed (ref feature-x)");
   });
 
   it("collapses a rejected erratum by default behind a toggle wired with aria-controls, expanding on click", async () => {

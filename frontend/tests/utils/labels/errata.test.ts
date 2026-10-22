@@ -46,9 +46,9 @@ describe("erratumStatusLabel", () => {
     },
   );
 
-  it("appends a 'Proposed (branch …)' suffix for a candidate erratum", () => {
+  it("appends a 'Proposed (ref …)' suffix for a candidate erratum", () => {
     const label = erratumStatusLabel("pending", "candidate", "feature-x");
-    expect(label.text).toBe("Reported — Proposed (branch feature-x)");
+    expect(label.text).toBe("Reported — Proposed (ref feature-x)");
   });
 
   it("falls back to a plain 'Proposed' suffix without a ref", () => {

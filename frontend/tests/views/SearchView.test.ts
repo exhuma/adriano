@@ -223,7 +223,7 @@ describe("SearchView", () => {
     expect(list.text()).not.toContain("Published");
     expect(list.text()).toContain("Candidate");
     // The branch is shown once, as plain text, never inside the chip.
-    expect(list.text()).toContain("Branch: feature/payments-migration");
+    expect(list.text()).toContain("Ref: feature/payments-migration");
     const candidateChip = wrapper
       .findAllComponents({ name: "StatusChip" })
       .find((chip) => chip.props("text") === "Candidate");

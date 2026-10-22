@@ -53,7 +53,7 @@ const props = defineProps<{
    *  dialog so it names the record. */
   recordTitle: string;
   /** Branch/ref of the record's content, shown in the candidate
-   *  erratum chip's "Proposed (branch …)" suffix; omitted falls back
+   *  erratum chip's "Proposed (ref …)" suffix; omitted falls back
    *  to a plain "Proposed". */
   recordRef?: string;
   /** Whether the record page's issues card already lists validation

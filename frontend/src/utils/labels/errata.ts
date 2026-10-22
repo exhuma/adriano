@@ -23,7 +23,7 @@ import type { StatusLabel } from "./shared";
  * :param kind: Whether this erratum row is published or a candidate;
  *     a candidate additionally shows a "Proposed" suffix.
  * :param ref: Source ref (branch/label) for a candidate; shown in the
- *     "Proposed (branch …)" suffix when known.
+ *     "Proposed (ref …)" suffix when known.
  * :returns: Icon, label text, and colour.
  */
 export function erratumStatusLabel(
@@ -66,7 +66,7 @@ export function erratumStatusLabel(
   if (kind !== "candidate") {
     return base;
   }
-  const proposed = ref ? `Proposed (branch ${ref})` : "Proposed";
+  const proposed = ref ? `Proposed (ref ${ref})` : "Proposed";
   return { ...base, text: `${base.text} — ${proposed}` };
 }
 
