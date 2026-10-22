@@ -68,10 +68,10 @@ Each entry shows the status, type and section, who reported it and
 when (if known), the original and corrected text, and an **Open
 erratum** link.
 
-Errata that come from a branch and are not yet published are
-**proposed**.
+Errata that come from another ref (for example a branch)
+and are not yet published are **proposed**.
 They appear in their own group, **Proposed errata**, with a status
-such as "Reported — Proposed (branch ...)".
+such as "Reported — Proposed (ref ...)".
 Treat them as drafts.
 
 .. figure:: /_static/screenshots/erratum-proposed-on-decision.png

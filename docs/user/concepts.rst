@@ -12,7 +12,8 @@ A decision, also called an **ADR** (architecture decision record),
 is a short document that says what was decided, why, and what
 follows from it.
 
-Teams keep these documents in their own repositories.
+Teams keep these documents in their own sources, for example a Git
+project or a shared folder.
 Adriano reads them from there and shows them in one searchable
 place.
 It never changes the originals.
@@ -27,14 +28,13 @@ Published and candidate
 A decision can exist in two forms:
 
 Published
-   The version on the team's main line.
+   The version your team has published.
    This is the decision as it stands today.
 
 Candidate
-   A proposal that lives on a separate branch and has not been
-   merged yet.
-   A candidate shows the branch name, so you can see where it comes
-   from.
+   A proposal that is sent from another ref (for example a branch)
+   and is not published yet.
+   A candidate shows its ref, so you can see where it comes from.
 
 The same decision can have both a published version and one or more
 candidates.
@@ -102,7 +102,7 @@ was never accepted, and to "Changed since acceptance" if it was.
 The state of one version never affects another.
 Accepting a candidate does not accept the published version, unless
 both contain exactly the same text.
-In that case, once the candidate is merged and published, the
+In that case, once the candidate is published, the
 published version is accepted automatically.
 
 Where this appears in the catalog
