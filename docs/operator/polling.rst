@@ -42,7 +42,7 @@ Polling one registration
 
 .. code-block:: sh
 
-   docker compose exec adriano adriano poll --source gitlab-platform
+   docker compose exec adriano adriano poll --source central
 
 Exit codes
 ~~~~~~~~~~

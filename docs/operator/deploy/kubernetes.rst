@@ -66,8 +66,8 @@ It needs these keys:
   address when the database is outside the cluster.
 - Add one key for every secret your catalog file names
   (:ref:`catalog-secrets`).
-  The Secret is used by the Deployment and by the poll job, so a
-  GitLab token is available to both.
+  The Secret is used by the Deployment and by the poll job, so
+  source access tokens and push tokens are available to both.
 
 ConfigMap
 ~~~~~~~~~

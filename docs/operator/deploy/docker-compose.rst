@@ -49,7 +49,7 @@ You provide two files next to ``docker-compose.yml``:
 
 ``.env``
    Environment settings: database password, OIDC settings, and the
-   secrets that the catalog file names (GitLab and push tokens).
+   secrets that the catalog file names (source access tokens and push tokens).
    Every setting is described in :doc:`../configuration`.
    Keep this file out of version control; it holds secrets.
 ``catalog.yaml``
@@ -78,6 +78,7 @@ A minimal production ``.env``:
    ADRIANO_OIDC_ROLES_CLAIM=realm_access.roles
 
    # Secrets that catalog.yaml refers to by name
+   # only needed for a gitlab source
    ADRIANO_GITLAB_TOKEN_PLATFORM=<GitLab access token>
    ADRIANO_PUSH_TOKEN_PLATFORM=<long random token>
 

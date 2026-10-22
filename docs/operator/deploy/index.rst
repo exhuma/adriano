@@ -42,7 +42,7 @@ Put a TLS-terminating ingress or load balancer in front of it.
      ci["CI jobs"]
      cron["Poll schedule<br/>(cron or CronJob)"]
      idp["OIDC provider<br/>(yours)"]
-     gitlab["GitLab or folders<br/>(yours)"]
+     sources["Record sources<br/>(GitLab, folders, ...)<br/>(yours)"]
      db[("PostgreSQL<br/>(yours)")]
 
      subgraph adriano["Adriano image"]
@@ -53,7 +53,7 @@ Put a TLS-terminating ingress or load balancer in front of it.
      browser -- "sign-in" --> idp
      ci -- "push candidates<br/>(push token)" --> app
      app -- "verify tokens<br/>(signing keys)" --> idp
-     app -- "read records" --> gitlab
+     app -- "read records" --> sources
      cron -- "runs adriano poll" --> app
      app -- "reads and writes" --> db
 
@@ -72,8 +72,9 @@ A TLS-terminating ingress or load balancer
 An OIDC identity provider
    See the next section.
 At least one record source
-   A GitLab instance and an access token (:doc:`/operator/sources`),
-   or a folder of decision records you can mount into the container.
+   For example a GitLab instance and an access token, or a folder of
+   decision records you can mount into the container
+   (:doc:`/operator/sources`).
 A scheduler for polling
    cron or a systemd timer on the Docker host, or the Kubernetes
    ``CronJob`` from the example (:doc:`/operator/polling`).

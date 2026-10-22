@@ -154,9 +154,11 @@ A source shows "Disabled" with a configuration problem
       A source disabled because its token variable is not set.
 
 A poll ends ``failed``
-   *Cause:* the source could not be listed: GitLab unreachable, token
-   expired or lacking access (401/403), or a folder root missing or
-   unreadable.
+   *Cause:* the source could not be listed:
+
+   - GitLab sources: GitLab unreachable, or the token expired or
+     lacking access (401/403).
+   - Folder sources: the folder ``root`` missing or unreadable.
 
    *Check:* the problem shown on the Sources page or printed by
    ``adriano poll --source <id>``.
