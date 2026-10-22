@@ -12,24 +12,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.dev import DEV_ISSUER
-from app.config import Settings
-from tests.auth_helpers import bearer
+from tests.auth_helpers import sign_in
 
 type AsRoles = Callable[..., None]
 
 
 @pytest.fixture
-def as_roles(client: TestClient, router_settings: Settings) -> AsRoles:
+def as_roles(client: TestClient) -> AsRoles:
     """
-    Switch the client to a dev token with other roles.
+    Switch the client to a dev session with other roles.
 
     :param client: The test client.
-    :param router_settings: The client's settings (dev secret).
     :returns: ``as_roles(*roles)``.
     """
 
     def _switch(*roles: str) -> None:
-        client.headers.update(bearer(router_settings, roles=roles))
+        sign_in(client, roles=roles)
 
     return _switch
 

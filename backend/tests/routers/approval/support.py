@@ -20,8 +20,7 @@ from fastapi.testclient import TestClient
 from httpx import Response
 
 from app.auth.dev import DEV_ISSUER
-from app.config import Settings
-from tests.auth_helpers import bearer
+from tests.auth_helpers import sign_in
 
 type ClientFactory = Callable[[str | None], TestClient]
 
@@ -149,14 +148,14 @@ def push(
     """
     Send a candidate with a push token.
 
-    :param client: Test client (its default dev token is replaced).
+    :param client: Test client (its session cookie is sent too, and
+        ignored by intake).
     :param body: JSON body.
     :param token: Push token, ``None`` for no ``Authorization`` header.
     :param method: ``PUT`` or ``POST``.
     :returns: The response.
     """
-    # An empty header replaces the client's default dev token.
-    headers = {"Authorization": f"Bearer {token}" if token else ""}
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     return client.request(
         method, "/api/v1/candidates", json=body, headers=headers
     )
@@ -164,24 +163,20 @@ def push(
 
 def as_user(
     client: TestClient,
-    settings: Settings,
     *,
     sub: str = "rita",
     roles: tuple[str, ...] = ("adr-reviewer",),
     email: str | None = "rita@example.com",
 ) -> None:
     """
-    Switch the client's default token to another dev identity.
+    Switch the client's session to another dev identity.
 
     :param client: Test client.
-    :param settings: Its settings (dev secret).
     :param sub: Subject.
     :param roles: Roles.
     :param email: Verified email.
     """
-    client.headers.update(
-        bearer(settings, sub=sub, roles=roles, email=email, name=sub.title())
-    )
+    sign_in(client, sub=sub, roles=roles, email=email, name=sub.title())
 
 
 def decide(
