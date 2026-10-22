@@ -1,33 +1,37 @@
 """
-Tests for ``ADRIANO_TLS_VERIFY`` on the outbound HTTPS clients.
+Tests for the TLS settings of the outbound HTTPS clients.
+
+The settings are ``ADRIANO_TLS_VERIFY`` and ``ADRIANO_EXTRA_CA_CERTS``.
 
 Each client talks to a real local HTTPS server whose certificate is
 self-signed, i.e. issued by a CA the client does not trust -- the
 situation of an instance behind an internal certificate authority.
-With verification on the request must fail; with it off it must
-succeed.
+With verification on the request must fail, unless that certificate is
+trusted as an extra CA; with verification off it must succeed.
 """
 
-import datetime
-import ipaddress
 import json
 import ssl
 import threading
 from collections.abc import Iterator
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import httpx
 import jwt
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID
 
-from app.auth.oidc import OidcValidator, _default_jwks_client
+from app.auth.oidc import (
+    OidcValidator,
+    _default_jwks_client,
+    cached_oidc_validator,
+)
 from app.errors import AuthUnavailableError
 from app.sources.gitlab_api import open_client
+from app.tls import outbound_ssl_context
+from tests.tls_helpers import write_self_signed
 
 #: One public signing key, so the body is a valid (non-empty) JWKS.
 _JWK = jwt.algorithms.ECAlgorithm.to_jwk(
@@ -59,54 +63,28 @@ class _JsonHandler(BaseHTTPRequestHandler):
         """Keep the test output quiet."""
 
 
-def _self_signed(tmp_path: Path) -> tuple[Path, Path]:
+@dataclass(frozen=True)
+class UntrustedServer:
     """
-    Write a self-signed certificate for 127.0.0.1 and its key.
+    A local HTTPS server with a self-signed certificate.
 
-    :param tmp_path: Directory to write into.
-    :returns: Certificate and key paths.
+    :param url: The server's base URL.
+    :param cert_path: Its certificate (PEM), which is its own CA.
     """
-    key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
-    now = datetime.datetime.now(datetime.UTC)
-    cert = (
-        x509.CertificateBuilder()
-        .subject_name(name)
-        .issuer_name(name)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now - datetime.timedelta(minutes=1))
-        .not_valid_after(now + datetime.timedelta(hours=1))
-        .add_extension(
-            x509.SubjectAlternativeName(
-                [x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
-            ),
-            critical=False,
-        )
-        .sign(key, hashes.SHA256())
-    )
-    cert_path = tmp_path / "cert.pem"
-    key_path = tmp_path / "key.pem"
-    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    key_path.write_bytes(
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-    )
-    return cert_path, key_path
+
+    url: str
+    cert_path: Path
 
 
 @pytest.fixture
-def untrusted_https(tmp_path: Path) -> Iterator[str]:
+def untrusted_server(tmp_path: Path) -> Iterator[UntrustedServer]:
     """
     Serve :data:`_BODY` over HTTPS with an untrusted certificate.
 
     :param tmp_path: Pytest temporary directory.
-    :returns: The server's base URL.
+    :returns: The server's URL and certificate path.
     """
-    cert_path, key_path = _self_signed(tmp_path)
+    cert_path, key_path = write_self_signed(tmp_path)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert_path, key_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), _JsonHandler)
@@ -114,10 +92,34 @@ def untrusted_https(tmp_path: Path) -> Iterator[str]:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"https://127.0.0.1:{server.server_address[1]}"
+        yield UntrustedServer(
+            f"https://127.0.0.1:{server.server_address[1]}", cert_path
+        )
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.fixture
+def untrusted_https(untrusted_server: UntrustedServer) -> str:
+    """
+    Return the base URL of :func:`untrusted_server`.
+
+    :param untrusted_server: The server.
+    :returns: Its base URL.
+    """
+    return untrusted_server.url
+
+
+@pytest.fixture
+def trusting_context(untrusted_server: UntrustedServer) -> ssl.SSLContext:
+    """
+    Build a verifying context that trusts the server's certificate.
+
+    :param untrusted_server: The server.
+    :returns: The context, with the certificate as an extra CA.
+    """
+    return outbound_ssl_context(True, (untrusted_server.cert_path,))
 
 
 def test_discovery_rejects_untrusted_certificate(untrusted_https: str) -> None:
@@ -131,8 +133,10 @@ def test_discovery_rejects_untrusted_certificate(untrusted_https: str) -> None:
 def test_discovery_skips_verification_when_disabled(
     untrusted_https: str,
 ) -> None:
-    """Ensure tls_verify=False fetches discovery despite the certificate."""
-    validator = OidcValidator(untrusted_https, None, "aud", tls_verify=False)
+    """Ensure an unverified context fetches discovery anyway."""
+    validator = OidcValidator(
+        untrusted_https, None, "aud", ssl_context=outbound_ssl_context(False)
+    )
 
     document = validator._fetch_discovery()
 
@@ -148,8 +152,10 @@ def test_jwks_rejects_untrusted_certificate(untrusted_https: str) -> None:
 
 
 def test_jwks_skips_verification_when_disabled(untrusted_https: str) -> None:
-    """Ensure tls_verify=False fetches the JWKS despite the certificate."""
-    client = _default_jwks_client(f"{untrusted_https}/jwks", tls_verify=False)
+    """Ensure an unverified context fetches the JWKS anyway."""
+    client = _default_jwks_client(
+        f"{untrusted_https}/jwks", ssl_context=outbound_ssl_context(False)
+    )
 
     assert client.fetch_data()["keys"] == [_JWK]
 
@@ -166,10 +172,60 @@ async def test_gitlab_rejects_untrusted_certificate(
 async def test_gitlab_skips_verification_when_disabled(
     untrusted_https: str,
 ) -> None:
-    """Ensure tls_verify=False reaches GitLab despite the certificate."""
+    """Ensure an unverified context reaches GitLab anyway."""
     async with open_client(
-        untrusted_https, "token", tls_verify=False
+        untrusted_https, "token", ssl_context=outbound_ssl_context(False)
     ) as client:
         response = await client.get("version")
 
     assert response.status_code == 200
+
+
+def test_discovery_trusts_extra_ca(
+    untrusted_https: str, trusting_context: ssl.SSLContext
+) -> None:
+    """Ensure OIDC discovery succeeds when the CA is an extra CA."""
+    validator = OidcValidator(
+        untrusted_https, None, "aud", ssl_context=trusting_context
+    )
+
+    document = validator._fetch_discovery()
+
+    assert document["jwks_uri"] == _BODY["jwks_uri"]
+
+
+def test_jwks_trusts_extra_ca(
+    untrusted_https: str, trusting_context: ssl.SSLContext
+) -> None:
+    """Ensure the JWKS fetch succeeds when the CA is an extra CA."""
+    client = _default_jwks_client(
+        f"{untrusted_https}/jwks", ssl_context=trusting_context
+    )
+
+    assert client.fetch_data()["keys"] == [_JWK]
+
+
+async def test_gitlab_trusts_extra_ca(
+    untrusted_https: str, trusting_context: ssl.SSLContext
+) -> None:
+    """Ensure the GitLab client succeeds when the CA is an extra CA."""
+    async with open_client(
+        untrusted_https, "token", ssl_context=trusting_context
+    ) as client:
+        response = await client.get("version")
+
+    assert response.status_code == 200
+
+
+def test_cached_validator_uses_extra_ca(
+    untrusted_server: UntrustedServer,
+) -> None:
+    """Ensure the cached validator builds its context from the settings."""
+    cached_oidc_validator.cache_clear()
+    validator = cached_oidc_validator(
+        untrusted_server.url, None, "aud", True, (untrusted_server.cert_path,)
+    )
+
+    document = validator._fetch_discovery()
+
+    assert document["issuer"] == _BODY["issuer"]

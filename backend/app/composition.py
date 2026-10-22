@@ -38,6 +38,7 @@ from app.services.registrations import sync_registrations
 from app.sources.registry import default_registry
 from app.storage.port import CatalogStoreProvider
 from app.storage.postgres.store import PostgresStoreProvider
+from app.tls import ssl_context_from_settings
 
 logger = logging.getLogger(__name__)
 
@@ -67,19 +68,20 @@ def load_catalog(settings: Settings) -> CatalogConfig:
     """
     Load ``catalog.yaml`` with the default source types.
 
+    Network sources use the shared outbound TLS context
+    (:func:`app.tls.ssl_context_from_settings`).
+
     :param settings: Application settings.
     :returns: The configuration (never raises for bad content).
+    :raises app.errors.ConfigurationError: If an extra CA path
+        (``ADRIANO_EXTRA_CA_CERTS``) cannot be loaded.
     """
-    if not settings.tls_verify:
-        logger.warning(
-            "ADRIANO_TLS_VERIFY is false: certificates of network "
-            "sources (such as GitLab) are NOT verified. Never use this "
-            "in production."
-        )
     return load_catalog_config(
         settings.config_file,
         env=os.environ,
-        registry=default_registry(tls_verify=settings.tls_verify),
+        registry=default_registry(
+            ssl_context=ssl_context_from_settings(settings)
+        ),
     )
 
 

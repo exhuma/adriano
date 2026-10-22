@@ -64,6 +64,7 @@ Public API: :data:`PROJECT_DEFAULT`, :func:`validate_settings`,
 import asyncio
 import hashlib
 import logging
+import ssl
 from collections.abc import AsyncIterator, Awaitable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -108,7 +109,7 @@ def validate_settings(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
     sleep: Sleep = asyncio.sleep,
-    tls_verify: bool = True,
+    ssl_context: ssl.SSLContext | None = None,
 ) -> SourceBinding:
     """
     Validate a ``gitlab`` registration and bind the adapter factory.
@@ -122,8 +123,8 @@ def validate_settings(
     :param env: Environment used to resolve ``token_env``.
     :param transport: HTTP transport override (tests).
     :param sleep: Async sleep for retry waits (tests).
-    :param tls_verify: Whether to verify the instance's certificate
-        (``ADRIANO_TLS_VERIFY``).
+    :param ssl_context: TLS context of the HTTP client (see
+        :mod:`app.tls`); ``None`` uses the default outbound context.
     :returns: The binding.
     :raises app.sources.port.SourceConfigError: If the settings are
         invalid or the token env var is not set.
@@ -136,7 +137,7 @@ def validate_settings(
             config.base_url,
             config.token.get_secret_value(),
             transport=transport,
-            tls_verify=tls_verify,
+            ssl_context=ssl_context,
         )
         async with client:
             api = GitLabApi(client, token_env=config.token_env, sleep=sleep)

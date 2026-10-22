@@ -13,12 +13,13 @@ settings are built, i.e. at process start.
 """
 
 import re
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, PostgresDsn, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 #: Accepted ``ADRIANO_OIDC_AUTHORITY`` shape: scheme ``http``/``https``,
 #: a DNS name or IPv4 host, an optional port and an optional plain
@@ -74,6 +75,13 @@ class Settings(BaseSettings):
         server certificate.
         ``False`` disables verification entirely; meant only as a
         stop-gap for non-production instances behind an internal CA.
+    :cvar extra_ca_certs: PEM files (bundles allowed) and directories
+        (their ``*.pem`` and ``*.crt`` files) whose certificates
+        outbound HTTPS trusts in addition to the standard set, e.g. an
+        internal CA. Comma-separated in the environment; every path
+        must exist. Unset (or blank) trusts the standard set only.
+        Ignored when ``tls_verify`` is ``False``. Loaded by
+        :mod:`app.tls`.
     :cvar migrate_on_start: Whether ``adriano serve`` applies the
         database migrations (under an advisory lock) before starting
         the server.
@@ -116,6 +124,7 @@ class Settings(BaseSettings):
     static_dir: Path | None = None
     migrate_on_start: bool = True
     tls_verify: bool = True
+    extra_ca_certs: Annotated[tuple[Path, ...] | None, NoDecode] = None
     version: str = "dev"
     workers: int = Field(default=4, ge=1)
     forwarded_allow_ips: str | None = None
@@ -146,6 +155,47 @@ class Settings(BaseSettings):
         """
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("extra_ca_certs", mode="before")
+    @classmethod
+    def _split_paths(cls, value: object) -> object:
+        """
+        Split a comma-separated path list; blank means unset.
+
+        :param value: The raw input: a string from the environment, or
+            an iterable of paths.
+        :returns: A tuple of the non-blank entries, ``None`` when there
+            are none, or *value* unchanged when it is of another type.
+        """
+        if isinstance(value, str):
+            value = value.split(",")
+        if not isinstance(value, Iterable):
+            return value
+        entries = tuple(str(item).strip() for item in value)
+        paths = tuple(Path(entry) for entry in entries if entry)
+        return paths or None
+
+    @field_validator("extra_ca_certs")
+    @classmethod
+    def _check_paths_exist(
+        cls, value: tuple[Path, ...] | None
+    ) -> tuple[Path, ...] | None:
+        """
+        Reject an extra CA path that does not exist.
+
+        The files themselves are parsed later, by :mod:`app.tls`.
+
+        :param value: The paths, ``None`` when unset.
+        :returns: *value* unchanged.
+        :raises ValueError: If a path does not exist.
+        """
+        missing = [str(path) for path in value or () if not path.exists()]
+        if missing:
+            raise ValueError(
+                "ADRIANO_EXTRA_CA_CERTS: no such file or directory: "
+                + ", ".join(missing)
+            )
         return value
 
     @field_validator("oidc_authority")
