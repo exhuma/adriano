@@ -22,6 +22,11 @@ data:
   # deployment.yaml).
   ADRIANO_CONFIG_FILE: "/etc/adriano/catalog.yaml"
 
+  # Optional: trust an internal CA in addition to the public ones.
+  # Uncomment together with the `ca` volume and mounts in
+  # deployment.yaml and cronjob.yaml.
+  # ADRIANO_EXTRA_CA_CERTS: "/etc/adriano-ca"
+
   # Trust X-Forwarded-* from the ingress controller. Pod addresses of
   # the controller are not stable, so every peer is trusted: only
   # allow the ingress controller to reach the Service (NetworkPolicy).

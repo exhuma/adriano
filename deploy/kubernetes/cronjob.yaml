@@ -53,6 +53,11 @@ spec:
                 - name: catalog
                   mountPath: /etc/adriano
                   readOnly: true
+                # Optional internal CA (see ADRIANO_EXTRA_CA_CERTS in
+                # configmap.yaml).
+                # - name: ca
+                #   mountPath: /etc/adriano-ca
+                #   readOnly: true
               resources:
                 requests:
                   cpu: 50m
@@ -65,3 +70,7 @@ spec:
             - name: catalog
               configMap:
                 name: adriano-catalog
+            # Optional internal CA: the ConfigMap adriano-ca.
+            # - name: ca
+            #   configMap:
+            #     name: adriano-ca

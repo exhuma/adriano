@@ -50,6 +50,18 @@ The container exits right after start (or restarts in a loop)
    With Compose, ``docker compose ps -a`` shows whether ``db`` ever
    became healthy.
 
+The container exits and the log names :envvar:`ADRIANO_EXTRA_CA_CERTS`
+   *Cause:* a path in :envvar:`ADRIANO_EXTRA_CA_CERTS` does not exist
+   in the container, cannot be read or holds no PEM certificate,
+   or a folder in it has no ``*.pem`` or ``*.crt`` file.
+   The ``migrate`` init container fails the same way when the path is
+   not mounted there.
+
+   *Check:* the volume is mounted in every container that runs
+   Adriano, including the init container, and the message names the
+   file to fix.
+   ``adriano check-config`` lists the certificates it added.
+
 ``/healthz`` answers 503
    *Cause:* the database is unreachable.
 
@@ -112,8 +124,8 @@ Requests answer 503 ``auth_unavailable``
 
    *Check:* network access from the Adriano container to
    :envvar:`ADRIANO_OIDC_AUTHORITY`; for an internal certificate
-   authority, :envvar:`SSL_CERT_FILE` (or, on a non-production
-   instance only, :envvar:`ADRIANO_TLS_VERIFY`).
+   authority, :envvar:`ADRIANO_EXTRA_CA_CERTS` (or, on a
+   non-production instance only, :envvar:`ADRIANO_TLS_VERIFY`).
 
 Signed in, but every page says "permission required" (403)
    *Cause:* none of the user's roles grants ``read`` in ``rbac``,
@@ -163,6 +175,16 @@ A poll ends ``failed``
    *Check:* the problem shown on the Sources page or printed by
    ``adriano poll --source <id>``.
    Previously indexed records are kept; poll again after fixing it.
+
+A poll ends ``failed`` with a certificate verification error
+   *Cause:* GitLab (or another network source) uses a certificate
+   from an authority Adriano does not trust.
+
+   *Check:* the authority's certificate is listed in
+   :envvar:`ADRIANO_EXTRA_CA_CERTS`; ``adriano check-config`` prints
+   the certificates that were added.
+   On a non-production instance only, :envvar:`ADRIANO_TLS_VERIFY`
+   turns the checks off.
 
 A poll ends ``partial``
    *Cause:* some projects or files could not be listed or read.

@@ -190,6 +190,44 @@ Verification
 #. Sign in as an operator and open the Sources page.
    Every registration should show the status OK.
 
+Trusting an internal certificate authority
+------------------------------------------
+
+If your identity provider or GitLab uses a certificate from an
+internal certificate authority, give Adriano the authority's
+certificate.
+Adriano then trusts it in addition to the public authorities.
+Put the PEM file (for example ``internal-ca.pem``) in a folder on the
+Docker host, and mount that folder read-only in a
+``docker-compose.override.yml`` next to ``docker-compose.yml``:
+
+.. code-block:: yaml
+
+   services:
+     adriano:
+       volumes:
+         - ./ca:/etc/adriano-ca:ro
+
+Then point :envvar:`ADRIANO_EXTRA_CA_CERTS` at the mounted folder in
+``.env``:
+
+.. code-block:: sh
+
+   ADRIANO_EXTRA_CA_CERTS=/etc/adriano-ca
+
+Adriano reads the ``*.pem`` and ``*.crt`` files of the folder.
+Check that it loads them; the log lists the subject of every added
+certificate:
+
+.. code-block:: sh
+
+   docker compose run --rm --no-deps adriano adriano check-config
+
+A wrong path or a file without a certificate stops Adriano at start,
+and the message names the file.
+Do not turn off verification with :envvar:`ADRIANO_TLS_VERIFY` in
+production.
+
 Upgrade and rollback
 --------------------
 

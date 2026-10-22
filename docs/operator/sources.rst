@@ -153,7 +153,8 @@ TLS for network sources
 Adriano verifies the server certificate of every network source,
 such as GitLab.
 If a source (or the identity provider) uses a certificate from an
-internal certificate authority, mount a PEM bundle that contains it
-into the container and point :envvar:`SSL_CERT_FILE` at it.
+internal certificate authority, mount its certificate into the
+container and point :envvar:`ADRIANO_EXTRA_CA_CERTS` at it
+(see :doc:`deploy/docker-compose` and :doc:`deploy/kubernetes`).
 On a test or staging instance only, :envvar:`ADRIANO_TLS_VERIFY`
 can turn the checks off instead.

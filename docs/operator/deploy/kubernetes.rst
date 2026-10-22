@@ -105,6 +105,32 @@ Save its content as ``catalog.yaml`` and run:
      -v "$PWD:/c:ro" ghcr.io/exhuma/adriano:<version> \
      adriano check-config
 
+Trusting an internal certificate authority
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If your identity provider or GitLab uses a certificate from an
+internal certificate authority, give Adriano the authority's
+certificate.
+Adriano then trusts it in addition to the public authorities.
+The certificate is public, so a ConfigMap is fine:
+
+.. code-block:: sh
+
+   kubectl create configmap adriano-ca --from-file=internal-ca.pem
+
+Then uncomment the optional parts in the manifests:
+
+- ``ADRIANO_EXTRA_CA_CERTS`` in ``configmap.yaml``.
+- The ``ca`` volume and its mount in ``deployment.yaml``,
+  in **both** the ``migrate`` init container and the ``adriano``
+  container.
+  A configured path that is not mounted stops a container at start.
+- The ``ca`` volume and its mount in ``cronjob.yaml``.
+
+See :envvar:`ADRIANO_EXTRA_CA_CERTS`.
+Do not turn off verification with :envvar:`ADRIANO_TLS_VERIFY` in
+production.
+
 Deployment
 ~~~~~~~~~~
 
@@ -142,7 +168,7 @@ Security
    The pod runs as the image's non-root user (10001) with a read-only
    root filesystem, no capabilities and the default seccomp profile.
    Only ``/tmp`` is writable.
-   The catalog is mounted read-only.
+   The catalog, and an optional internal CA, are mounted read-only.
 
 Service and ingress
 ~~~~~~~~~~~~~~~~~~~
