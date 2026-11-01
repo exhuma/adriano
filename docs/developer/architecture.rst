@@ -18,7 +18,7 @@ frontmatter) that live in other systems,
 keeps its own copy in PostgreSQL,
 and runs an approval workflow on top of that copy.
 
-.. mermaid::
+.. md-mermaid::
 
    flowchart LR
      reader["Reader or reviewer<br/>(browser)"]
@@ -86,7 +86,7 @@ The backend is one deployable (a modular monolith).
 Each concern lives in its own package,
 and calls flow only downward:
 
-.. mermaid::
+.. md-mermaid::
 
    flowchart TD
      ui["frontend/<br/>Vue 3 + Vuetify SPA"]
@@ -170,7 +170,7 @@ Poll path
 Polling reads each registration's configured published ref
 and keeps the published rows in step with it.
 
-.. mermaid::
+.. md-mermaid::
 
    sequenceDiagram
      participant T as cron, CronJob or operator
@@ -217,7 +217,7 @@ Push path
 
 CI submits candidates from branches other than the published ref.
 
-.. mermaid::
+.. md-mermaid::
 
    sequenceDiagram
      participant CI as CI job
@@ -248,7 +248,7 @@ docstring.
 Read path
 ~~~~~~~~~
 
-.. mermaid::
+.. md-mermaid::
 
    sequenceDiagram
      participant B as Browser (SPA)
@@ -281,7 +281,7 @@ See :doc:`performance` for the measured cost.
 Decision path
 ~~~~~~~~~~~~~
 
-.. mermaid::
+.. md-mermaid::
 
    sequenceDiagram
      participant B as Reviewer (SPA)

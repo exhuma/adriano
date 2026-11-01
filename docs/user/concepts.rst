@@ -74,7 +74,7 @@ Blocked
 Approval not required
    Your administrators turned approval off for this catalog.
 
-.. mermaid::
+.. md-mermaid::
 
    stateDiagram-v2
       state "Pending approval" as Pending
@@ -162,7 +162,7 @@ Changed since verification
    The report was edited after it was verified, so the new text
    needs a new check.
 
-.. mermaid::
+.. md-mermaid::
 
    stateDiagram-v2
       state "Reported" as Reported

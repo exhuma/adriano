@@ -30,7 +30,7 @@ Every migration is hand-written and has a working ``downgrade()``.
 Tables
 ------
 
-.. mermaid::
+.. md-mermaid::
 
    erDiagram
      source_registration ||--o{ record : "source_id"
