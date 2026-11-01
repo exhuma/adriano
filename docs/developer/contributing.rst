@@ -86,14 +86,26 @@ Screenshots
 Diagrams
 --------
 
-Draw diagrams as code with ``.. md-mermaid::`` (sphinx-immaterial's
-mermaid support, enabled in ``docs/conf.py``).
+Draw diagrams as code with ``.. md-mermaid::`` (drawn by the
+``michel_albert_sphinx`` theme package).
+Readers can also enlarge every diagram to full screen.
 
 - The theme colours diagrams, in light and dark mode.
-  Do not add inline colours.
+  Do not add inline colours (``style``, ``classDef`` colours or
+  ``%%{init}%%`` themes).
+- Give a diagram a ``:caption:`` when it needs a title, and a ``:name:``
+  to link to it.
+- To tell kinds of nodes apart, tag them with the classes ``cat1`` to
+  ``cat6`` (``node:::cat1``).
+  The six colours stay distinct for colour-blind readers.
+  Context and deployment diagrams use one scheme:
+  ``cat1`` people and jobs (rounded),
+  ``cat2`` services Adriano relies on (double-sided),
+  ``cat3`` Adriano itself (square),
+  ``cat4`` data (cylinder).
 - Never encode meaning by colour alone.
-  Label every edge and state, and use shapes or text to distinguish
-  kinds of nodes.
+  Label every edge and state, give each category its own shape, and
+  name the categories in the caption.
 - Keep each diagram small enough to read without zooming, and explain
   it in the text next to it.
 

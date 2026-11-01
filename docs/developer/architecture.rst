@@ -19,20 +19,24 @@ keeps its own copy in PostgreSQL,
 and runs an approval workflow on top of that copy.
 
 .. md-mermaid::
+   :caption: Adriano in context. Rounded: people and jobs.
+             Double-sided: services Adriano relies on.
+             Square: Adriano. Cylinder: data.
+   :name: context-diagram
 
    flowchart LR
-     reader["Reader or reviewer<br/>(browser)"]
-     operator["Operator"]
-     ci["CI pipeline"]
-     idp["OIDC identity provider"]
+     reader(["Reader or reviewer<br/>(browser)"]):::cat1
+     operator(["Operator"]):::cat1
+     ci(["CI pipeline"]):::cat1
+     idp[["OIDC identity provider"]]:::cat2
      subgraph adriano["Adriano"]
-       spa["Frontend<br/>Vue SPA, served by the API"]
-       api["Backend API<br/>FastAPI, stateless"]
-       poll["Polling<br/>CLI job or operator trigger"]
+       spa["Frontend<br/>Vue SPA, served by the API"]:::cat3
+       api["Backend API<br/>FastAPI, stateless"]:::cat3
+       poll["Polling<br/>CLI job or operator trigger"]:::cat3
      end
-     db[("PostgreSQL")]
-     gitlab["GitLab projects"]
-     fs["ADR folder on disk"]
+     db[("PostgreSQL")]:::cat4
+     gitlab[["GitLab projects"]]:::cat2
+     fs[["ADR folder on disk"]]:::cat2
 
      reader -- "loads the app, calls /api" --> spa
      reader -- "signs in: Auth Code + PKCE" --> idp
