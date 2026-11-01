@@ -61,7 +61,7 @@ dev = [
     { name = "ruff", specifier = ">=0.17.1" },
 ]
 docs = [
-    { name = "michel-albert-sphinx", git = "https://github.com/exhuma/michel-albert-design?subdirectory=packages%2Fsphinx&rev=sphinx-v0.9.0" },
+    { name = "michel-albert-sphinx", git = "https://github.com/exhuma/michel-albert-design?subdirectory=packages%2Fsphinx&rev=sphinx-v0.9.1" },
     { name = "sphinx", specifier = ">=8.1" },
     { name = "sphinx-autodoc-typehints", specifier = ">=3.0" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.8" },
@@ -764,8 +764,8 @@ wheels = [
 
 [[package]]
 name = "michel-albert-sphinx"
-version = "0.9.0"
-source = { git = "https://github.com/exhuma/michel-albert-design?subdirectory=packages%2Fsphinx&rev=sphinx-v0.9.0#0be642ba78270c8b184348d4d7fd07bdeda68014" }
+version = "0.9.1"
+source = { git = "https://github.com/exhuma/michel-albert-design?subdirectory=packages%2Fsphinx&rev=sphinx-v0.9.1#d25b79a493676bd420e138395d13c52d6a9b8ea1" }
 dependencies = [
     { name = "sphinx" },
     { name = "sphinx-immaterial" },
