@@ -69,7 +69,6 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
     "michel_albert_sphinx",
-    "sphinx_immaterial.mermaid_diagrams",
     "sphinxcontrib.openapi",
 ]
 
@@ -124,8 +123,3 @@ html_theme_options = {
 # Backdrop style: "facets" (architecture viewpoints, structure) suits a
 # catalog of architecture decisions.
 michel_albert_backdrop_style = "facets"
-
-# -- Mermaid ----------------------------------------------------------
-
-# sphinx_immaterial.mermaid_diagrams ships mermaid with the site (no CDN)
-# and colours diagrams from the theme, so they follow light and dark mode.

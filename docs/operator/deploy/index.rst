@@ -36,17 +36,21 @@ The container speaks plain HTTP.
 Put a TLS-terminating ingress or load balancer in front of it.
 
 .. md-mermaid::
+   :caption: What a deployment connects. Rounded: people and jobs.
+             Double-sided: services you provide.
+             Square: the Adriano image. Cylinder: your database.
+   :name: deployment-overview
 
    flowchart LR
-     browser["Browser"]
-     ci["CI jobs"]
-     cron["Poll schedule<br/>(cron or CronJob)"]
-     idp["OIDC provider<br/>(yours)"]
-     sources["Record sources<br/>(GitLab, folders, ...)<br/>(yours)"]
-     db[("PostgreSQL<br/>(yours)")]
+     browser(["Browser"]):::cat1
+     ci(["CI jobs"]):::cat1
+     cron(["Poll schedule<br/>(cron or CronJob)"]):::cat1
+     idp[["OIDC provider<br/>(yours)"]]:::cat2
+     sources[["Record sources<br/>(GitLab, folders, ...)<br/>(yours)"]]:::cat2
+     db[("PostgreSQL<br/>(yours)")]:::cat4
 
      subgraph adriano["Adriano image"]
-       app["web UI and API<br/>port 8000"]
+       app["web UI and API<br/>port 8000"]:::cat3
      end
 
      browser -- "HTTPS via your ingress" --> app
