@@ -31,7 +31,7 @@ Trust boundaries
 Authentication paths
 --------------------
 
-.. mermaid::
+.. md-mermaid::
 
    flowchart TD
      req(["request"])

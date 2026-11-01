@@ -69,7 +69,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
     "michel_albert_sphinx",
-    "sphinxcontrib.mermaid",
+    "sphinx_immaterial.mermaid_diagrams",
     "sphinxcontrib.openapi",
 ]
 
@@ -127,32 +127,5 @@ michel_albert_backdrop_style = "facets"
 
 # -- Mermaid ----------------------------------------------------------
 
-# Okabe-Ito colour-blind-safe palette as one site-wide mermaid theme.
-# Node fills are light tints of the palette with near-black text and
-# dark lines. Both mermaid theme names map to "base".
-mermaid_version = "11"
-mermaid_light_theme = "base"
-mermaid_dark_theme = "base"
-mermaid_init_config = {
-    "startOnLoad": False,
-    "themeVariables": {
-        "primaryColor": "#cfe8f7",
-        "primaryBorderColor": "#0072B2",
-        "primaryTextColor": "#111111",
-        "secondaryColor": "#fbe3b0",
-        "secondaryBorderColor": "#E69F00",
-        "secondaryTextColor": "#111111",
-        "tertiaryColor": "#b5e6d6",
-        "tertiaryBorderColor": "#009E73",
-        "tertiaryTextColor": "#111111",
-        "noteBkgColor": "#f7f3b5",
-        "noteBorderColor": "#8a7f00",
-        "noteTextColor": "#111111",
-        "lineColor": "#333333",
-        "textColor": "#111111",
-        "edgeLabelBackground": "#ffffff",
-        "clusterBkg": "#f4f4f4",
-        "clusterBorder": "#333333",
-        "titleColor": "#111111",
-    },
-}
+# sphinx_immaterial.mermaid_diagrams ships mermaid with the site (no CDN)
+# and colours diagrams from the theme, so they follow light and dark mode.

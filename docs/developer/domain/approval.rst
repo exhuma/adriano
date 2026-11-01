@@ -60,7 +60,7 @@ evaluated from all decision events of its logical identity
 ``(source_id, project, record_key)``.
 :py:obj:`app.domain.approval.evaluate` applies these rules in order:
 
-.. mermaid::
+.. md-mermaid::
 
    flowchart TD
      start(["record with current digest"])

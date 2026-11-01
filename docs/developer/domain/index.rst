@@ -8,7 +8,7 @@ They are written for developers changing that logic.
 How authors write ADR and erratum files is covered for authors in
 :doc:`/user/index`.
 
-.. mermaid::
+.. md-mermaid::
 
    flowchart LR
      file["ADR or erratum file<br/>(bytes from a source or CI)"]

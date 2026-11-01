@@ -86,12 +86,11 @@ Screenshots
 Diagrams
 --------
 
-Draw diagrams as code with ``.. mermaid::``
-(``sphinxcontrib-mermaid``).
+Draw diagrams as code with ``.. md-mermaid::`` (sphinx-immaterial's
+mermaid support, enabled in ``docs/conf.py``).
 
-- The site-wide theme in ``docs/conf.py`` uses the Okabe-Ito
-  colour-blind-safe palette on a white panel.
-  Do not add inline colours unless they come from that palette.
+- The theme colours diagrams, in light and dark mode.
+  Do not add inline colours.
 - Never encode meaning by colour alone.
   Label every edge and state, and use shapes or text to distinguish
   kinds of nodes.

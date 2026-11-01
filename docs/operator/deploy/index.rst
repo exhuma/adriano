@@ -35,7 +35,7 @@ A catalog file
 The container speaks plain HTTP.
 Put a TLS-terminating ingress or load balancer in front of it.
 
-.. mermaid::
+.. md-mermaid::
 
    flowchart LR
      browser["Browser"]

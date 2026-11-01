@@ -20,7 +20,7 @@ CI jobs use separate *push tokens* that can only submit candidates.
 How sign-in works
 -----------------
 
-.. mermaid::
+.. md-mermaid::
 
    sequenceDiagram
      actor User
