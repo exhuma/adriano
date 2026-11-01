@@ -121,8 +121,8 @@ html_theme_options = {
     ],
 }
 
-# Backdrop style of the design system (ignored by releases before
-# the option exists).
+# Backdrop style: "facets" (architecture viewpoints, structure) suits a
+# catalog of architecture decisions.
 michel_albert_backdrop_style = "facets"
 
 # -- Mermaid ----------------------------------------------------------

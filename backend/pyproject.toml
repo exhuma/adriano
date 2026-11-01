@@ -30,7 +30,7 @@ dev = [
     "ruff>=0.17.1",
 ]
 docs = [
-    "michel-albert-sphinx @ git+https://github.com/exhuma/michel-albert-design@sphinx-v0.7.0#subdirectory=packages/sphinx",
+    "michel-albert-sphinx @ git+https://github.com/exhuma/michel-albert-design@sphinx-v0.8.0#subdirectory=packages/sphinx",
     "sphinx>=8.1",
     "sphinx-autodoc-typehints>=3.0",
     "sphinxcontrib-openapi>=0.8",
