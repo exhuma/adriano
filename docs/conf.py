@@ -68,6 +68,7 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
+    "michel_albert_sphinx",
     "sphinxcontrib.mermaid",
     "sphinxcontrib.openapi",
 ]
@@ -101,40 +102,34 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
 
-# -- HTML output (furo) -----------------------------------------------
+# -- HTML output (michel-albert-design) -------------------------------
 
-html_theme = "furo"
 html_title = "Adriano"
 html_logo = "_static/identity/adriano-mark.png"
 html_favicon = "_static/identity/adriano-mark.png"
 html_static_path = ["_static"]
-html_css_files = ["custom.css"]
 
-# Brand colours taken from the identity image (dark navy shield and
-# lettering, warm grey inner shield line). Contrast against the furo
-# page background (WCAG, text needs >= 4.5:1):
-#   light: brand #1f3149 / links #2b4a73 on #ffffff -> 13.2 / 9.0
-#   dark:  brand #8fb0dc / links #a9c3e6 on #131416 -> 8.3 / 10.2
+# Non-visual theme options only; the design system owns the looks.
 html_theme_options = {
-    "light_css_variables": {
-        "color-brand-primary": "#1f3149",
-        "color-brand-content": "#2b4a73",
-        "color-foreground-secondary": "#5f5a52",
-    },
-    "dark_css_variables": {
-        "color-brand-primary": "#8fb0dc",
-        "color-brand-content": "#a9c3e6",
-        "color-foreground-secondary": "#b3aca0",
-    },
+    "repo_url": "https://github.com/exhuma/adriano",
+    "repo_name": "exhuma/adriano",
+    "edit_uri": "blob/master/docs",
+    "features": [
+        "content.code.copy",
+        "navigation.top",
+        "toc.follow",
+    ],
 }
+
+# Backdrop style of the design system (ignored by releases before
+# the option exists).
+michel_albert_backdrop_style = "facets"
 
 # -- Mermaid ----------------------------------------------------------
 
 # Okabe-Ito colour-blind-safe palette as one site-wide mermaid theme.
 # Node fills are light tints of the palette with near-black text and
-# dark lines. Diagrams are drawn on a white panel (see custom.css), so
-# the same theme is readable in furo's light and dark modes; both
-# mermaid theme names therefore map to "base".
+# dark lines. Both mermaid theme names map to "base".
 mermaid_version = "11"
 mermaid_light_theme = "base"
 mermaid_dark_theme = "base"

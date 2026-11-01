@@ -1,8 +1,8 @@
-.. container:: adriano-hero
-
-   .. image:: _static/identity/adriano.png
-      :alt: Adriano: a smiling architect holding a blueprint in front
-            of a shield, with the wordmark ADRIANO below
+.. image:: _static/identity/adriano.png
+   :alt: Adriano: a smiling architect holding a blueprint in front
+         of a shield, with the wordmark ADRIANO below
+   :width: 288px
+   :align: center
 
 Adriano
 =======
