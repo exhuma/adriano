@@ -4,13 +4,15 @@ import datetime
 
 from sqlalchemy import Engine
 
-from tests.auth_helpers import sign_in
-from tests.routers.sessions.support import (
+from app.services.session_values import utc_now
+from tests.auth_helpers import (
     SESSION_COOKIE,
     ClientFactory,
     session_row,
+    sign_in,
+)
+from tests.routers.sessions.support import (
     set_session_times,
-    utc_now,
 )
 
 

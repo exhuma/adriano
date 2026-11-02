@@ -10,17 +10,14 @@ is a client of an app with OIDC configured, not signed in.
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
-from app.auth.deps import get_idp_client, get_oidc_validator
-from app.config import Settings, get_settings
-from app.main import create_app
-from tests.auth_helpers import FakeIdp, https_client
-from tests.routers.oidc.support import OIDC, ClientFactory
+from app.config import Settings
+from tests.auth_helpers import ClientFactory, FakeIdp, client_factory
+from tests.routers.oidc.support import OIDC
 
 
 @pytest.fixture
@@ -47,29 +44,12 @@ def make_client(
     :param catalog_file: The router tests' ``catalog.yaml``.
     :param clean_engine: Truncated, migrated engine.
     :param idp: The fake IdP.
-    :returns: A factory ``(**settings_updates) -> client``.
+    :returns: A factory ``(csrf=True, **settings_updates) -> client``.
     """
-    stack: list[TestClient] = []
-
-    def _make(**updates: Any) -> TestClient:
-        settings = test_settings.model_copy(
-            update={"config_file": str(catalog_file), **OIDC, **updates}
-        )
-        app = create_app(settings)
-        app.dependency_overrides[get_settings] = lambda: settings
-        if settings.oidc_authority is not None:
-            validator = idp.validator(issuer=settings.oidc_issuer)
-            client = idp.idp_client(validator)
-            app.dependency_overrides[get_oidc_validator] = lambda: validator
-            app.dependency_overrides[get_idp_client] = lambda: client
-        test_client = https_client(app)
-        test_client.__enter__()
-        stack.append(test_client)
-        return test_client
-
-    yield _make
-    for test_client in stack:
-        test_client.__exit__(None, None, None)
+    with client_factory(
+        test_settings, catalog_file, defaults=OIDC, idp=idp
+    ) as factory:
+        yield factory
 
 
 @pytest.fixture

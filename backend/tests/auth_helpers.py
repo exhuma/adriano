@@ -4,6 +4,8 @@ Helpers for authenticated test requests.
 - :func:`https_client` builds a :class:`TestClient` on
   ``https://testserver`` (so the ``Secure`` session cookie is sent)
   that adds the ``X-Adriano-CSRF: 1`` header to unsafe requests.
+- :func:`client_factory` builds the ``make_client`` fixtures of the
+  router test packages (custom settings, optional fake IdP).
 - :func:`sign_in` signs a client in through ``POST /auth/dev/login``
   (the real dev-session path); the session cookie stays in the
   client's jar.
@@ -18,12 +20,14 @@ in the application.
 """
 
 import base64
+import contextlib
 import datetime
 import hashlib
 import secrets
 import urllib.parse
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -33,10 +37,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from jwt.algorithms import RSAAlgorithm
 from pydantic import SecretStr
+from sqlalchemy import Engine, text
 
 from app.auth.csrf import CSRF_HEADER, UNSAFE_METHODS
+from app.auth.deps import get_idp_client, get_oidc_validator
 from app.auth.idp import IdpClient
 from app.auth.oidc import OidcValidator
+from app.config import Settings, get_settings
+from app.main import create_app
+from app.services.auth_sessions import session_id_for
 
 #: Dev shared secret of the test settings (tests only).
 TEST_DEV_SECRET = "test-only-dev-secret-" + "0123456789abcdef" * 3
@@ -46,6 +55,12 @@ TEST_SESSION_KEY = "c26RjuiSkW-H31dbUTEt_ELLnCSNmUjhxoMLsnRrJIU="
 
 #: Base URL of every test client (``Secure`` cookies need https).
 BASE_URL = "https://testserver"
+
+#: The documented cookie names. Deliberately literal: tests pin them.
+SESSION_COOKIE = "__Host-adriano-session"
+LOGIN_COOKIE = "__Host-adriano-login"
+
+type ClientFactory = Callable[..., TestClient]
 
 #: Client id and secret of the fake IdP's confidential client.
 CLIENT_ID = "adriano"
@@ -74,6 +89,89 @@ def https_client(app: FastAPI, *, csrf: bool = True) -> TestClient:
     if csrf:
         client.event_hooks = {"request": [_add_csrf_header], "response": []}
     return client
+
+
+@contextlib.contextmanager
+def client_factory(
+    base_settings: Settings,
+    catalog_file: Path,
+    *,
+    defaults: Mapping[str, Any] | None = None,
+    idp: FakeIdp | None = None,
+) -> Iterator[ClientFactory]:
+    """
+    Build https clients of apps with custom settings.
+
+    Entered clients are exited when the context ends.
+
+    :param base_settings: Base test settings.
+    :param catalog_file: The router tests' ``catalog.yaml``.
+    :param defaults: Settings applied to every client, below the
+        per-call updates.
+    :param idp: If given, an app with an OIDC authority validates
+        tokens and talks to this fake IdP.
+    :returns: A factory ``(csrf=True, **settings_updates) -> client``.
+    """
+    stack: list[TestClient] = []
+
+    def _make(*, csrf: bool = True, **updates: Any) -> TestClient:
+        settings = base_settings.model_copy(
+            update={
+                "config_file": str(catalog_file),
+                **(defaults or {}),
+                **updates,
+            }
+        )
+        app = create_app(settings)
+        app.dependency_overrides[get_settings] = lambda: settings
+        if idp is not None and settings.oidc_authority is not None:
+            validator = idp.validator(issuer=settings.oidc_issuer)
+            idp_client = idp.idp_client(validator)
+            app.dependency_overrides[get_oidc_validator] = lambda: validator
+            app.dependency_overrides[get_idp_client] = lambda: idp_client
+        client = https_client(app, csrf=csrf)
+        client.__enter__()
+        stack.append(client)
+        return client
+
+    try:
+        yield _make
+    finally:
+        for client in stack:
+            client.__exit__(None, None, None)
+
+
+def session_rows(
+    engine: Engine, cookie: str | None = None
+) -> list[dict[str, Any]]:
+    """
+    Read raw ``auth_session`` rows.
+
+    :param engine: Test database engine.
+    :param cookie: Only the row of this cookie value; every row if
+        ``None``.
+    :returns: The rows.
+    """
+    query = "SELECT * FROM auth_session"
+    params: dict[str, Any] = {}
+    if cookie is not None:
+        query += " WHERE id = :id"
+        params["id"] = session_id_for(cookie)
+    with engine.connect() as connection:
+        result = connection.execute(text(query), params)
+        return [dict(row) for row in result.mappings()]
+
+
+def session_row(engine: Engine, cookie: str) -> dict[str, Any] | None:
+    """
+    Read the raw session row of a cookie.
+
+    :param engine: Test database engine.
+    :param cookie: The cookie value.
+    :returns: The row as a mapping, or ``None``.
+    """
+    rows = session_rows(engine, cookie)
+    return rows[0] if rows else None
 
 
 def sign_in(

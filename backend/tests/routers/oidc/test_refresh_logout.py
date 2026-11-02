@@ -7,12 +7,16 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
-from tests.auth_helpers import CLIENT_ID, END_SESSION_URL, FakeIdp
-from tests.routers.oidc.support import (
+from tests.auth_helpers import (
+    CLIENT_ID,
+    END_SESSION_URL,
     SESSION_COOKIE,
+    FakeIdp,
+    session_rows,
+)
+from tests.routers.oidc.support import (
     expire_access_token,
     query_of,
-    session_rows,
     sign_in_at_idp,
     stored_refresh_token,
     wait_for_lock_waiter,

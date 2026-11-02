@@ -3,8 +3,6 @@
 import datetime
 import time
 import urllib.parse
-from collections.abc import Callable
-from typing import Any
 
 import httpx
 from fastapi.testclient import TestClient
@@ -19,12 +17,8 @@ from tests.auth_helpers import (
     IDP_ISSUER,
     TEST_SESSION_KEY,
     FakeIdp,
+    session_rows,
 )
-
-type ClientFactory = Callable[..., TestClient]
-
-SESSION_COOKIE = "__Host-adriano-session"
-LOGIN_COOKIE = "__Host-adriano-login"
 
 #: Settings of an app signing in at the fake IdP (dev auth off).
 OIDC = {
@@ -74,18 +68,6 @@ def sign_in_at_idp(
     """
     code, state = idp.authorize(start_login(client, return_to))
     return client.get("/auth/callback", params={"code": code, "state": state})
-
-
-def session_rows(engine: Engine) -> list[dict[str, Any]]:
-    """
-    Read every raw session row.
-
-    :param engine: Test database engine.
-    :returns: The rows.
-    """
-    with engine.connect() as connection:
-        result = connection.execute(text("SELECT * FROM auth_session"))
-        return [dict(row) for row in result.mappings()]
 
 
 def stored_refresh_token(engine: Engine) -> str:

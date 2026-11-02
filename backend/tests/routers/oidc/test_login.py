@@ -10,14 +10,14 @@ from tests.auth_helpers import (
     CLIENT_ID,
     CLIENT_SECRET,
     IDP_ISSUER,
-    FakeIdp,
-)
-from tests.routers.oidc.support import (
     LOGIN_COOKIE,
     SESSION_COOKIE,
     ClientFactory,
-    query_of,
+    FakeIdp,
     session_rows,
+)
+from tests.routers.oidc.support import (
+    query_of,
     sign_in_at_idp,
     start_login,
     stored_refresh_token,

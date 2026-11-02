@@ -11,12 +11,16 @@ import re
 from sqlalchemy import Engine
 
 from app.auth.dev import DEV_ISSUER
-from tests.auth_helpers import IDP_ISSUER, FakeIdp, sign_in
-from tests.routers.sessions.support import (
+from tests.auth_helpers import (
+    IDP_ISSUER,
     SESSION_COOKIE,
-    ZERO_UUID,
     ClientFactory,
+    FakeIdp,
     session_row,
+    sign_in,
+)
+from tests.routers.sessions.support import (
+    ZERO_UUID,
 )
 
 
