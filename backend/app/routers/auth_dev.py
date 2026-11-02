@@ -14,7 +14,7 @@ dev sign-in dialog can offer presets that match this catalog.
 from fastapi import APIRouter, Depends, Response
 
 from app.auth.cookies import set_session_cookie
-from app.auth.csrf import require_csrf
+from app.auth.csrf import check_csrf
 from app.auth.deps import get_session_service
 from app.auth.dev import DevIdentity, dev_claims
 from app.composition import CatalogRuntime, get_catalog_runtime
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/auth/dev", tags=["dev-auth"])
     "/login",
     status_code=204,
     response_class=Response,
-    dependencies=[Depends(require_csrf)],
+    dependencies=[Depends(check_csrf)],
     responses={403: {"description": "CSRF check failed (csrf_failed)"}},
 )
 def dev_login(

@@ -157,15 +157,6 @@ class IdpClient:
         self._transport = transport
         self._ssl_context = ssl_context
 
-    @property
-    def validator(self) -> OidcValidator:
-        """
-        The provider's token validator.
-
-        :returns: The validator.
-        """
-        return self._validator
-
     def _endpoint(self, name: str) -> str | None:
         """
         Read an endpoint URL from the discovery document.

@@ -37,7 +37,7 @@ from app.auth.cookies import (
     set_login_cookie,
     set_session_cookie,
 )
-from app.auth.csrf import request_origin, require_csrf
+from app.auth.csrf import check_csrf, request_origin
 from app.auth.deps import get_idp_client, get_login_service, get_session_service
 from app.auth.idp import IdpClient
 from app.auth.pages import LANDING_JS, error_page, landing_page
@@ -166,7 +166,7 @@ def session_status(
 @router.post(
     "/logout",
     response_model=LogoutOut,
-    dependencies=[Depends(require_csrf)],
+    dependencies=[Depends(check_csrf)],
     responses={403: {"description": "CSRF check failed (csrf_failed)"}},
 )
 def logout(

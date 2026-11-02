@@ -24,7 +24,7 @@ browser's ``Host`` through unchanged: ``X-Forwarded-Host`` is not
 honoured, so a client can never choose the origin it is compared with.
 
 Public API: :data:`CSRF_HEADER`, :data:`UNSAFE_METHODS`,
-:func:`request_origin`, :func:`check_csrf`, :func:`require_csrf`.
+:func:`request_origin`, :func:`check_csrf`.
 """
 
 from urllib.parse import urlsplit
@@ -38,7 +38,6 @@ __all__ = [
     "UNSAFE_METHODS",
     "check_csrf",
     "request_origin",
-    "require_csrf",
 ]
 
 CSRF_HEADER = "X-Adriano-CSRF"
@@ -120,13 +119,3 @@ def check_csrf(request: Request) -> None:
             "this site",
             code="csrf_failed",
         )
-
-
-def require_csrf(request: Request) -> None:
-    """
-    FastAPI dependency: :func:`check_csrf` for the auth posts.
-
-    :param request: The request.
-    :raises ForbiddenError: Code ``csrf_failed`` (HTTP 403).
-    """
-    check_csrf(request)
