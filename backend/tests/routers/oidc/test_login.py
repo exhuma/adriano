@@ -2,7 +2,6 @@
 
 import hashlib
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
@@ -133,22 +132,16 @@ def test_token_endpoint_uses_post_when_only_post_is_offered(
     assert form["client_secret"] == CLIENT_SECRET
 
 
-@pytest.mark.parametrize(
-    "return_to",
-    [
-        "https://evil.example/x",
-        "//evil.example/x",
-        "/\\evil.example",
-        "javascript:alert(1)",
-        "records",
-        "/a\nb",
-    ],
-)
 def test_invalid_return_to_becomes_root(
-    client: TestClient, idp: FakeIdp, return_to: str
+    client: TestClient, idp: FakeIdp
 ) -> None:
-    """Ensure a non-relative or ambiguous return_to is replaced by /."""
-    response = sign_in_at_idp(client, idp, return_to)
+    """
+    Ensure an invalid return_to is replaced by / through the sign-in.
+
+    This proves the wiring only; the unit test of ``safe_return_to`` in
+    ``tests/auth/test_csrf_and_cookies.py`` holds the full matrix.
+    """
+    response = sign_in_at_idp(client, idp, "https://evil.example/x")
 
     assert response.status_code == 200
     assert 'data-return-to="/"' in response.text

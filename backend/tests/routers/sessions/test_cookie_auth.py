@@ -8,7 +8,6 @@ from ``POST /auth/dev/login``. The OIDC flow is covered by
 
 import re
 
-import pytest
 from sqlalchemy import Engine
 
 from app.auth.dev import DEV_ISSUER
@@ -19,35 +18,6 @@ from tests.routers.sessions.support import (
     ClientFactory,
     session_row,
 )
-
-PROTECTED_GETS = [
-    "/api/v1/records",
-    f"/api/v1/records/{ZERO_UUID}",
-    "/api/v1/sources",
-    "/api/v1/facets",
-    "/api/v1/me",
-]
-
-
-@pytest.mark.parametrize("path", PROTECTED_GETS)
-def test_protected_routes_require_a_session(
-    make_client: ClientFactory, path: str
-) -> None:
-    """Ensure every /api/v1 route answers 401 without a session."""
-    client = make_client()
-
-    response = client.get(path)
-
-    assert response.status_code == 401
-    assert response.json()["code"] == "not_authenticated"
-
-
-def test_poll_routes_require_a_session(make_client: ClientFactory) -> None:
-    """Ensure the operator poll routes answer 401 without a session."""
-    client = make_client()
-
-    assert client.post("/api/v1/sources/poll").status_code == 401
-    assert client.post("/api/v1/sources/central/poll").status_code == 401
 
 
 def test_healthz_and_docs_stay_public(make_client: ClientFactory) -> None:

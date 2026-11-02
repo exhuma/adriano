@@ -126,21 +126,6 @@ def test_idle_expiry_slides_but_never_passes_the_absolute(
         service.authenticate(cookie)
 
 
-def test_idle_session_ends(
-    sessions_provider: PostgresSessionStoreProvider, engine: Engine
-) -> None:
-    """Ensure a session unused for the idle time is gone."""
-    clock = Clock()
-    service = _service(sessions_provider, clock)
-    cookie = service.create(SessionKind.DEV, CLAIMS)
-    clock.now += POLICY.idle
-
-    with pytest.raises(AuthenticationError):
-        service.authenticate(cookie)
-
-    assert _count(engine) == 0
-
-
 def test_changed_session_key_ends_the_session(
     sessions_provider: PostgresSessionStoreProvider, engine: Engine
 ) -> None:

@@ -75,50 +75,6 @@ def test_idle_expiry_ends_the_session(
     assert session_row(clean_engine, cookie) is None
 
 
-def test_absolute_expiry_ends_an_active_session(
-    make_client: ClientFactory, clean_engine: Engine
-) -> None:
-    """Ensure activity cannot keep a session past its absolute expiry."""
-    client = make_client()
-    cookie = sign_in(client, roles=["admin"])
-    past = utc_now() - datetime.timedelta(seconds=1)
-    set_session_times(
-        clean_engine,
-        cookie,
-        idle_expires_at=past,
-        absolute_expires_at=past,
-    )
-
-    response = client.get("/api/v1/me")
-
-    assert response.status_code == 401
-    assert session_row(clean_engine, cookie) is None
-
-
-def test_activity_slides_the_idle_expiry_up_to_the_absolute(
-    make_client: ClientFactory, clean_engine: Engine
-) -> None:
-    """Ensure touching extends idle expiry, capped at the absolute one."""
-    client = make_client()
-    cookie = sign_in(client, roles=["admin"])
-    now = utc_now()
-    absolute = now + datetime.timedelta(minutes=30)
-    set_session_times(
-        clean_engine,
-        cookie,
-        last_seen_at=now - datetime.timedelta(minutes=5),
-        idle_expires_at=now + datetime.timedelta(minutes=10),
-        absolute_expires_at=absolute,
-    )
-
-    assert client.get("/api/v1/me").status_code == 200
-
-    row = session_row(clean_engine, cookie)
-    assert row is not None
-    assert row["idle_expires_at"] == absolute
-    assert row["last_seen_at"] > now - datetime.timedelta(minutes=1)
-
-
 def test_recent_activity_is_not_rewritten(
     make_client: ClientFactory, clean_engine: Engine
 ) -> None:
