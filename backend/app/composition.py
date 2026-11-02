@@ -18,7 +18,8 @@ Public API: :class:`SyncStatus`, :class:`CatalogRuntime`,
 :func:`load_catalog`, :func:`build_store_provider`,
 :func:`build_polling_service`, :func:`start_catalog`,
 :func:`log_problems`, :func:`get_catalog_runtime`,
-:func:`get_store_provider`.
+:func:`get_store_provider`, :func:`build_session_store_provider`,
+:func:`get_session_store_provider`.
 """
 
 import logging
@@ -37,7 +38,9 @@ from app.services.polling import PollingService
 from app.services.registrations import sync_registrations
 from app.sources.registry import default_registry
 from app.storage.port import CatalogStoreProvider
+from app.storage.postgres.sessions import PostgresSessionStoreProvider
 from app.storage.postgres.store import PostgresStoreProvider
+from app.storage.session_port import SessionStoreProvider
 from app.tls import ssl_context_from_settings
 
 logger = logging.getLogger(__name__)
@@ -171,3 +174,25 @@ def get_store_provider(
     :returns: The provider.
     """
     return build_store_provider(settings)
+
+
+def build_session_store_provider(settings: Settings) -> SessionStoreProvider:
+    """
+    Build the sign-in session storage for the configured database.
+
+    :param settings: Application settings.
+    :returns: The provider.
+    """
+    return PostgresSessionStoreProvider(get_engine(str(settings.database_url)))
+
+
+def get_session_store_provider(
+    settings: Settings = Depends(get_settings),
+) -> SessionStoreProvider:
+    """
+    FastAPI dependency: the sign-in session storage.
+
+    :param settings: Application settings, injected for overriding.
+    :returns: The provider.
+    """
+    return build_session_store_provider(settings)

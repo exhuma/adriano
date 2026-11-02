@@ -64,6 +64,11 @@ It needs these keys:
 
 - Keep ``sslmode=require`` (or ``verify-full``) in the database
   address when the database is outside the cluster.
+- ``ADRIANO_OIDC_CLIENT_SECRET`` is the confidential client's secret.
+  ``ADRIANO_SESSION_KEY`` is a Fernet key encrypting the sessions
+  (:doc:`../authentication` shows how to generate one).
+  Every replica and the poll job must have the same key; changing it
+  signs every user out.
 - Add one key for every secret your catalog file names
   (:ref:`catalog-secrets`).
   The Secret is used by the Deployment and by the poll job, so
@@ -86,6 +91,9 @@ Adriano then trusts the ``X-Forwarded-*`` headers of every peer, so
 let only the ingress controller reach the Service, for example with
 a NetworkPolicy.
 If your controller has fixed addresses, list them instead.
+The ingress must pass the ``Host`` header through unchanged
+(the default for most controllers), because sign-in and the CSRF
+check compare against it.
 
 Changes to a ConfigMap or Secret reach the pods only when they
 restart:

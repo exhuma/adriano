@@ -1,5 +1,5 @@
 /**
- * Business-object types for identity, permissions, and dev tokens,
+ * Business-object types for identity, permissions, and dev login,
  * derived from the generated OpenAPI schema (see
  * `scripts/gen-types.mjs`).
  */
@@ -11,10 +11,8 @@ export type Permission = components["schemas"]["Permission"];
 export type ReviewerOut = components["schemas"]["ReviewerOut"];
 /** `GET /api/v1/me`: the authenticated caller and what they may do. */
 export type MeOut = components["schemas"]["MeOut"];
-/** `POST /auth/dev/token` request body. */
-export type DevTokenIn = components["schemas"]["DevTokenIn"];
-/** `POST /auth/dev/token` response (OAuth2 token-response shape). */
-export type DevTokenOut = components["schemas"]["DevTokenOut"];
+/** `POST /auth/dev/login` request body. */
+export type DevLoginIn = components["schemas"]["DevLoginIn"];
 /** One `rbac` role of the loaded catalog (`GET /auth/dev/roles`). */
 export type DevRoleOut = components["schemas"]["DevRoleOut"];
 /** `GET /auth/dev/roles`: role names for dev sign-in presets. */

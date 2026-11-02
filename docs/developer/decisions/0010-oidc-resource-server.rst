@@ -1,7 +1,10 @@
 0010: Standard OIDC, stateless bearer tokens
 ============================================
 
-:Status: Accepted
+:Status: Superseded in part by :doc:`0022-backend-for-frontend-session`.
+   The SPA as a public client, in-memory tokens and bearer-token user
+   authentication no longer apply; the backend's OIDC claim validation and
+   the role mapping still do.
 :Date: 2026-10-19
 
 Context

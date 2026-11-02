@@ -30,7 +30,11 @@ application:
    and the approval workflow.
 
 ``tests/auth``
-   Token claims and the command line.
+   Claim mapping, the OIDC validator, cookies, CSRF and the command
+   line.
+
+``tests/routers/oidc``
+   The sign-in, refresh and sign-out flows against a fake provider.
 
 Test doubles
 ^^^^^^^^^^^^
@@ -47,7 +51,13 @@ Nothing in the suite talks to the network or to a real provider.
    failures.
 
 ``tests/auth_helpers.py``
-   A throwaway dev secret and helpers to mint tokens.
+   A throwaway dev secret and session key, ``FakeIdp`` (a local RSA
+   key pair posing as an OIDC provider), and the client helpers.
+   ``https_client(app)`` builds a test client for an ``https://``
+   base URL, so ``Secure`` cookies are kept, and adds the
+   ``X-Adriano-CSRF`` header to unsafe requests.
+   ``sign_in(client, sub=..., roles=...)`` signs it in through
+   ``POST /auth/dev/login`` and returns the session cookie.
 
 Test database
 ^^^^^^^^^^^^^

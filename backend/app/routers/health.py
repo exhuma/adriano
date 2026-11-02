@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.auth.tokens import auth_status
+from app.auth.status import auth_status
 from app.composition import CatalogRuntime, get_catalog_runtime
 from app.config import Settings, get_settings
 from app.database import get_db

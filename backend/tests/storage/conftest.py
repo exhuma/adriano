@@ -30,7 +30,10 @@ from app.storage.port import (
 from app.storage.postgres.store import PostgresStoreProvider
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-TABLES = "intake_run, decision_event, record, revision, source_registration"
+TABLES = (
+    "intake_run, decision_event, record, revision, source_registration, "
+    "auth_session, auth_login"
+)
 SOURCES = ("central", "other")
 
 #: Migration 0002's TRUNCATE guard on ``decision_event``.

@@ -1,6 +1,6 @@
 /**
- * The dev-only endpoints (token minting and the catalog's role
- * names), isolated from `src/api/auth.ts` on purpose: this module
+ * The dev-only endpoints (dev login and the catalog's role names),
+ * isolated from `src/api/auth.ts` on purpose: this module
  * (and everything that imports it) is reachable
  * **only** through `src/auth/devAuth.ts` -> the dynamically-imported
  * `DevLoginDialog`, so a production build's dead-code elimination
@@ -11,18 +11,22 @@
  * `src/composables/useAuth.ts`).
  */
 import { api } from "@/api";
-import type { DevRolesOut, DevTokenIn, DevTokenOut } from "@/types/auth";
+import type { DevLoginIn, DevRolesOut } from "@/types/auth";
 
 /**
- * Mint a dev-only HS256 token for the requested identity.
+ * Create a dev session for the requested identity. The backend
+ * answers 204 and sets the session cookie; the caller then re-runs
+ * the session check.
+ *
+ * Opts out of the re-auth loop guard: it is a sign-in, not an API
+ * call the session authorised.
  *
  * :param identity: Subject, name, email, and roles to assert.
- * :returns: The minted access token and its lifetime.
- * :throws ApiError: `503 auth_unconfigured` if the backend secret is
- *     unset.
+ * :throws ApiError: `503 auth_unconfigured` if dev auth has no
+ *     session key.
  */
-export function createDevToken(identity: DevTokenIn): Promise<DevTokenOut> {
-  return api.post<DevTokenOut>("/auth/dev/token", identity);
+export async function createDevSession(identity: DevLoginIn): Promise<void> {
+  await api.post<null>("/auth/dev/login", identity, { trackAuth: false });
 }
 
 /**
@@ -33,5 +37,5 @@ export function createDevToken(identity: DevTokenIn): Promise<DevTokenOut> {
  * :throws ApiError: `404` when the backend has dev auth disabled.
  */
 export function listDevRoles(): Promise<DevRolesOut> {
-  return api.get<DevRolesOut>("/auth/dev/roles");
+  return api.get<DevRolesOut>("/auth/dev/roles", { trackAuth: false });
 }

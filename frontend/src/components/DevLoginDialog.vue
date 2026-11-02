@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Dev-only sign-in dialog: mints an HS256 token for a hand-picked
- * identity via `POST /auth/dev/token`. Its role presets (Reader,
+ * Dev-only sign-in dialog: creates a dev session for a hand-picked
+ * identity via `POST /auth/dev/login`. Its role presets (Reader,
  * Reviewer, Operator) come from the loaded catalog via
  * `GET /auth/dev/roles` (see `src/auth/devPresets.ts`); presets the
  * catalog cannot satisfy are not shown, and the roles field can
@@ -10,8 +10,8 @@
  * responsible for that gate so this component never has to repeat
  * it.
  *
- * Cancel/Escape/click-outside all close the dialog without minting a
- * token or touching any existing session (module-ux-principles "UI
+ * Cancel/Escape/click-outside all close the dialog without creating a
+ * session or touching any existing session (module-ux-principles "UI
  * modes": dismiss must never mutate state).
  */
 import { ref, useId, watch } from "vue";
@@ -33,7 +33,7 @@ const emit = defineEmits<{
   /** Open/closed state changed (Cancel, Escape, click-outside, or a
    *  successful sign-in all close it this way). */
   "update:modelValue": [value: boolean];
-  /** A dev token was minted and `/me` loaded successfully. */
+  /** A dev session was created and `/me` loaded successfully. */
   "signed-in": [];
 }>();
 
@@ -164,7 +164,7 @@ async function submit(): Promise<void> {
         Dev sign-in
       </v-card-title>
       <v-card-subtitle>
-        Local-only: mints a token for any identity you type. Never
+        Local-only: signs in as any identity you type. Never
         available in a production build.
       </v-card-subtitle>
       <v-card-text>

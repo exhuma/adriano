@@ -42,28 +42,17 @@ describe("config", () => {
     expect(apiBaseUrl).toBe("https://runtime.example");
   });
 
-  it("reports OIDC as unconfigured when neither authority nor client id is set", async () => {
-    const { oidcConfigured } = await import("@/config");
+  it("reports OIDC as disabled when the runtime config does not say otherwise", async () => {
+    const { oidcEnabled } = await import("@/config");
 
-    expect(oidcConfigured).toBe(false);
+    expect(oidcEnabled).toBe(false);
   });
 
-  it("reports OIDC as configured once both an authority and a client id are present", async () => {
-    window.__APP_CONFIG__ = {
-      oidcAuthority: "https://idp.example.com",
-      oidcClientId: "adriano-spa",
-    };
-    const { oidcConfigured, oidcAuthority, oidcClientId } = await import("@/config");
+  it("reports OIDC as enabled when the backend's runtime config says so", async () => {
+    window.__APP_CONFIG__ = { apiBaseUrl: "", oidcEnabled: true };
+    const { oidcEnabled } = await import("@/config");
 
-    expect(oidcConfigured).toBe(true);
-    expect(oidcAuthority).toBe("https://idp.example.com");
-    expect(oidcClientId).toBe("adriano-spa");
-  });
-
-  it("defaults the OIDC scope when unset", async () => {
-    const { oidcScope } = await import("@/config");
-
-    expect(oidcScope).toBe("openid profile email");
+    expect(oidcEnabled).toBe(true);
   });
 
   it("the dev-auth gate is never read from runtime config (security boundary)", async () => {

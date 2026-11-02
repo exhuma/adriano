@@ -4,7 +4,8 @@
  * build-time gate is off, which it is under the default test
  * environment), the blocking "auth not configured" screen on
  * `/healthz` `auth: "unconfigured"`, and the normal shell once
- * `/api/v1/me` resolves. Also covers the xs/sm app-bar layout: the
+ * `/api/v1/me` resolves, and a neutral loading state (never the
+ * sign-in screen) while the startup session check is pending. Also covers the xs/sm app-bar layout: the
  * product name and the DEV LOGIN mode chip stay inline while
  * everything else collapses into `AppBarMenu` (module-ux-principles
  * "UI modes" + "Fitt's/Hick's law").
@@ -42,6 +43,7 @@ const meRef = ref<MeOut | null>(null);
 const meErrorRef = ref<{ kind: string; detail: string } | null>(null);
 const authModeRef = ref<"oidc" | "dev" | null>(null);
 const authErrorRef = ref<string | null>(null);
+const sessionCheckedRef = ref(true);
 
 const signInWithOidc = vi.fn();
 const signOut = vi.fn();
@@ -61,7 +63,8 @@ vi.mock("@/composables/useAuth", () => ({
     meError: meErrorRef,
     authMode: authModeRef,
     authError: authErrorRef,
-    oidcConfigured: true,
+    sessionChecked: sessionCheckedRef,
+    oidcEnabled: true,
     initAuth,
     signInWithOidc,
     signOut,
@@ -80,7 +83,6 @@ async function mountApp(
     routes: [
       { path: "/", name: "search", component: { template: "<div>catalog</div>" } },
       { path: "/sources", name: "sources", component: { template: "<div>sources</div>" } },
-      { path: "/auth/callback", name: "auth-callback", component: { template: "<div>callback</div>" } },
     ],
   });
   await router.push("/");
@@ -101,6 +103,7 @@ describe("App", () => {
     meErrorRef.value = null;
     authModeRef.value = null;
     authErrorRef.value = null;
+    sessionCheckedRef.value = true;
     mdAndUpRef.value = true;
     signInWithOidc.mockReset();
     signOut.mockReset();
@@ -120,6 +123,45 @@ describe("App", () => {
     // or dialog markup is rendered at all.
     expect(wrapper.text()).not.toContain("Dev sign-in");
     expect(wrapper.findComponent({ name: "DevLoginDialog" }).exists()).toBe(false);
+  });
+
+  it("shows a loading state, not the sign-in screen, while the session check is pending", async () => {
+    sessionCheckedRef.value = false;
+    const { wrapper } = await mountApp();
+
+    expect(wrapper.text()).toContain("Checking your session");
+    expect(wrapper.text()).not.toContain("Sign in to browse the decision catalog");
+    expect(wrapper.text()).not.toContain("Catalog");
+  });
+
+  it("replaces the loading state with the sign-in screen once the check finds no session", async () => {
+    sessionCheckedRef.value = false;
+    const { wrapper } = await mountApp();
+    sessionCheckedRef.value = true;
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("Checking your session");
+    expect(wrapper.text()).toContain("Sign in to browse the decision catalog");
+  });
+
+  it("renders the app, not the sign-in screen, when startup restores a session", async () => {
+    sessionCheckedRef.value = false;
+    const { wrapper } = await mountApp();
+    meRef.value = {
+      issuer: "adriano-dev",
+      subject: "alice",
+      display: "Alice",
+      email: null,
+      roles: ["admin"],
+      permissions: ["read", "operate"],
+      reviewer: { eligible: false, reason: "n/a" },
+    };
+    sessionCheckedRef.value = true;
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("catalog");
+    expect(wrapper.text()).toContain("Alice");
+    expect(wrapper.text()).not.toContain("Sign in to browse the decision catalog");
   });
 
   it("shows a blocking screen when /healthz reports auth is unconfigured", async () => {

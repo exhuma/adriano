@@ -1,11 +1,15 @@
 """
-FastAPI dependencies: the authenticated principal and permissions.
+FastAPI dependencies: sessions, the authenticated principal, rights.
 
-Identity comes from verified token claims only; no user is stored.
-Real (RS256) and dev (HS256) tokens produce their claims through
-:func:`app.auth.tokens.verify_token` and then share this module's
-mapping (:func:`principal_from_claims`) and authorization
-(:func:`require_permission`).
+Users authenticate **only** with the ``__Host-adriano-session`` cookie
+(Backend-for-Frontend, ADR 0022); an ``Authorization`` header is
+ignored on user routes (CI push tokens are a separate scheme,
+:mod:`app.auth.push`). :func:`get_principal` resolves the cookie
+through :class:`~app.services.auth_sessions.SessionService` (which
+refreshes OIDC tokens inline) and maps the session's verified claims
+-- the IdP access token's, or a dev session's -- with
+:func:`principal_from_claims`. Cookie-authenticated requests with an
+unsafe method must pass :func:`app.auth.csrf.check_csrf` (HTTP 403).
 
 Claim mapping:
 
@@ -22,34 +26,53 @@ Permissions come from the ``rbac`` section loaded at startup
 (:mod:`app.auth.rbac`); no configuration means no permissions.
 
 Public API: :class:`Principal`, :func:`principal_from_claims`,
-:func:`get_oidc_validator`, :func:`get_principal`,
-:func:`get_permissions`, :func:`require_permission`.
+:func:`get_oidc_validator`, :func:`get_idp_client`,
+:func:`get_session_service`, :func:`get_login_service`,
+:func:`get_principal`, :func:`get_permissions`,
+:func:`require_permission`.
 """
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, Request
 
+from app.auth.cipher import SessionCipher
+from app.auth.cookies import SESSION_COOKIE, read_cookie
+from app.auth.csrf import UNSAFE_METHODS, check_csrf
+from app.auth.idp import IdpClient
 from app.auth.oidc import OidcValidator, cached_oidc_validator
 from app.auth.rbac import Permission, permissions_for
-from app.auth.tokens import ensure_configured, verify_token
-from app.composition import CatalogRuntime, get_catalog_runtime
+from app.auth.status import dev_auth_active, ensure_configured
+from app.composition import (
+    CatalogRuntime,
+    get_catalog_runtime,
+    get_session_store_provider,
+)
 from app.config import Settings, get_settings
-from app.errors import AuthenticationError, ForbiddenError
+from app.errors import (
+    AuthenticationError,
+    AuthUnavailableError,
+    ForbiddenError,
+    NotFoundError,
+)
+from app.services.auth_sessions import SessionPolicy, SessionService
+from app.services.oidc_login import LoginService
+from app.storage.session_port import SessionKind, SessionStoreProvider
+from app.tls import ssl_context_from_settings
 
 __all__ = [
     "Principal",
+    "get_idp_client",
+    "get_login_service",
     "get_oidc_validator",
     "get_permissions",
     "get_principal",
+    "get_session_service",
     "principal_from_claims",
     "require_permission",
 ]
-
-_bearer = HTTPBearer(auto_error=False, description="OIDC access token")
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,35 +192,143 @@ def get_oidc_validator(
     )
 
 
-def get_principal(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+def get_idp_client(
     settings: Settings = Depends(get_settings),
     oidc: OidcValidator | None = Depends(get_oidc_validator),
+) -> IdpClient | None:
+    """
+    FastAPI dependency: the confidential OIDC client, if configured.
+
+    Tests override this to inject a mocked token endpoint.
+
+    :param settings: Application settings.
+    :param oidc: The validator of the same provider.
+    :returns: The client, or ``None`` without OIDC.
+    """
+    if (
+        oidc is None
+        or settings.oidc_client_id is None
+        or settings.oidc_client_secret is None
+    ):
+        return None
+    return IdpClient(
+        oidc,
+        client_id=settings.oidc_client_id,
+        client_secret=settings.oidc_client_secret,
+        scope=settings.oidc_scope,
+        ssl_context=ssl_context_from_settings(settings),
+    )
+
+
+def _accepted_kinds(
+    settings: Settings, idp: IdpClient | None
+) -> set[SessionKind]:
+    """
+    List the session kinds the current configuration accepts.
+
+    :param settings: Application settings.
+    :param idp: The OIDC client, if configured.
+    :returns: The kinds.
+    """
+    kinds: set[SessionKind] = set()
+    if idp is not None:
+        kinds.add(SessionKind.OIDC)
+    if dev_auth_active(settings):
+        kinds.add(SessionKind.DEV)
+    return kinds
+
+
+def get_session_service(
+    settings: Settings = Depends(get_settings),
+    provider: SessionStoreProvider = Depends(get_session_store_provider),
+    idp: IdpClient | None = Depends(get_idp_client),
+) -> SessionService | None:
+    """
+    FastAPI dependency: the session service, if sessions are configured.
+
+    :param settings: Application settings.
+    :param provider: Session storage.
+    :param idp: The OIDC client, if configured.
+    :returns: The service, or ``None`` without ``ADRIANO_SESSION_KEY``.
+    """
+    if settings.session_key is None:
+        return None
+    return SessionService(
+        provider,
+        SessionCipher(settings.session_key),
+        SessionPolicy.from_settings(settings),
+        accepted=_accepted_kinds(settings, idp),
+        idp=idp,
+    )
+
+
+def get_login_service(
+    settings: Settings = Depends(get_settings),
+    provider: SessionStoreProvider = Depends(get_session_store_provider),
+    idp: IdpClient | None = Depends(get_idp_client),
+    sessions: SessionService | None = Depends(get_session_service),
+) -> LoginService:
+    """
+    FastAPI dependency: the OIDC sign-in flow.
+
+    :param settings: Application settings.
+    :param provider: Session storage.
+    :param idp: The OIDC client.
+    :param sessions: The session service.
+    :returns: The service.
+    :raises NotFoundError: If OIDC is not configured (HTTP 404).
+    """
+    if idp is None or sessions is None or settings.session_key is None:
+        raise NotFoundError(
+            "OIDC sign-in is not configured", code="oidc_not_configured"
+        )
+    return LoginService(
+        provider, SessionCipher(settings.session_key), idp, sessions
+    )
+
+
+def get_principal(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    sessions: SessionService | None = Depends(get_session_service),
 ) -> Principal:
     """
-    FastAPI dependency: authenticate the bearer token.
+    FastAPI dependency: authenticate the session cookie.
 
     Synchronous on purpose: FastAPI runs it in a worker thread, so the
-    (rare) discovery/JWKS fetch never blocks the event loop.
+    database lookup and a (rare) token refresh or discovery/JWKS fetch
+    never block the event loop.
 
-    :param credentials: The ``Authorization: Bearer`` credentials.
+    :param request: The request (cookie, method, CSRF headers).
     :param settings: Application settings.
-    :param oidc: The OIDC validator, if configured.
+    :param sessions: The session service.
     :returns: The principal.
     :raises AuthUnavailableError: If authentication is not configured
         or the IdP is unreachable (HTTP 503).
-    :raises AuthenticationError: If the token is missing or not
-        acceptable (HTTP 401).
+    :raises AuthenticationError: If there is no usable session (HTTP
+        401).
+    :raises ForbiddenError: If an unsafe request fails the CSRF check
+        (HTTP 403, code ``csrf_failed``).
     """
     ensure_configured(settings)
-    if credentials is None or not credentials.credentials:
+    cookie = read_cookie(request, SESSION_COOKIE)
+    if cookie is None:
         raise AuthenticationError(
-            "authentication required: send an Authorization: Bearer token",
+            "authentication required: sign in first",
             code="not_authenticated",
             token_presented=False,
         )
-    claims = verify_token(credentials.credentials, settings, oidc)
-    return principal_from_claims(claims, roles_claim=settings.oidc_roles_claim)
+    if request.method in UNSAFE_METHODS:
+        check_csrf(request)
+    if sessions is None:
+        raise AuthUnavailableError(
+            "sessions are not configured; set ADRIANO_SESSION_KEY",
+            code="auth_unconfigured",
+        )
+    active = sessions.authenticate(cookie)
+    return principal_from_claims(
+        active.claims, roles_claim=settings.oidc_roles_claim
+    )
 
 
 def get_permissions(

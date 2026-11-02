@@ -51,7 +51,7 @@ def test_reviewer_role_accepts(
 ) -> None:
     """Ensure a reviewer role accepts the exact current digest."""
     pushed = _pushed(client)
-    as_user(client, router_settings)
+    as_user(client)
     assert _approval(client, pushed["record_id"])["can_decide"] is True
 
     response = decide(
@@ -86,7 +86,7 @@ def test_listed_user_is_eligible(
 ) -> None:
     """Ensure an ``issuer|subject`` reviewer without the role can decide."""
     pushed = _pushed(client)
-    as_user(client, router_settings, sub="carol", roles=("adr-reader",))
+    as_user(client, sub="carol", roles=("adr-reader",))
 
     response = decide(client, pushed["record_id"], "rejected")
 
@@ -99,7 +99,7 @@ def test_reader_is_not_eligible(
 ) -> None:
     """Ensure read permission alone never allows a decision."""
     pushed = _pushed(client)
-    as_user(client, router_settings, sub="rob", roles=("adr-reader",))
+    as_user(client, sub="rob", roles=("adr-reader",))
 
     response = decide(client, pushed["record_id"])
     approval = _approval(client, pushed["record_id"])
@@ -117,7 +117,7 @@ def test_missing_policy_refuses_decisions(
     """Ensure decisions are refused (409) while the policy is missing."""
     pushed = _pushed(client)
     no_policy = make_client(None)
-    as_user(no_policy, router_settings)
+    as_user(no_policy)
 
     response = decide(no_policy, pushed["record_id"])
 
@@ -134,7 +134,7 @@ def test_self_approval_is_refused(
 ) -> None:
     """Ensure the author (by verified email) cannot decide (403)."""
     pushed = _pushed(client, author="Rita@Example.com")
-    as_user(client, router_settings, email="rita@example.com")
+    as_user(client, email="rita@example.com")
 
     response = decide(client, pushed["record_id"])
 
@@ -149,7 +149,7 @@ def test_self_approval_by_principal_is_refused(
 ) -> None:
     """Ensure an ``issuer|subject`` author is also recognised."""
     pushed = _pushed(client, author=f"{DEV_ISSUER}|rita")
-    as_user(client, router_settings, email=None)
+    as_user(client, email=None)
 
     response = decide(client, pushed["record_id"])
 
@@ -162,9 +162,9 @@ def test_deciding_twice_is_409(
 ) -> None:
     """Ensure one formal decision per (identity, digest)."""
     pushed = _pushed(client)
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, pushed["record_id"]).status_code == 201
-    as_user(client, router_settings, sub="carol", roles=("adr-reader",))
+    as_user(client, sub="carol", roles=("adr-reader",))
 
     response = decide(client, pushed["record_id"], "rejected")
 
@@ -177,7 +177,7 @@ def test_expected_digest_mismatch_is_409(
 ) -> None:
     """Ensure a reviewer never decides content they did not see."""
     pushed = _pushed(client)
-    as_user(client, router_settings)
+    as_user(client)
 
     response = decide(
         client, pushed["record_id"], expected_digest="sha256-v1:" + "0" * 64
@@ -192,7 +192,7 @@ def test_rejection_needs_approval(
 ) -> None:
     """Ensure a rejected record appears in the needs-approval filter."""
     pushed = _pushed(client)
-    as_user(client, router_settings)
+    as_user(client)
 
     assert decide(client, pushed["record_id"], "rejected").status_code == 201
     listed = client.get("/api/v1/records", params={"needs_approval": "true"})
@@ -205,7 +205,7 @@ def test_unknown_record_is_404(
     client: TestClient, router_settings: Settings
 ) -> None:
     """Ensure deciding an unknown record answers 404."""
-    as_user(client, router_settings)
+    as_user(client)
 
     response = decide(client, str(uuid.uuid4()))
 
@@ -218,7 +218,7 @@ def test_comment_length_and_extra_fields_are_validated(
 ) -> None:
     """Ensure overlong comments and unknown fields answer 422."""
     pushed = _pushed(client)
-    as_user(client, router_settings)
+    as_user(client)
 
     long_comment = decide(client, pushed["record_id"], comment="x" * 2001)
     extra = decide(client, pushed["record_id"], digest="sha256-v1:00")
@@ -230,6 +230,7 @@ def test_comment_length_and_extra_fields_are_validated(
 def test_decisions_need_authentication(client: TestClient) -> None:
     """Ensure a push token cannot record decisions."""
     pushed = _pushed(client)
+    client.cookies.clear()
 
     response = client.post(
         f"/api/v1/records/{pushed['record_id']}/decisions",
@@ -248,7 +249,7 @@ def test_history_survives_a_new_app_and_is_append_only(
 ) -> None:
     """Ensure decisions persist across app instances and are immutable."""
     pushed = _pushed(client)
-    as_user(client, router_settings)
+    as_user(client)
     event = decide(client, pushed["record_id"]).json()
 
     restarted = make_client(POLICY)
@@ -273,7 +274,7 @@ def test_unapprovable_records_cannot_be_decided(
     """Ensure a record without a valid UUID answers 409."""
     with provider.lock_registration("central") as store:
         record_id = seed(store, content=b"---\ntitle: x\n---\nBody\n")
-    as_user(client, router_settings)
+    as_user(client)
 
     response = decide(client, str(record_id))
 

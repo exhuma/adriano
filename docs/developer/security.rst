@@ -17,8 +17,8 @@ What needs protecting
    GitLab tokens and CI push tokens.
 
 Who acts
-   Readers and reviewers (browser, OIDC token),
-   operators (OIDC token with ``operate``),
+   Readers and reviewers (browser, session cookie),
+   operators (session with ``operate``),
    CI pipelines (push token),
    and anyone on the network who can reach the frontend.
 
@@ -38,11 +38,11 @@ Authentication paths
      pub{"/healthz, /openapi.json<br/>or /api/docs?"}
      intake{"/api/v1/candidates?"}
      push["push-token check<br/>app.auth.push"]
-     alg{"token alg header"}
-     oidc["OIDC validator<br/>RS256, JWKS"]
-     sec{"dev shared<br/>secret set?"}
-     dev["dev validator<br/>HS256"]
+     cookie{"session cookie?"}
+     csrf{"unsafe method:<br/>CSRF header, Origin"}
+     sess["server-side session<br/>refresh if expiring"]
      deny["401"]
+     forbid["403 csrf_failed"]
      principal["Principal<br/>issuer, subject, email, roles"]
      perm["require_permission<br/>read or operate"]
 
@@ -50,35 +50,79 @@ Authentication paths
      pub -- "yes" --> pubok["public, no record data"]
      pub -- "no" --> intake
      intake -- "yes" --> push
-     intake -- "no" --> alg
-     alg -- "RS256" --> oidc
-     alg -- "HS256" --> sec
-     alg -- "anything else" --> deny
-     sec -- "yes" --> dev
-     sec -- "no" --> deny
-     oidc -- "valid" --> principal
-     dev -- "valid" --> principal
+     intake -- "no" --> cookie
+     cookie -- "none, unknown or ended" --> deny
+     cookie -- "yes" --> csrf
+     csrf -- "fails" --> forbid
+     csrf -- "ok" --> sess
+     sess -- "valid" --> principal
+     sess -- "refused by IdP" --> deny
      principal --> perm
 
-Bearer tokens (people)
-   :py:obj:`app.auth.tokens.verify_token` picks the validator from the
-   token's unverified ``alg`` header and never tries validators in
-   turn, so an RS256 token can never be checked against the dev
-   secret.
-   :mod:`app.auth.oidc` validates signature, ``exp``, ``nbf``, ``aud`` and
-   ``iss`` with PyJWT; ``exp``, ``iss``, ``aud`` and ``sub`` are
-   required.
-   No custom crypto.
-   An unacceptable token is 401; an unreachable IdP or no configured
+Sessions (people)
+   The backend is a confidential OIDC client
+   (:doc:`decisions/0022-backend-for-frontend-session`).
+   :mod:`app.services.oidc_login` runs the code flow with PKCE, state
+   and nonce.
+   It validates the ID token (``iss``, ``aud``, ``nonce``, ``exp``) and
+   the access token with :mod:`app.auth.oidc` (signature, ``exp``,
+   ``nbf``, ``aud`` and ``iss`` with PyJWT; no custom crypto).
+   :mod:`app.services.auth_sessions` stores the result as a session
+   row.
+   An unacceptable session is 401; an unreachable IdP or no configured
    mechanism is 503.
    Token values are never logged or echoed.
+
+Token storage
+   Claims and the IdP tokens are encrypted with a Fernet key
+   (``ADRIANO_SESSION_KEY``) in the ``auth_session`` table.
+   The browser never receives a token.
+   A session has an idle and an absolute expiry; ``adriano poll``
+   purges expired rows.
+   Changing the key makes every stored session unreadable, which ends
+   them.
+
+Cookies
+   ``__Host-adriano-session``: an opaque random identifier with
+   ``Secure; HttpOnly; SameSite=Strict; Path=/``, no ``Domain`` and no
+   ``Max-Age``.
+   Server-side expiry is authoritative.
+   ``__Host-adriano-login`` (``SameSite=Lax``, ten minutes) binds a
+   pending sign-in to its browser; its ``auth_login`` row is single
+   use.
+   The callback answers a landing page whose script
+   (``/auth/landing.js``, so no inline script) navigates onwards,
+   because a ``SameSite=Strict`` cookie is not sent on the redirect
+   chain that started at the IdP.
+
+CSRF
+   Cookie-authenticated requests with an unsafe method, and
+   ``/auth/logout`` and ``/auth/dev/login``, need the header
+   ``X-Adriano-CSRF: 1``; a present ``Origin`` header must equal the
+   request's own origin (scheme and ``Host``).
+   Failures are 403 ``csrf_failed``.
+   ``SameSite=Strict`` is the first line of defence; the header and
+   origin check add a second (:mod:`app.auth.csrf`).
+   ``X-Forwarded-Host`` is deliberately ignored.
+
+Refresh
+   An access token that is about to expire is refreshed inline, once
+   at a time per session (row lock), and the rotated refresh token is
+   stored.
+   ``invalid_grant`` deletes the session.
+
+Logout
+   ``POST /auth/logout`` deletes the session, revokes the refresh
+   token at the IdP when it offers a revocation endpoint (best
+   effort) and returns the IdP's end-session URL (with
+   ``id_token_hint``) for RP-initiated logout.
 
 Claims to principal
    :py:obj:`app.auth.deps.principal_from_claims` maps ``iss`` and ``sub`` to
    the identity, ``name`` or ``preferred_username`` to the display name,
    ``email`` (dropped when ``email_verified`` is false) and the roles
    at ``ADRIANO_OIDC_ROLES_CLAIM``.
-   No user is stored.
+   No user is stored; the claims live in the session.
 
 Push tokens (CI)
    Per-registration shared secrets, resolved at startup from the env
@@ -87,18 +131,16 @@ Push tokens (CI)
    ``hmac.compare_digest``, checking every configured token without an
    early exit, so neither content nor length leaks through timing.
    A push token authorizes writing candidates to its own registration
-   and nothing else; intake refuses JWTs, and read routes refuse push
-   tokens.
+   and nothing else; intake refuses sessions, and read routes refuse
+   push tokens.
+   Push requests carry no cookie and are exempt from the CSRF check.
    Intake authenticates *before* it parses the body, so an
    unauthenticated caller learns nothing about registrations or the
    expected shape.
 
-Frontend tokens
-   The SPA is a public OIDC client (Authorization Code + PKCE via
-   ``oidc-client-ts``).
-   Tokens live in memory only, never in ``localStorage``;
-   only the short-lived PKCE state uses ``sessionStorage``.
-   A page reload therefore signs the user out.
+Frontend
+   The SPA holds no tokens and talks only to its own origin.
+   A page reload restores the session from the cookie.
 
 Authorization
 -------------
@@ -108,7 +150,7 @@ Permissions
    ``catalog.yaml``, mapping IdP roles to permissions.
    A missing or invalid section grants nothing (deny by default).
    Catalog routes need ``read``; poll triggers need ``operate``;
-   ``/api/v1/me`` needs only a valid token.
+   ``/api/v1/me`` needs only a signed-in session.
 
 Reviewing
    Not a permission.
@@ -155,8 +197,7 @@ The backend adds these headers to every response
    ``default-src 'self'``, ``script-src 'self'``,
    ``style-src 'self' 'unsafe-inline'`` (Vuetify sets theme variables
    in inline ``style`` attributes),
-   ``connect-src`` and ``frame-src`` limited to ``'self'`` plus the
-   identity provider's origin,
+   ``connect-src 'self'``, ``frame-src 'none'``,
    ``frame-ancestors 'none'``, ``base-uri 'none'``,
    ``form-action 'self'``.
 
@@ -166,27 +207,30 @@ The backend adds these headers to every response
 ``Referrer-Policy``
    ``strict-origin-when-cross-origin``.
 
-The settings validation rejects an ``ADRIANO_OIDC_AUTHORITY`` that is
-not a plain ``http(s)://host[:port][/path]`` before its origin is
-written into the CSP and into ``/config.js``, so the setting cannot
-inject CSP directives.
+The browser never contacts the identity provider from JavaScript, so
+the policy does not name it.
 
 The development bypass
 ----------------------
 
-Dev login lets a developer mint a token for any identity,
+Dev login lets a developer sign in as any identity,
 so it is guarded at three independent points
 (:doc:`decisions/0011-dev-auth-bypass`):
 
-Backend validator
-   HS256 tokens are accepted only while ``ADRIANO_DEV_SHARED_SECRET``
-   is set; the secret has no default.
+Backend sessions
+   Dev sessions (claims only, no IdP tokens) are accepted only while
+   dev auth is active, i.e. ``ADRIANO_DEV_SHARED_SECRET`` is set and
+   the flag is true.
+   They are refused as soon as it is switched off.
+   The secret has no default and dev auth needs
+   ``ADRIANO_SESSION_KEY``.
 
 Backend router
-   ``/auth/dev/token`` and ``/auth/dev/roles`` are imported and mounted
+   ``/auth/dev/login`` and ``/auth/dev/roles`` are imported and mounted
    only when ``ADRIANO_DEV_AUTH_ENABLED`` is true and the secret is set,
    with a loud warning in the log.
    Otherwise they are a plain 404.
+   The login route needs the CSRF header like any other.
 
 Frontend build
    The dev-login UI is reachable only when the build-time literal
@@ -195,11 +239,11 @@ Frontend build
    of runtime configuration.
    ``frontend/scripts/check-no-dev-auth.sh`` runs after every
    ``npm run build`` and fails if dev-login markers
-   (``/auth/dev/token``, ``/auth/dev/roles``, ``DevLoginDialog``)
+   (``/auth/dev/login``, ``/auth/dev/roles``, ``DevLoginDialog``)
    appear in ``dist/``.
 
-With a real issuer configured, a dev token is issued under that issuer
-and can impersonate any ``issuer|subject``, including a reviewer.
+With a real issuer configured, a dev session can impersonate any
+``issuer|subject``, including a reviewer.
 That is why the secret must never be set in production.
 
 Secrets
@@ -236,15 +280,13 @@ Known gaps
   ones, writes an ``intake_run`` row.
 * A repeated ``delivery_id`` returns the earlier result without
   comparing the body; it is retry protection, not a content check.
-* The CSP allows exactly one identity-provider origin, that of
-  ``OIDC_AUTHORITY``; a provider serving endpoints from a second origin
-  is blocked.
 * ``OIDC_AUTHORITY`` with a bracketed IPv6 host is refused at
   container start.
-* RP-initiated logout is not implemented: signing out clears the
-  in-memory token but leaves the IdP session.
-* The browser's Authorization Code + PKCE round trip has not been
-  exercised against a real provider; backend RS256 validation is
-  tested against a fake IdP's JWKS.
+* The sign-in flow has not been exercised against a real provider; it
+  is tested against a fake IdP (``FakeIdp``).
+* Sessions are not listed or revocable per user from the UI; deleting
+  rows of ``auth_session`` is the only lever.
+* Roles are fixed at sign-in and when the access token is refreshed;
+  a role change at the IdP applies at the next refresh or sign-in.
 * Self-approval cannot be detected for polled records, which have no
   author.
