@@ -21,7 +21,8 @@
 import ThemeMenuItems from "@/components/ThemeMenuItems.vue";
 
 defineProps<{
-  /** Whether the primary nav (Catalog/Sources) should be listed. */
+  /** Whether the primary nav (Catalog, Sources, Not indexed) should be
+   *  listed. */
   showNav: boolean;
   /** Whether `/healthz` reports a configuration problem. */
   hasConfigProblem: boolean;
@@ -54,6 +55,7 @@ defineEmits<{
       <template v-if="showNav">
         <v-list-item to="/" title="Catalog" />
         <v-list-item to="/sources" title="Sources" />
+        <v-list-item to="/not-indexed" title="Not indexed" />
         <v-divider class="my-1" />
       </template>
 

@@ -59,3 +59,9 @@ export {
   issueIndicatorLabel,
   validationIssueText,
 } from "./issues";
+
+export {
+  NOT_INDEXED_REASON_CODES,
+  notIndexedReasonOptions,
+  originLabel,
+} from "./notIndexed";

@@ -169,6 +169,7 @@ async function handleSignOut(): Promise<void> {
         <template v-if="mdAndUp && signedIn">
           <v-btn to="/" variant="text">Catalog</v-btn>
           <v-btn to="/sources" variant="text">Sources</v-btn>
+          <v-btn to="/not-indexed" variant="text">Not indexed</v-btn>
         </template>
 
         <v-spacer />

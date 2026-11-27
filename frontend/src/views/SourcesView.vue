@@ -19,6 +19,7 @@ import { ApiError } from "@/api";
 import { listSources, pollAllSources, pollSource } from "@/api/sources";
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
+import SourceNotIndexedCell from "@/components/SourceNotIndexedCell.vue";
 import SourceProblemCell from "@/components/SourceProblemCell.vue";
 import StatusChip from "@/components/StatusChip.vue";
 import { useAuth } from "@/composables/useAuth";
@@ -87,6 +88,8 @@ interface SourceRow {
   staleText: string | null;
   lastAttempt: { relative: string; absolute: string } | null;
   lastSuccess: { relative: string; absolute: string } | null;
+  /** Documents of this registration intake could not index. */
+  notIndexedCount: number;
   problem: SourceProblemDisplay;
   hint: string | null;
   /** Whether this row has operator-relevant problem/recovery detail
@@ -241,6 +244,7 @@ function toRow(source: SourceOut): SourceRow {
           absolute: formatDateTime(source.last_success_at) ?? "",
         }
       : null,
+    notIndexedCount: source.not_indexed_count,
     problem,
     hint,
     hasProblemDetail: problem.kind !== "none" || hint !== null,
@@ -249,13 +253,14 @@ function toRow(source: SourceOut): SourceRow {
 
 const rows = computed<SourceRow[]>(() => sources.value.map(toRow));
 
-// Registration, Status, Last attempt, Last success are always their
+// Registration, Status, Last attempt, Last success and Not indexed are
+// always their
 // own columns; Type/Intake/Published ref fold into Registration below
 // `sm` (P11-R-11); Action is an operator's own column. Used as the
 // problem sub-row's `colspan` so it always spans every visible column
 //.
 const columnCount = computed(
-  () => 4 + (smAndDown.value ? 0 : 3) + (canOperate.value ? 1 : 0),
+  () => 5 + (smAndDown.value ? 0 : 3) + (canOperate.value ? 1 : 0),
 );
 </script>
 
@@ -324,6 +329,9 @@ const columnCount = computed(
               </th>
               <th scope="col" class="text-label-large text-medium-emphasis">
                 Last success
+              </th>
+              <th scope="col" class="text-label-large text-medium-emphasis">
+                Not indexed
               </th>
               <th
                 v-if="canOperate"
@@ -402,6 +410,12 @@ const columnCount = computed(
                     />
                   </span>
                   <span v-else>Never</span>
+                </td>
+                <td>
+                  <SourceNotIndexedCell
+                    :source-id="row.id"
+                    :count="row.notIndexedCount"
+                  />
                 </td>
                 <td v-if="canOperate">
                   <v-btn

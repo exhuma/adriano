@@ -35,6 +35,18 @@ const router = createRouter({
       component: () => import("@/views/SourcesView.vue"),
     },
     {
+      path: "/not-indexed",
+      name: "not-indexed",
+      component: () => import("@/views/NotIndexedView.vue"),
+    },
+    {
+      // The location is four query parameters (see
+      // `utils/notIndexedPaths.ts`).
+      path: "/not-indexed/entry",
+      name: "not-indexed-entry",
+      component: () => import("@/views/NotIndexedEntryView.vue"),
+    },
+    {
       path: "/:pathMatch(.*)*",
       name: "not-found",
       component: () => import("@/views/NotFoundView.vue"),
