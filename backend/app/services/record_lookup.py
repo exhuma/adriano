@@ -6,27 +6,41 @@ picks a candidate, no ref picks the published row. An ADR that is only
 proposed (candidates, no published row) is shown through its most
 recently updated candidate.
 
-Public API: :func:`find_record`.
+Public API: :class:`RecordAddress`, :func:`find_record`.
 """
 
 import uuid
+from dataclasses import dataclass
 
 from app.storage.port import CatalogStore, StoredRecord
 
 
+@dataclass(frozen=True, slots=True)
+class RecordAddress:
+    """
+    The address of one record row.
+
+    :param adr_uuid: The ADR's UUID.
+    :param ref: A candidate's ref; ``None`` for the published row.
+    """
+
+    adr_uuid: uuid.UUID
+    ref: str | None = None
+
+
 def find_record(
-    store: CatalogStore, adr_uuid: uuid.UUID, ref: str | None = None
+    store: CatalogStore, address: RecordAddress
 ) -> StoredRecord | None:
     """
     Find the row of an ADR to show or decide.
 
     :param store: Store of the caller's unit of work.
-    :param adr_uuid: The ADR's UUID.
-    :param ref: A candidate's ref; ``None`` for the published row.
-    :returns: With *ref*: the candidate at *ref*, else the published row
+    :param address: The ADR's UUID and optional ref.
+    :returns: With a ref: the candidate at *ref*, else the published row
         if it was read from *ref*. Without: the published row, else the
         most recently updated candidate. ``None`` if nothing matches.
     """
+    adr_uuid, ref = address.adr_uuid, address.ref
     if ref is not None:
         candidate = store.get_candidate(adr_uuid, ref)
         if candidate is not None:

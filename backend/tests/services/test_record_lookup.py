@@ -3,7 +3,7 @@
 import dataclasses
 import uuid
 
-from app.services.record_lookup import find_record
+from app.services.record_lookup import RecordAddress, find_record
 from app.storage.port import RecordState
 from app.storage.postgres.store import PostgresStoreProvider
 from tests.storage.conftest import put_record
@@ -16,10 +16,10 @@ def test_published_row_is_the_default(provider: PostgresStoreProvider) -> None:
     with provider.unit_of_work() as store:
         store.upsert_published(put_record(store, adr_uuid=X))
         store.upsert_candidate(put_record(store, adr_uuid=X, ref="feature"))
-        default = find_record(store, X)
-        candidate = find_record(store, X, "feature")
-        by_published_ref = find_record(store, X, "main")
-        missing = find_record(store, X, "nope")
+        default = find_record(store, RecordAddress(X))
+        candidate = find_record(store, RecordAddress(X, "feature"))
+        by_published_ref = find_record(store, RecordAddress(X, "main"))
+        missing = find_record(store, RecordAddress(X, "nope"))
     assert default is not None and default.kind is RecordState.PUBLISHED
     assert candidate is not None and candidate.kind is RecordState.CANDIDATE
     assert by_published_ref is not None
@@ -40,7 +40,7 @@ def test_unpublished_adr_shows_its_newest_candidate(
             title="Newer",
         )
         store.upsert_candidate(newer)
-        found = find_record(store, X)
-        nothing = find_record(store, uuid.uuid4())
+        found = find_record(store, RecordAddress(X))
+        nothing = find_record(store, RecordAddress(uuid.uuid4()))
     assert found is not None and found.title == "Newer"
     assert nothing is None

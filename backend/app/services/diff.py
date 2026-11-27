@@ -23,13 +23,12 @@ Public API: :class:`DiffEndpoint`, :class:`RecordDiff`,
 
 import datetime
 import difflib
-import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.domain.approval import DecisionAction, last_decided
 from app.errors import NotFoundError
-from app.services.record_lookup import find_record
+from app.services.record_lookup import RecordAddress, find_record
 from app.storage.port import CatalogStore, DecisionEvent, StoredRecord
 
 __all__ = ["DiffEndpoint", "RecordDiff", "diff_record", "short_digest"]
@@ -193,9 +192,8 @@ def _unified(
 
 def diff_record(
     store: CatalogStore,
-    adr_uuid: uuid.UUID,
+    address: RecordAddress,
     *,
-    ref: str | None = None,
     from_digest: str | None = None,
     to_digest: str | None = None,
 ) -> RecordDiff:
@@ -203,17 +201,16 @@ def diff_record(
     Diff two snapshots of an ADR.
 
     :param store: Store of the caller's unit of work.
-    :param adr_uuid: The ADR's UUID.
-    :param ref: A candidate's ref; ``None`` for the published row.
+    :param address: The record row: ADR UUID and optional candidate ref.
     :param from_digest: Base digest; default per the module docstring.
     :param to_digest: Target digest; default the current digest.
     :returns: The diff.
     :raises NotFoundError: ``record_not_found`` or ``unknown_revision``.
     """
-    record = find_record(store, adr_uuid, ref)
+    record = find_record(store, address)
     if record is None:
         raise NotFoundError(
-            f"record {adr_uuid} not found", code="record_not_found"
+            f"record {address.adr_uuid} not found", code="record_not_found"
         )
     events = store.list_decisions(record.adr_uuid)
     siblings = store.list_records(record.adr_uuid)

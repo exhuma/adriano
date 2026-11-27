@@ -50,7 +50,7 @@ from app.services.errata_view import (
     build_errata,
     erratum_content,
 )
-from app.services.record_lookup import find_record
+from app.services.record_lookup import RecordAddress, find_record
 from app.services.record_relationships import (
     ErratumForInfo,
     InboundLinkInfo,
@@ -336,9 +336,8 @@ def _legacy_signoff(metadata: JsonObject) -> tuple[str, ...]:
 
 def get_record_detail(
     store: CatalogStore,
-    adr_uuid: uuid.UUID,
+    address: RecordAddress,
     *,
-    ref: str | None = None,
     policy: Policy | None,
     policy_status: PolicyStatus,
     now: datetime.datetime,
@@ -350,9 +349,8 @@ def get_record_detail(
     Assemble everything the record detail page shows.
 
     :param store: Store of the caller's unit of work.
-    :param adr_uuid: The ADR's UUID.
-    :param ref: A candidate's ref; ``None`` for the published row (see
-        :func:`~app.services.record_lookup.find_record`).
+    :param address: The record row: ADR UUID and optional candidate ref
+        (see :func:`~app.services.record_lookup.find_record`).
     :param policy: The configured policy, or ``None`` if missing or
         invalid.
     :param policy_status: Configuration status of the policy.
@@ -365,7 +363,7 @@ def get_record_detail(
         from ``catalog.yaml``).
     :returns: The detail, or ``None`` if the record does not exist.
     """
-    record = find_record(store, adr_uuid, ref)
+    record = find_record(store, address)
     if record is None:
         return None
     siblings = store.list_records(record.adr_uuid)

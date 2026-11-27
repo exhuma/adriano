@@ -43,6 +43,7 @@ from app.routers.decisions import reviewer_from
 from app.schemas.records import RecordDetailOut, RecordDiffOut, SearchPageOut
 from app.services import record_detail, search
 from app.services.diff import diff_record
+from app.services.record_lookup import RecordAddress
 from app.storage.port import (
     MAX_PAGE_SIZE,
     CatalogStoreProvider,
@@ -152,8 +153,7 @@ def list_records(
 
 
 def _detail(
-    adr_uuid: uuid.UUID,
-    ref: str | None,
+    address: RecordAddress,
     provider: CatalogStoreProvider,
     runtime: CatalogRuntime | None,
     settings: Settings,
@@ -162,8 +162,7 @@ def _detail(
     """
     Assemble the detail of one row of an ADR.
 
-    :param adr_uuid: The ADR's UUID.
-    :param ref: A candidate's ref; ``None`` for the default row.
+    :param address: The ADR's UUID and the candidate's ref, if any.
     :param provider: Storage provider.
     :param runtime: Startup configuration state.
     :param settings: Application settings.
@@ -175,8 +174,7 @@ def _detail(
     with provider.unit_of_work() as store:
         detail = record_detail.get_record_detail(
             store,
-            adr_uuid,
-            ref=ref,
+            address,
             policy=policy,
             policy_status=policy_status,
             now=datetime.datetime.now(datetime.UTC),
@@ -185,9 +183,10 @@ def _detail(
             config_sources=runtime.config.sources if runtime else (),
         )
     if detail is None:
-        where = f" at ref {ref!r}" if ref is not None else ""
+        where = f" at ref {address.ref!r}" if address.ref is not None else ""
         raise NotFoundError(
-            f"record {adr_uuid}{where} not found", code="record_not_found"
+            f"record {address.adr_uuid}{where} not found",
+            code="record_not_found",
         )
     return RecordDetailOut.model_validate(detail)
 
@@ -216,7 +215,9 @@ def get_record(
     :returns: The detail.
     :raises app.errors.NotFoundError: If the record does not exist.
     """
-    return _detail(adr_uuid, None, provider, runtime, settings, principal)
+    return _detail(
+        RecordAddress(adr_uuid), provider, runtime, settings, principal
+    )
 
 
 @router.get(
@@ -243,7 +244,9 @@ def get_candidate(
     :returns: The detail.
     :raises app.errors.NotFoundError: If there is no row at *ref*.
     """
-    return _detail(adr_uuid, ref, provider, runtime, settings, principal)
+    return _detail(
+        RecordAddress(adr_uuid, ref), provider, runtime, settings, principal
+    )
 
 
 @router.get("/records/{adr_uuid}/diff", response_model=RecordDiffOut)
@@ -282,8 +285,7 @@ def get_record_diff(
     with provider.unit_of_work() as store:
         diff = diff_record(
             store,
-            adr_uuid,
-            ref=ref,
+            RecordAddress(adr_uuid, ref),
             from_digest=from_digest,
             to_digest=to_digest,
         )

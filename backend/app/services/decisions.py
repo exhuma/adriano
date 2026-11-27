@@ -37,7 +37,6 @@ Public API: :class:`Reviewer`, :class:`DecisionBlocker`,
 :func:`record_decision`.
 """
 
-import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -58,7 +57,7 @@ from app.errors import (
     ForbiddenError,
     NotFoundError,
 )
-from app.services.record_lookup import find_record
+from app.services.record_lookup import RecordAddress, find_record
 from app.storage.port import (
     CatalogStoreProvider,
     DecisionEvent,
@@ -279,9 +278,8 @@ def _provenance(record: StoredRecord) -> dict[str, str | None]:
 
 def record_decision(
     provider: CatalogStoreProvider,
-    adr_uuid: uuid.UUID,
+    address: RecordAddress,
     *,
-    ref: str | None = None,
     action: DecisionAction,
     comment: str | None,
     expected_digest: str | None,
@@ -292,8 +290,7 @@ def record_decision(
     Append an accept/reject decision for a record's current content.
 
     :param provider: Storage provider.
-    :param adr_uuid: The ADR's UUID.
-    :param ref: A candidate's ref; ``None`` for the published row.
+    :param address: The record row: ADR UUID and optional candidate ref.
     :param action: Accepted or rejected.
     :param comment: Optional reviewer comment (blank means none).
     :param expected_digest: Digest the reviewer saw, if sent.
@@ -306,10 +303,10 @@ def record_decision(
         ``not_approvable``, ``digest_changed``, ``already_decided``.
     """
     with provider.unit_of_work() as store:
-        record = find_record(store, adr_uuid, ref)
+        record = find_record(store, address)
         if record is None:
             raise NotFoundError(
-                f"record {adr_uuid} not found", code="record_not_found"
+                f"record {address.adr_uuid} not found", code="record_not_found"
             )
         events = store.list_decisions(record.adr_uuid)
         blocker = decision_blocker(

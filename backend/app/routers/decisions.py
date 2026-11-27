@@ -25,6 +25,7 @@ from app.schemas.approval import DecisionIn
 from app.schemas.records import DecisionSummaryOut
 from app.services.approval_view import decision_summary
 from app.services.decisions import Reviewer, record_decision
+from app.services.record_lookup import RecordAddress
 from app.storage.port import CatalogStoreProvider
 
 router = APIRouter(prefix="/api/v1", tags=["decisions"])
@@ -86,8 +87,7 @@ def post_decision(
     """
     event = record_decision(
         provider,
-        adr_uuid,
-        ref=ref,
+        RecordAddress(adr_uuid, ref),
         action=body.action,
         comment=body.comment,
         expected_digest=body.expected_digest,
