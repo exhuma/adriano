@@ -91,6 +91,7 @@ to services.
    app.routers.facets
    app.routers.health
    app.routers.me
+   app.routers.not_indexed
    app.routers.records
    app.routers.sources
 
@@ -105,6 +106,7 @@ Pydantic request and response models of the HTTP API.
    app.schemas
    app.schemas.approval
    app.schemas.auth
+   app.schemas.not_indexed
    app.schemas.records
    app.schemas.sources
 
@@ -127,11 +129,16 @@ storage port.
    app.services.ingest
    app.services.intake
    app.services.intake_checks
+   app.services.intake_queue
+   app.services.not_indexed_view
    app.services.oidc_login
+   app.services.poll_apply
+   app.services.poll_collect
    app.services.poll_plan
    app.services.poll_trigger
    app.services.polling
    app.services.record_detail
+   app.services.record_lookup
    app.services.record_relationships
    app.services.registrations
    app.services.search
@@ -168,8 +175,18 @@ The storage port and its PostgreSQL implementation.
    :maxdepth: 1
 
    app.storage
+   app.storage.approval_values
    app.storage.errata_values
+   app.storage.intake_values
    app.storage.port
+   app.storage.port_approval
+   app.storage.port_queue
+   app.storage.port_records
+   app.storage.port_search
+   app.storage.port_sources
+   app.storage.postgres.queue
+   app.storage.queue_values
+   app.storage.search_values
    app.storage.session_port
    app.storage.postgres
    app.storage.postgres.convert
