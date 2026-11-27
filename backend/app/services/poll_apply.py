@@ -40,7 +40,8 @@ without a valid UUID, a losing duplicate or an unreadable document is
 written (or rewritten, keeping ``first_seen_at``); an entry is cleared
 when its location gets indexed, when it is gone from a complete
 listing, or when its registration is removed from the configuration
-(:func:`clear_removed_sources`). A poll never clears a push entry for
+(:func:`clear_removed_sources`, which clears push entries too). A poll
+never clears a push entry for
 not being listed (a pushed branch is not in the listing); it clears
 the push entries at a file location where it now indexes a document,
 whatever their ref or reason (an invalid or mismatched push, or a
