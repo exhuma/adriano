@@ -24,10 +24,9 @@ import LoadingState from "@/components/LoadingState.vue";
 import NotIndexedFilterBar from "@/components/notIndexed/NotIndexedFilterBar.vue";
 import NotIndexedRow from "@/components/notIndexed/NotIndexedRow.vue";
 import { withLoading } from "@/composables/useLoading";
+import { readPage, readString } from "@/composables/urlQuery";
 import {
   readOrigin,
-  readPage,
-  readString,
   useNotIndexedQuery,
 } from "@/composables/useNotIndexedQuery";
 import type { NotIndexedPage, NotIndexedParams } from "@/types/notIndexed";

@@ -12,10 +12,16 @@
  * pagination apply immediately. Changing any filter other than
  * `page` resets pagination back to page 1.
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import type { LocationQueryRaw } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import type { LocationQuery } from "vue-router";
 
+import {
+  DEFAULT_DEBOUNCE_MS,
+  readPage,
+  readString,
+  useUrlQuerySync,
+} from "@/composables/urlQuery";
 import type {
   RecordState,
   RecordTypeFilter,
@@ -29,7 +35,6 @@ export type StateFilter = RecordState | "";
  *  cluttering shared links with the common case. */
 export const DEFAULT_RECORD_TYPE: RecordTypeFilter = "decision";
 
-const DEFAULT_DEBOUNCE_MS = 300;
 const FILTER_KEYS = [
   "q",
   "source",
@@ -41,17 +46,8 @@ const FILTER_KEYS = [
   "page",
 ] as const;
 
-function readString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
 function readBoolean(value: unknown): boolean {
   return value === "true";
-}
-
-function readPage(value: unknown): number {
-  const parsed = Number.parseInt(readString(value), 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
 }
 
 /**
@@ -130,7 +126,6 @@ export interface UseSearchQueryOptions {
 export function useSearchQuery(options: UseSearchQueryOptions = {}) {
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
   const route = useRoute();
-  const router = useRouter();
 
   const q = ref(readString(route.query.q));
   const source = ref(readString(route.query.source));
@@ -164,17 +159,42 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
   });
   const page = ref(readPage(route.query.page));
 
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function clearPendingDebounce(): void {
-    if (debounceTimer !== undefined) {
-      clearTimeout(debounceTimer);
-      debounceTimer = undefined;
-    }
+  // Restore filters on browser back/forward (or any external
+  // navigation to this route with different query parameters). A
+  // pending debounce from the field the user just left is discarded
+  // so it cannot overwrite the state the user navigated to.
+  function restoreFromQuery(query: LocationQuery): void {
+    const nextQ = readString(query.q);
+    const nextSource = readString(query.source);
+    const nextProject = readString(query.project);
+    const nextState = readString(query.state) as StateFilter;
+    const nextNeedsApproval = readBoolean(query.needs_approval);
+    const nextRecordType = readRecordType(query.record_type);
+    // `readExplicitSort`, not `readSort`: a URL navigated to with
+    // no `sort` param must restore "no explicit choice" (`null`),
+    // not a concrete value locked in via the `sort` setter below
+    // -- otherwise navigating back to a plain `?q=...` URL would
+    // re-introduce the P11-R-02 lock-in bug this ref exists to
+    // avoid. Assigned straight to `rawSort`, bypassing the `sort`
+    // computed's setter (which only ever accepts a concrete
+    // `SearchSort`, never `null`).
+    const nextRawSort = readExplicitSort(query.sort);
+    const nextPage = readPage(query.page);
+    if (q.value !== nextQ) q.value = nextQ;
+    if (source.value !== nextSource) source.value = nextSource;
+    if (project.value !== nextProject) project.value = nextProject;
+    if (state.value !== nextState) state.value = nextState;
+    if (needsApproval.value !== nextNeedsApproval) needsApproval.value = nextNeedsApproval;
+    if (recordType.value !== nextRecordType) recordType.value = nextRecordType;
+    if (rawSort.value !== nextRawSort) rawSort.value = nextRawSort;
+    if (page.value !== nextPage) page.value = nextPage;
   }
 
-  function currentQuery(): LocationQueryRaw {
-    return {
+  const { applyFilterChange, clearFilters: clearUrlFilters } = useUrlQuerySync({
+    keys: FILTER_KEYS,
+    page,
+    debounceMs,
+    currentQuery: () => ({
       q: q.value || undefined,
       source: source.value || undefined,
       project: project.value || undefined,
@@ -183,40 +203,9 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
       record_type: recordType.value !== DEFAULT_RECORD_TYPE ? recordType.value : undefined,
       sort: sort.value !== defaultSort(q.value !== "") ? sort.value : undefined,
       page: page.value > 1 ? String(page.value) : undefined,
-    };
-  }
-
-  function matchesRoute(query: LocationQueryRaw): boolean {
-    return FILTER_KEYS.every((key) => {
-      const next = query[key] ?? undefined;
-      const current = route.query[key] ?? undefined;
-      return (next ?? "") === (current ?? "");
-    });
-  }
-
-  function pushQuery(): void {
-    const query = currentQuery();
-    if (matchesRoute(query)) {
-      return;
-    }
-    void router.replace({ query });
-  }
-
-  /** Resets pagination and applies a filter change, immediately or
-   *  after the debounce delay. */
-  function applyFilterChange(debounce: boolean): void {
-    clearPendingDebounce();
-    if (!debounce) {
-      page.value = 1;
-      pushQuery();
-      return;
-    }
-    debounceTimer = setTimeout(() => {
-      debounceTimer = undefined;
-      page.value = 1;
-      pushQuery();
-    }, debounceMs);
-  }
+    }),
+    restore: restoreFromQuery,
+  });
 
   watch(q, () => applyFilterChange(true));
   // `rawSort`, not the `sort` computed, is the watch source: an
@@ -229,44 +218,6 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
   watch([source, project, state, needsApproval, recordType, rawSort], () =>
     applyFilterChange(false),
   );
-  watch(page, () => pushQuery());
-
-  // Restore filters on browser back/forward (or any external
-  // navigation to this route with different query parameters). A
-  // pending debounce from the field the user just left is discarded
-  // so it cannot overwrite the state the user navigated to.
-  watch(
-    () => route.query,
-    (query) => {
-      clearPendingDebounce();
-      const nextQ = readString(query.q);
-      const nextSource = readString(query.source);
-      const nextProject = readString(query.project);
-      const nextState = readString(query.state) as StateFilter;
-      const nextNeedsApproval = readBoolean(query.needs_approval);
-      const nextRecordType = readRecordType(query.record_type);
-      // `readExplicitSort`, not `readSort`: a URL navigated to with
-      // no `sort` param must restore "no explicit choice" (`null`),
-      // not a concrete value locked in via the `sort` setter below
-      // -- otherwise navigating back to a plain `?q=...` URL would
-      // re-introduce the P11-R-02 lock-in bug this ref exists to
-      // avoid. Assigned straight to `rawSort`, bypassing the `sort`
-      // computed's setter (which only ever accepts a concrete
-      // `SearchSort`, never `null`).
-      const nextRawSort = readExplicitSort(query.sort);
-      const nextPage = readPage(query.page);
-      if (q.value !== nextQ) q.value = nextQ;
-      if (source.value !== nextSource) source.value = nextSource;
-      if (project.value !== nextProject) project.value = nextProject;
-      if (state.value !== nextState) state.value = nextState;
-      if (needsApproval.value !== nextNeedsApproval) needsApproval.value = nextNeedsApproval;
-      if (recordType.value !== nextRecordType) recordType.value = nextRecordType;
-      if (rawSort.value !== nextRawSort) rawSort.value = nextRawSort;
-      if (page.value !== nextPage) page.value = nextPage;
-    },
-  );
-
-  onBeforeUnmount(clearPendingDebounce);
 
   /** Whether any filter (other than pagination) is currently set. */
   const hasActiveFilters = computed(
@@ -281,16 +232,16 @@ export function useSearchQuery(options: UseSearchQueryOptions = {}) {
 
   /** Resets every filter and pagination to defaults and clears the URL. */
   function clearFilters(): void {
-    clearPendingDebounce();
-    q.value = "";
-    source.value = "";
-    project.value = "";
-    state.value = "";
-    needsApproval.value = false;
-    recordType.value = DEFAULT_RECORD_TYPE;
-    rawSort.value = null;
-    page.value = 1;
-    void router.replace({ query: {} });
+    clearUrlFilters(() => {
+      q.value = "";
+      source.value = "";
+      project.value = "";
+      state.value = "";
+      needsApproval.value = false;
+      recordType.value = DEFAULT_RECORD_TYPE;
+      rawSort.value = null;
+      page.value = 1;
+    });
   }
 
   return {

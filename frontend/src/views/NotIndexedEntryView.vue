@@ -20,7 +20,7 @@ import StatusChip from "@/components/StatusChip.vue";
 import NotIndexedLinks from "@/components/notIndexed/NotIndexedLinks.vue";
 import NotIndexedReasons from "@/components/notIndexed/NotIndexedReasons.vue";
 import { withLoading } from "@/composables/useLoading";
-import { readString } from "@/composables/useNotIndexedQuery";
+import { readString } from "@/composables/urlQuery";
 import type { NotIndexedDetail, NotIndexedLocation } from "@/types/notIndexed";
 import { forbiddenText, isForbidden } from "@/utils/apiErrors";
 import { formatDateTime } from "@/utils/dates";
