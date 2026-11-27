@@ -271,3 +271,25 @@ def test_a_poll_clears_the_duplicate_it_now_indexes(
     record = client.get(f"/api/v1/records/{ADR}").json()
     assert record["provenance"]["project"] == "payments"
     assert record["metadata"]["kind"] == RecordState.PUBLISHED.value
+
+
+def test_a_poll_clears_an_invalid_push_fixed_and_merged(
+    client: TestClient, router_settings: Settings, root: Path
+) -> None:
+    """Ensure indexing a document at the location clears any push entry."""
+    refused = push(
+        client,
+        candidate(ADR, content="broken", project="platform", path=HELD_PATH),
+    )
+    assert refused.status_code == 422
+    other = push(
+        client,
+        candidate(ADR, content="broken", project="platform", path="o.md"),
+    )
+    assert other.status_code == 422
+    assert len(_entries(client, origin="push")) == 2
+
+    _write(root, "platform", HELD_PATH, adr_text(ADR))
+    _poll(client, router_settings)
+
+    assert [e["path"] for e in _entries(client, origin="push")] == ["o.md"]

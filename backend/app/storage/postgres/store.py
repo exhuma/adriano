@@ -272,11 +272,9 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.count_not_indexed`."""
         return queue.count_not_indexed(self._session)
 
-    def clear_pushed_duplicates(
-        self, claims: Collection[tuple[Location, uuid.UUID]]
-    ) -> int:
-        """See :meth:`app.storage.port.CatalogStore.clear_pushed_duplicates`."""
-        return queue.clear_pushed_duplicates(self._session, claims)
+    def clear_pushed_at(self, locations: Collection[Location]) -> int:
+        """See :meth:`app.storage.port.CatalogStore.clear_pushed_at`."""
+        return queue.clear_pushed_at(self._session, locations)
 
     def delete_not_indexed(self, keys: Collection[NotIndexedKey]) -> int:
         """See :meth:`app.storage.port.CatalogStore.delete_not_indexed`."""

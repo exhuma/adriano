@@ -42,9 +42,10 @@ when its location gets indexed, when it is gone from a complete
 listing, or when its registration is removed from the configuration
 (:func:`clear_removed_sources`). A poll never clears a push entry for
 not being listed (a pushed branch is not in the listing); it clears
-only the push entries that claimed a UUID which the poll now indexes
-at that very file location (a pushed duplicate that stopped being
-one). Nothing else removes an entry.
+the push entries at a file location where it now indexes a document,
+whatever their ref or reason (an invalid or mismatched push, or a
+duplicate, that the author fixed and merged). Nothing else removes an
+entry.
 
 Public API: :class:`PollRun`, :func:`apply_plan`,
 :func:`clear_removed_sources`.
@@ -172,7 +173,7 @@ class _Apply:
     :param run: Knowledge of the whole run.
     :param holders: Published row per claimed UUID, kept current.
     :param written: Not-indexed keys written by this apply.
-    :param indexed: ``(location, UUID)`` of every document indexed.
+    :param indexed: File location of every document indexed.
     """
 
     store: CatalogStore
@@ -180,7 +181,7 @@ class _Apply:
     run: PollRun
     holders: dict[uuid.UUID, ChangeTokenEntry]
     written: set[NotIndexedKey] = field(default_factory=set)
-    indexed: list[tuple[Location, uuid.UUID]] = field(default_factory=list)
+    indexed: list[Location] = field(default_factory=list)
 
     def index(self, prepared: PreparedDocument) -> None:
         """
@@ -215,7 +216,7 @@ class _Apply:
         result = ingest_document(self.store, prepared, RecordState.PUBLISHED)
         record = prepared.record
         assert record is not None
-        self.indexed.append((_location(prepared), record.adr_uuid))
+        self.indexed.append(_location(prepared))
         self.holders[record.adr_uuid] = ChangeTokenEntry(
             adr_uuid=record.adr_uuid,
             source_id=record.source_id,
@@ -317,7 +318,7 @@ def apply_plan(
     ]
     plan.counts.deleted = store.delete_published(removed)
     store.delete_not_indexed(_stale_keys(plan, state.written))
-    store.clear_pushed_duplicates(state.indexed)
+    store.clear_pushed_at(state.indexed)
 
 
 def clear_removed_sources(

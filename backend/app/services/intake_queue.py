@@ -24,9 +24,9 @@ say nothing about the document: authentication, malformed requests,
 registration's), and ``candidate_exists`` (the candidate is indexed).
 
 A later successful push for the same location removes its push entry
-(:func:`clear_push_entry`); only that, and the poll clearing a pushed
-duplicate it now indexes (:mod:`app.services.poll_apply`), ever remove
-one.
+(:func:`clear_push_entry`); only that, and a poll indexing a document
+at the same file location (:mod:`app.services.poll_apply`, any ref,
+any reason), ever remove one.
 
 Public API: :func:`ensure_not_held_elsewhere`, :func:`queue_rejection`,
 :func:`clear_push_entry`.
