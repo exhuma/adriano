@@ -6,9 +6,9 @@ from the env var **names** listed in ``push_tokens_env``
 (:class:`~app.source_config.SourceRegistration.push_tokens`). They
 authorize exactly one thing: writing candidates to that registration
 through ``PUT``/``POST /api/v1/candidates``. They grant no catalog
-read access (read routes accept only OIDC/dev JWTs, and a push token
-is not a JWT), and OIDC/dev tokens are never accepted for intake (they
-never equal a configured push token).
+read access (user routes accept only the session cookie and ignore
+``Authorization``), and a session is never accepted for intake (intake
+reads only the bearer push token).
 
 Comparison is constant-time: both sides are hashed with SHA-256 first
 (so token length does not leak either) and compared with

@@ -83,7 +83,9 @@ Environment
    client on the same host.
 
 Client
-   ``backend/bench/bench.py`` (httpx) mints a dev token,
+   ``backend/bench/bench.py`` (httpx) signs in through ``POST /auth/dev/login`` (or reuses
+   ``--session``; ``--login-sub`` and ``--login-roles`` pick the
+   identity),
    discards warm-up requests (50 were used),
    then times 400 requests per scenario at concurrency 1 and 8,
    and reports p50, p95, p99, max and mean.

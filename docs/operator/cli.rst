@@ -112,11 +112,6 @@ Development-only commands
 These commands exist for development and benchmarking.
 Do not use them on a production deployment.
 
-``adriano mint-dev-token``
-   Prints a development sign-in token for any user and roles.
-   It works only when :envvar:`ADRIANO_DEV_SHARED_SECRET` is set,
-   which it must never be in production;
-   on a correctly configured deployment it fails with exit code 2.
 ``adriano seed-synthetic``
    Fills the database with generated test records for benchmarking.
    It refuses databases whose name does not look like a development

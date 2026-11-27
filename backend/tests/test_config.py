@@ -11,19 +11,38 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import Settings
-from tests.auth_helpers import IDP_ISSUER, FakeIdp
+from tests.auth_helpers import IDP_ISSUER, TEST_SESSION_KEY, FakeIdp
 
 BLANK_OPTIONAL = [
     "ADRIANO_OIDC_AUTHORITY",
     "ADRIANO_OIDC_ISSUER",
     "ADRIANO_OIDC_CLIENT_ID",
-    "ADRIANO_OIDC_REDIRECT_URI",
-    "ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI",
+    "ADRIANO_OIDC_CLIENT_SECRET",
     "ADRIANO_DEV_SHARED_SECRET",
+    "ADRIANO_SESSION_KEY",
     "ADRIANO_STATIC_DIR",
     "ADRIANO_FORWARDED_ALLOW_IPS",
     "ADRIANO_EXTRA_CA_CERTS",
 ]
+
+#: A complete OIDC client configuration.
+OIDC_ENV = {
+    "ADRIANO_OIDC_AUTHORITY": "https://idp.example.com/realms/adr",
+    "ADRIANO_OIDC_CLIENT_ID": "adriano",
+    "ADRIANO_OIDC_CLIENT_SECRET": "s3cret",
+    "ADRIANO_SESSION_KEY": TEST_SESSION_KEY,
+}
+
+
+def _set_env(monkeypatch: pytest.MonkeyPatch, values: dict[str, str]) -> None:
+    """
+    Export several settings.
+
+    :param monkeypatch: Pytest monkeypatch.
+    :param values: Variable names and values.
+    """
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
 
 
 @pytest.fixture(autouse=True)
@@ -66,7 +85,7 @@ def test_empty_issuer_env_validates_against_discovery_issuer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ensure ADRIANO_OIDC_ISSUER="" falls back to the discovery issuer."""
-    monkeypatch.setenv("ADRIANO_OIDC_AUTHORITY", IDP_ISSUER)
+    _set_env(monkeypatch, {**OIDC_ENV, "ADRIANO_OIDC_AUTHORITY": IDP_ISSUER})
     monkeypatch.setenv("ADRIANO_OIDC_ISSUER", "")
     settings = Settings()
     idp = FakeIdp()
@@ -99,7 +118,7 @@ def test_well_formed_authority_is_accepted(
     monkeypatch: pytest.MonkeyPatch, authority: str
 ) -> None:
     """Ensure http(s)://host[:port][/path] authorities are accepted."""
-    monkeypatch.setenv("ADRIANO_OIDC_AUTHORITY", authority)
+    _set_env(monkeypatch, {**OIDC_ENV, "ADRIANO_OIDC_AUTHORITY": authority})
 
     assert Settings().oidc_authority == authority
 
@@ -121,58 +140,99 @@ def test_well_formed_authority_is_accepted(
 def test_malformed_authority_fails_validation(
     monkeypatch: pytest.MonkeyPatch, authority: str
 ) -> None:
-    """Ensure an authority that could inject into the CSP is rejected."""
+    """Ensure an authority with a query, credentials or quotes fails."""
     monkeypatch.setenv("ADRIANO_OIDC_AUTHORITY", authority)
 
     with pytest.raises(ValidationError, match="ADRIANO_OIDC_AUTHORITY"):
         Settings()
 
 
-def test_oidc_origin_drops_the_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure the CSP origin is scheme://host[:port] of the authority."""
-    monkeypatch.setenv("ADRIANO_OIDC_AUTHORITY", "https://idp.test:8443/r/a")
-
-    assert Settings().oidc_origin == "https://idp.test:8443"
-
-
 @pytest.mark.parametrize(
-    ("name", "missing"),
+    "missing",
     [
-        ("ADRIANO_OIDC_AUTHORITY", "https://idp.example.com"),
-        ("ADRIANO_OIDC_CLIENT_ID", "adriano-spa"),
+        "ADRIANO_OIDC_CLIENT_ID",
+        "ADRIANO_OIDC_CLIENT_SECRET",
+        "ADRIANO_SESSION_KEY",
     ],
 )
-def test_spa_needs_authority_and_client_id_together(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: str, missing: str
+def test_oidc_needs_client_credentials_and_session_key(
+    monkeypatch: pytest.MonkeyPatch, missing: str
 ) -> None:
-    """Ensure serving the SPA with half an OIDC client config fails."""
-    monkeypatch.setenv("ADRIANO_STATIC_DIR", str(tmp_path))
-    monkeypatch.setenv(name, missing)
+    """Ensure OIDC without the client secret or session key fails."""
+    _set_env(monkeypatch, {k: v for k, v in OIDC_ENV.items() if k != missing})
 
-    with pytest.raises(ValidationError, match="must be set together"):
+    with pytest.raises(ValidationError, match=missing):
         Settings()
 
 
-def test_api_only_allows_an_authority_without_client_id(
+def test_complete_oidc_settings_are_valid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure the pairing rule applies only when the SPA is served."""
-    monkeypatch.setenv("ADRIANO_OIDC_AUTHORITY", "https://idp.example.com")
-
-    assert Settings().oidc_client_id is None
-
-
-def test_spa_settings_with_both_oidc_values_are_valid(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Ensure a complete SPA configuration validates."""
-    monkeypatch.setenv("ADRIANO_STATIC_DIR", str(tmp_path))
-    monkeypatch.setenv("ADRIANO_OIDC_AUTHORITY", "https://idp.example.com")
-    monkeypatch.setenv("ADRIANO_OIDC_CLIENT_ID", "adriano-spa")
+    """Ensure a complete confidential-client configuration validates."""
+    _set_env(monkeypatch, OIDC_ENV)
 
     settings = Settings()
 
-    assert settings.static_dir == tmp_path
+    assert settings.oidc_client_secret is not None
+    assert settings.oidc_client_secret.get_secret_value() == "s3cret"
+    assert "s3cret" not in repr(settings)
+    assert TEST_SESSION_KEY not in repr(settings)
+
+
+def test_dev_auth_needs_a_session_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure enabling dev auth without a session key fails loudly."""
+    monkeypatch.setenv("ADRIANO_DEV_AUTH_ENABLED", "true")
+
+    with pytest.raises(ValidationError, match="ADRIANO_SESSION_KEY"):
+        Settings()
+
+
+def test_dev_auth_with_a_session_key_is_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure dev auth plus a session key validates."""
+    monkeypatch.setenv("ADRIANO_DEV_AUTH_ENABLED", "true")
+    monkeypatch.setenv("ADRIANO_SESSION_KEY", TEST_SESSION_KEY)
+
+    assert Settings().dev_auth_enabled is True
+
+
+@pytest.mark.parametrize(
+    "key", ["not-a-key", "c2hvcnQ=", TEST_SESSION_KEY[:-2], "é" * 44]
+)
+def test_malformed_session_key_fails_validation(
+    monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """Ensure a session key that is not a Fernet key is rejected."""
+    monkeypatch.setenv("ADRIANO_SESSION_KEY", key)
+
+    with pytest.raises(ValidationError, match="Fernet key"):
+        Settings()
+
+
+def test_session_defaults() -> None:
+    """Ensure the session lifetimes and scope have their defaults."""
+    settings = Settings()
+
+    assert settings.session_idle_minutes == 480
+    assert settings.session_max_hours == 24
+    assert settings.session_key is None
+    assert settings.oidc_scope == "openid profile email offline_access"
+
+
+@pytest.mark.parametrize(
+    "name", ["ADRIANO_SESSION_IDLE_MINUTES", "ADRIANO_SESSION_MAX_HOURS"]
+)
+def test_session_lifetimes_must_be_positive(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Ensure a zero session lifetime fails validation."""
+    monkeypatch.setenv(name, "0")
+
+    with pytest.raises(ValidationError):
+        Settings()
 
 
 def test_serving_defaults() -> None:
@@ -184,7 +244,6 @@ def test_serving_defaults() -> None:
     assert settings.version == "dev"
     assert settings.workers == 4
     assert settings.forwarded_allow_ips is None
-    assert settings.oidc_scope == "openid profile email"
 
 
 def test_workers_must_be_positive(monkeypatch: pytest.MonkeyPatch) -> None:

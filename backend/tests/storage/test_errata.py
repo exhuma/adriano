@@ -166,7 +166,7 @@ def test_migration_0003_round_trip(
         )
         decision = store.upsert_published(put_record(store, adr_uuid=TARGET))
     config = alembic_config()
-    command.downgrade(config, "-1")
+    command.downgrade(config, "0002_no_truncate_decisions")
     try:
         with engine.connect() as connection:
             assert _schema(connection) == (False, False)

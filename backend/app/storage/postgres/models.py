@@ -7,7 +7,8 @@ tables outside tests. Triggers (search vector, append-only decisions)
 and column comments live in the migration only.
 
 Public API: :class:`SourceRegistrationRow`, :class:`RevisionRow`,
-:class:`RecordRow`, :class:`DecisionEventRow`, :class:`IntakeRunRow`.
+:class:`RecordRow`, :class:`DecisionEventRow`, :class:`IntakeRunRow`,
+:class:`AuthSessionRow`, :class:`AuthLoginRow`.
 """
 
 import datetime
@@ -248,3 +249,60 @@ class IntakeRunRow(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     counts: Mapped[Any] = mapped_column(JSONB(none_as_null=True), nullable=True)
     errors: Mapped[Any] = mapped_column(JSONB(none_as_null=True), nullable=True)
+
+
+class AuthSessionRow(Base):
+    """A server-side sign-in session (secrets Fernet-encrypted)."""
+
+    __tablename__ = "auth_session"
+    __table_args__ = (
+        CheckConstraint("kind IN ('oidc', 'dev')", name="ck_auth_session_kind"),
+        CheckConstraint(
+            "idle_expires_at <= absolute_expires_at",
+            name="ck_auth_session_idle_within_absolute",
+        ),
+        CheckConstraint(
+            "(kind = 'oidc' AND access_token IS NOT NULL "
+            "AND access_expires_at IS NOT NULL) OR (kind = 'dev' "
+            "AND access_token IS NULL AND refresh_token IS NULL "
+            "AND id_token IS NULL AND access_expires_at IS NULL)",
+            name="ck_auth_session_tokens",
+        ),
+        Index("ix_auth_session_idle_expires_at", "idle_expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    claims: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token: Mapped[str | None] = mapped_column(Text)
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    id_token: Mapped[str | None] = mapped_column(Text)
+    access_expires_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_seen_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    idle_expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    absolute_expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class AuthLoginRow(Base):
+    """A pending OIDC sign-in (single use, short-lived)."""
+
+    __tablename__ = "auth_login"
+    __table_args__ = (Index("ix_auth_login_expires_at", "expires_at"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )

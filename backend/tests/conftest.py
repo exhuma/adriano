@@ -6,8 +6,11 @@ object for the FastAPI test client always point at the test
 database.
 
 Auth: test settings never use OIDC (no IdP calls) and enable the
-dev-only HS256 path with :data:`tests.auth_helpers.TEST_DEV_SECRET`, a
-throwaway value that exists only in the test suite.
+dev-only login with :data:`tests.auth_helpers.TEST_DEV_SECRET` and
+:data:`tests.auth_helpers.TEST_SESSION_KEY`, throwaway values that exist
+only in the test suite. Clients talk to ``https://testserver`` (so the
+``Secure`` session cookie is sent) and add the CSRF header to unsafe
+requests (:func:`tests.auth_helpers.https_client`).
 
 ``ADRIANO_DATABASE_URL`` is required by the settings and ``app.main``
 builds the application at import time, so it defaults to the test
@@ -28,10 +31,15 @@ os.environ.setdefault(
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from pydantic import SecretStr  # noqa: E402
 
 from app.config import Settings, get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
-from tests.auth_helpers import TEST_DEV_SECRET  # noqa: E402
+from tests.auth_helpers import (  # noqa: E402
+    TEST_DEV_SECRET,
+    TEST_SESSION_KEY,
+    https_client,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -68,8 +76,13 @@ def test_settings() -> Settings:
             "oidc_issuer": None,
             "oidc_audience": "adr_viewer",
             "oidc_roles_claim": "roles",
+            "oidc_client_id": None,
+            "oidc_client_secret": None,
             "dev_auth_enabled": True,
             "dev_shared_secret": TEST_DEV_SECRET,
+            "session_key": SecretStr(TEST_SESSION_KEY),
+            "session_idle_minutes": 480,
+            "session_max_hours": 24,
         }
     )
 
@@ -83,6 +96,6 @@ def client(test_settings: Settings) -> Iterator[TestClient]:
     """
     app = create_app(test_settings)
     app.dependency_overrides[get_settings] = lambda: test_settings
-    with TestClient(app) as test_client:
+    with https_client(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

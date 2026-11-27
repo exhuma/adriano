@@ -5,18 +5,15 @@ Commands:
 
 - ``adriano check-config`` -- load ``ADRIANO_CONFIG_FILE`` and print the
   registrations, the approval policy status, the RBAC roles, the
-  authentication status (``oidc``, ``dev``, ``oidc+dev`` or
+  sign-in mechanisms (``oidc``, ``dev``, ``oidc+dev`` or
   ``unconfigured``) and every problem. Needs no database. Exit code 0
   without errors (warnings allowed), 1 otherwise.
-- ``adriano poll [--source ID]`` -- sync registrations into the database
-  and poll every pollable registration (or one). Exit code 0 when every
-  polled registration is ``ok``, 1 when any is ``partial``, ``failed`` or
-  ``disabled``, 2 for usage errors (unknown ``--source``) or when the
-  registrations cannot be synced.
-- ``adriano mint-dev-token --sub SUB [--name N] [--email E]
-  [--roles a,b] [--minutes N]`` -- print a dev-only HS256 access token
-  signed with ``ADRIANO_DEV_SHARED_SECRET`` (exit code 2 when the
-  secret is not set). Roles go to ``ADRIANO_OIDC_ROLES_CLAIM``.
+- ``adriano poll [--source ID]`` -- purge expired sign-in sessions,
+  sync registrations into the database and poll every pollable
+  registration (or one). Exit code 0 when every polled registration is
+  ``ok``, 1 when any is ``partial``, ``failed`` or ``disabled``, 2 for
+  usage errors (unknown ``--source``) or when the registrations cannot
+  be synced.
 - ``adriano seed-synthetic --records N --projects M --source-id ID
   [--seed 42] [--candidates-ratio 0.1] [--decisions-ratio 0.3]
   [--force]`` -- generate and ingest a deterministic synthetic ADR
@@ -39,11 +36,10 @@ Outbound TLS: ``check-config``, ``poll``, ``seed-synthetic`` and
 ``serve`` build the shared outbound TLS context (:mod:`app.tls`) before
 doing anything else, so an unloadable ``ADRIANO_EXTRA_CA_CERTS`` entry
 stops them with exit code 2 (``serve`` before migrating). ``migrate``
-and ``mint-dev-token`` make no outbound HTTPS calls and do not load
-it: a broken CA mount must not block the schema migration (the server
-container still refuses to start). Every command except
-``mint-dev-token`` logs to stderr at INFO, which includes the list of
-extra CA certificates.
+makes no outbound HTTPS calls and does not load it: a broken CA mount
+must not block the schema migration (the server container still
+refuses to start). Every command logs to stderr at INFO, which
+includes the list of extra CA certificates.
 
 Scheduling is external (cron, Kubernetes CronJob); see
 ``docs/developer/decisions/0008-external-poll-job.rst``. This module
@@ -62,11 +58,11 @@ from typing import TextIO
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.auth.dev import DEFAULT_MINUTES, DevIdentity, mint_dev_token
-from app.auth.tokens import auth_status
+from app.auth.status import auth_status
 from app.catalog_config import CatalogConfig, SourceRegistration
 from app.composition import (
     build_polling_service,
+    build_session_store_provider,
     build_store_provider,
     load_catalog,
     log_problems,
@@ -74,6 +70,7 @@ from app.composition import (
 from app.config import Settings, get_settings
 from app.domain.frontmatter import JsonValue
 from app.errors import ConfigurationError, NotFoundError
+from app.services.auth_sessions import purge_expired_sessions
 from app.services.polling import PollOutcome
 from app.services.registrations import sync_registrations
 from app.services.seed_synthetic import (
@@ -117,20 +114,6 @@ def _parser() -> argparse.ArgumentParser:
         "poll", help="poll source registrations into the catalog"
     )
     poll.add_argument("--source", metavar="ID", help="poll only this id")
-    mint = commands.add_parser(
-        "mint-dev-token",
-        help="print a dev-only HS256 token (needs the dev shared secret)",
-    )
-    mint.add_argument("--sub", required=True, help="token subject")
-    mint.add_argument("--name", help="display name")
-    mint.add_argument("--email", help="email address")
-    mint.add_argument("--roles", default="", help="comma-separated role names")
-    mint.add_argument(
-        "--minutes",
-        type=int,
-        default=DEFAULT_MINUTES,
-        help=f"lifetime in minutes (default {DEFAULT_MINUTES})",
-    )
     _add_seed_synthetic_parser(commands)
     commands.add_parser(
         "migrate", help="apply the database migrations (advisory-locked)"
@@ -186,33 +169,6 @@ def _add_seed_synthetic_parser(
         action="store_true",
         help="seed even if the database name does not look like dev/bench",
     )
-
-
-def _mint(settings: Settings, args: argparse.Namespace, out: TextIO) -> int:
-    """
-    Run ``mint-dev-token``.
-
-    :param settings: Application settings.
-    :param args: Parsed arguments.
-    :param out: Output stream (receives only the token).
-    :returns: Exit code.
-    """
-    if not settings.dev_shared_secret:
-        print(
-            "error: ADRIANO_DEV_SHARED_SECRET is not set (dev only; put it "
-            "in your local .env)",
-            file=sys.stderr,
-        )
-        return EXIT_USAGE
-    if args.minutes < 1:
-        print("error: --minutes must be at least 1", file=sys.stderr)
-        return EXIT_USAGE
-    roles = [r.strip() for r in args.roles.split(",") if r.strip()]
-    identity = DevIdentity(
-        sub=args.sub, name=args.name, email=args.email, roles=roles
-    )
-    print(mint_dev_token(settings, identity, minutes=args.minutes), file=out)
-    return EXIT_OK
 
 
 def _load_outbound_tls(settings: Settings) -> int:
@@ -416,6 +372,10 @@ async def _run_poll(
     :returns: The outcomes.
     :raises NotFoundError: If *source_id* is not configured.
     """
+    purged = purge_expired_sessions(build_session_store_provider(settings))
+    logging.getLogger(__name__).info(
+        "purged %d expired sign-in session row(s)", purged
+    )
     provider = build_store_provider(settings)
     sync_registrations(provider, config)
     service = build_polling_service(provider, config)
@@ -527,8 +487,6 @@ def main(
     args = _parser().parse_args(argv)
     settings = settings or get_settings()
     stream = out or sys.stdout
-    if args.command == "mint-dev-token":
-        return _mint(settings, args, stream)
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
     )

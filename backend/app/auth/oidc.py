@@ -1,20 +1,26 @@
 """
-RS256 bearer-token validation against the configured OIDC provider.
+RS256 token validation against the configured OIDC provider.
 
-The backend is a stateless resource server (``module-auth-oidc``): it
-never takes part in the login flow. :class:`OidcValidator` resolves the
-JWKS URI from the provider's discovery document
-(``<authority>/.well-known/openid-configuration``) **lazily**, on the
-first token it validates -- never at import or startup, so an
-unreachable IdP never stops the application. The resulting
-:class:`jwt.PyJWKClient` is cached (it caches the key set and refetches
-on an unknown ``kid``). A failed discovery is not cached; the next
-request retries.
+The backend signs users in as a confidential client
+(:mod:`app.auth.idp`) and validates every token it receives from the
+IdP here. :class:`OidcValidator` fetches the provider's discovery
+document (``<authority>/.well-known/openid-configuration``) **lazily**,
+on first use -- never at import or startup, so an unreachable IdP never
+stops the application -- and caches it (:meth:`OidcValidator.discovery`
+also serves the endpoints of :mod:`app.auth.idp`). The
+:class:`jwt.PyJWKClient` built from its ``jwks_uri`` is cached too (it
+caches the key set and refetches on an unknown ``kid``). A failed
+discovery is not cached; the next request retries.
 
-Validation: signature (RS256 only), ``exp``, ``nbf`` (when present),
-``aud`` (``ADRIANO_OIDC_AUDIENCE``), ``iss`` (``ADRIANO_OIDC_ISSUER``,
-or the discovery document's ``issuer`` when unset); ``exp``, ``iss``,
-``aud`` and ``sub`` are required. No custom crypto: PyJWT does all of it.
+Access tokens (:meth:`OidcValidator.decode`): signature (RS256 only),
+``exp``, ``nbf`` (when present), ``aud`` (``ADRIANO_OIDC_AUDIENCE``),
+``iss`` (``ADRIANO_OIDC_ISSUER``, or the discovery document's
+``issuer`` when unset); ``exp``, ``iss``, ``aud`` and ``sub`` are
+required. ID tokens (:meth:`OidcValidator.decode_id_token`): the same
+signature, ``iss`` and ``exp`` checks, ``aud`` is the client id (and
+``azp`` must be the client id when there are several audiences), and
+``nonce`` must equal the sign-in's nonce. No custom crypto: PyJWT does
+all of it.
 
 Both the discovery request and the JWKS fetch use the shared outbound
 TLS context of :mod:`app.tls` (``ADRIANO_TLS_VERIFY``,
@@ -30,13 +36,14 @@ Public API: :data:`REQUIRED_CLAIMS`, :class:`OidcValidator`,
 :func:`cached_oidc_validator`.
 """
 
+import hmac
 import logging
 import ssl
 import threading
 from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import jwt
@@ -97,6 +104,19 @@ def _unavailable() -> AuthUnavailableError:
     )
 
 
+def _audience_count(claims: dict[str, Any]) -> int:
+    """
+    Count the audiences of a token.
+
+    :param claims: Verified claims.
+    :returns: The number of ``aud`` entries (a string counts as one).
+    """
+    audiences: object = claims.get("aud")
+    if isinstance(audiences, list):
+        return len(cast(list[object], audiences))
+    return 1
+
+
 class OidcValidator:
     """
     Validates RS256 tokens issued by one OIDC provider.
@@ -144,6 +164,7 @@ class OidcValidator:
             _default_jwks_client, ssl_context=self._ssl_context
         )
         self._lock = threading.Lock()
+        self._document: dict[str, Any] | None = None
         self._jwks: jwt.PyJWKClient | None = None
         self._resolved_issuer: str | None = issuer
 
@@ -173,16 +194,17 @@ class OidcValidator:
             raise _unavailable()
         return document
 
-    def _jwks_client(self) -> jwt.PyJWKClient:
+    def discovery(self) -> dict[str, Any]:
         """
-        Return the cached JWKS client, running discovery on first use.
+        Return the discovery document, fetching it on first use.
 
-        :returns: The JWKS client.
-        :raises AuthUnavailableError: If discovery fails.
+        :returns: The cached document (callers must not modify it).
+        :raises AuthUnavailableError: If it cannot be fetched or lacks
+            ``jwks_uri`` (or ``issuer`` while no issuer is configured).
         """
         with self._lock:
-            if self._jwks is not None:
-                return self._jwks
+            if self._document is not None:
+                return self._document
             document = self._fetch_discovery()
             jwks_uri = document.get("jwks_uri")
             issuer = document.get("issuer")
@@ -194,13 +216,27 @@ class OidcValidator:
                     self._authority,
                 )
                 raise _unavailable()
+            if self._issuer is None:
+                self._resolved_issuer = str(issuer)
+            self._document = document
+            return document
+
+    def _jwks_client(self) -> jwt.PyJWKClient:
+        """
+        Return the cached JWKS client, running discovery on first use.
+
+        :returns: The JWKS client.
+        :raises AuthUnavailableError: If discovery fails.
+        """
+        jwks_uri = str(self.discovery()["jwks_uri"])
+        with self._lock:
+            if self._jwks is not None:
+                return self._jwks
             try:
                 self._jwks = self._jwks_client_factory(jwks_uri)
             except jwt.PyJWKClientError as exc:
                 logger.warning("OIDC jwks_uri rejected: %s", exc)
                 raise _unavailable() from exc
-            if self._issuer is None:
-                self._resolved_issuer = str(issuer)
             return self._jwks
 
     def _signing_key(self, token: str) -> jwt.PyJWK:
@@ -223,9 +259,9 @@ class OidcValidator:
 
     def decode(self, token: str) -> dict[str, Any]:
         """
-        Validate an RS256 token and return its claims.
+        Validate an RS256 access token and return its claims.
 
-        :param token: Raw bearer token.
+        :param token: Raw access token.
         :returns: The verified claims.
         :raises AuthenticationError: If the token is not acceptable.
         :raises AuthUnavailableError: If the IdP cannot be reached.
@@ -246,6 +282,40 @@ class OidcValidator:
             ) from exc
         except jwt.InvalidTokenError as exc:
             raise _invalid(f"token rejected ({type(exc).__name__})") from exc
+
+    def decode_id_token(
+        self, token: str, *, client_id: str, nonce: str
+    ) -> dict[str, Any]:
+        """
+        Validate an ID token from the code exchange.
+
+        :param token: Raw ID token.
+        :param client_id: This client's id (the expected ``aud``).
+        :param nonce: The nonce sent with the authorization request.
+        :returns: The verified claims.
+        :raises AuthenticationError: If the token is not acceptable.
+        :raises AuthUnavailableError: If the IdP cannot be reached.
+        """
+        key = self._signing_key(token)
+        try:
+            claims = jwt.decode(
+                token,
+                key.key,
+                algorithms=["RS256"],
+                audience=client_id,
+                issuer=self._resolved_issuer,
+                options={"require": [*REQUIRED_CLAIMS, "nonce"]},
+            )
+        except jwt.InvalidTokenError as exc:
+            raise _invalid(f"ID token rejected ({type(exc).__name__})") from exc
+        if _audience_count(claims) > 1 and claims.get("azp") != client_id:
+            raise _invalid("ID token azp is not this client")
+        received = claims.get("nonce")
+        if not isinstance(received, str) or not hmac.compare_digest(
+            received.encode(), nonce.encode()
+        ):
+            raise _invalid("ID token nonce does not match the sign-in")
+        return claims
 
 
 @lru_cache(maxsize=4)

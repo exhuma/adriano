@@ -118,14 +118,16 @@ class PayloadTooLargeError(AdrianoError):
 
 class AuthenticationError(AdrianoError):
     """
-    Raised when a request has no acceptable bearer token (HTTP 401).
+    Raised when a request has no acceptable credentials (HTTP 401).
 
-    The response carries ``WWW-Authenticate: Bearer`` (RFC 6750), with
-    ``error="invalid_token"`` when a token was presented.
+    Credentials are the session cookie on user routes and a push token
+    on candidate intake. The response carries ``WWW-Authenticate:
+    Bearer`` (RFC 6750), with ``error="invalid_token"`` when credentials
+    were presented.
 
-    :param message: Human-readable reason (never contains the token).
+    :param message: Human-readable reason (never contains a secret).
     :param code: Machine-readable error code.
-    :param token_presented: Whether the request carried a token.
+    :param token_presented: Whether the request carried credentials.
     """
 
     def __init__(

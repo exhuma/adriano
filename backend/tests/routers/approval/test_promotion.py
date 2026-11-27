@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from tests.auth_helpers import bearer
+from tests.auth_helpers import sign_in
 from tests.routers.approval.support import (
     adr_text,
     as_user,
@@ -41,7 +41,7 @@ def _write(root: Path, text: str, name: str = FILE) -> None:
 
 def _poll(client: TestClient, settings: Settings) -> None:
     """Poll ``central`` as an admin through the operator route."""
-    client.headers.update(bearer(settings, roles=["admin"]))
+    sign_in(client, roles=["admin"])
     assert client.post("/api/v1/sources/central/poll").status_code == 202
 
 
@@ -77,7 +77,7 @@ def promoted(
     :returns: ``{"candidate": id, "published": id, "digest": digest}``.
     """
     pushed = push(client, candidate(ADR, path=FILE, ref=REF)).json()
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, pushed["record_id"]).status_code == 201
     _write(root, adr_text(ADR))
     _poll(client, router_settings)
@@ -123,7 +123,7 @@ def test_competing_candidate_is_not_a_duplicate(
             content=adr_text(ADR, body="We use a catalog and a queue."),
         ),
     ).json()
-    as_user(client, router_settings)
+    as_user(client)
 
     published = _detail(client, promoted["published"])
     competing = _detail(client, other["record_id"])
@@ -145,12 +145,12 @@ def test_divergent_published_content_stays_decidable(
 ) -> None:
     """Ensure a published row with an accepted candidate can be decided."""
     pushed = push(client, candidate(ADR, path=FILE, ref=REF)).json()
-    as_user(client, router_settings)
+    as_user(client)
     assert decide(client, pushed["record_id"]).status_code == 201
     _write(root, adr_text(ADR, body="Published differently."))
     _poll(client, router_settings)
     (published_id,) = _published(client)
-    as_user(client, router_settings)
+    as_user(client)
 
     detail = _detail(client, published_id)
 

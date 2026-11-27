@@ -14,7 +14,9 @@ metadata:
 data:
   # Your identity provider (see docs/operator/authentication.rst).
   ADRIANO_OIDC_AUTHORITY: "https://idp.example.com/realms/adr"
-  ADRIANO_OIDC_CLIENT_ID: "adriano-web"
+  # Confidential client; its secret is ADRIANO_OIDC_CLIENT_SECRET in
+  # the Secret.
+  ADRIANO_OIDC_CLIENT_ID: "adriano"
   ADRIANO_OIDC_AUDIENCE: "adr_viewer"
   ADRIANO_OIDC_ROLES_CLAIM: "realm_access.roles"
 

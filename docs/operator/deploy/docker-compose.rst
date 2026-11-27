@@ -71,9 +71,13 @@ A minimal production ``.env``:
    # Your catalog file on the Docker host
    ADRIANO_CATALOG_FILE_HOST=./catalog.yaml
 
-   # OIDC: used by the API and by the web UI
+   # OIDC: Adriano is a confidential client of your provider
    ADRIANO_OIDC_AUTHORITY=https://idp.example.com/realms/adr
-   ADRIANO_OIDC_CLIENT_ID=adriano-web
+   ADRIANO_OIDC_CLIENT_ID=adriano
+   ADRIANO_OIDC_CLIENT_SECRET=<client secret>
+   # Encrypts the sessions at rest. Generate once with:
+   # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   ADRIANO_SESSION_KEY=<Fernet key>
    ADRIANO_OIDC_AUDIENCE=adr_viewer
    ADRIANO_OIDC_ROLES_CLAIM=realm_access.roles
 
@@ -123,8 +127,10 @@ Bring-up
    off and run ``adriano migrate`` yourself).
 #. Point your ingress or load balancer at the published port, with
    TLS.
-   Forward the ``X-Forwarded-For``, ``X-Forwarded-Proto`` and
-   ``X-Forwarded-Host`` headers.
+   Pass the ``Host`` header through unchanged and forward the
+   ``X-Forwarded-For`` and ``X-Forwarded-Proto`` headers.
+   Sign-in builds its redirect address, and the CSRF check its
+   expected origin, from the scheme and ``Host`` the browser used.
    Adriano trusts them only from the addresses in
    :envvar:`ADRIANO_FORWARDED_ALLOW_IPS`: set it to your proxy's
    address, or to ``*`` if only the proxy can reach the published

@@ -105,6 +105,11 @@ Application settings
    Behind an ingress or load balancer, set it to the proxy's address;
    otherwise Adriano sees every request as coming from the proxy and
    may build ``http://`` links.
+   Sign-in needs this: the OIDC redirect address and the CSRF origin
+   check use the request's scheme (from ``X-Forwarded-Proto``) and its
+   ``Host`` header.
+   The proxy must pass ``Host`` through unchanged;
+   ``X-Forwarded-Host`` is ignored.
    ``*`` trusts every peer: use it only when nothing but the proxy
    can reach the container.
 
@@ -213,10 +218,11 @@ Application settings
 Sign-in settings
 ----------------
 
-One identity provider serves the API and the web UI.
-Both :envvar:`ADRIANO_OIDC_AUTHORITY` and
-:envvar:`ADRIANO_OIDC_CLIENT_ID` are required together:
-Adriano refuses to start with only one of them.
+Adriano signs users in as a confidential OIDC client.
+:envvar:`ADRIANO_OIDC_AUTHORITY`, :envvar:`ADRIANO_OIDC_CLIENT_ID`,
+:envvar:`ADRIANO_OIDC_CLIENT_SECRET` and :envvar:`ADRIANO_SESSION_KEY`
+are required together:
+Adriano refuses to start with only some of them.
 
 .. envvar:: ADRIANO_OIDC_AUTHORITY
 
@@ -226,12 +232,10 @@ Adriano refuses to start with only one of them.
 
    Base URL of your OIDC identity provider; Adriano appends
    ``/.well-known/openid-configuration`` to find it.
-   Setting it turns on OIDC sign-in, for the API and for the web UI.
+   Setting it turns on OIDC sign-in.
    It must be a plain ``http(s)://host[:port][/path]`` URL
    without query, fragment, user name or password;
    otherwise the container refuses to start.
-   The web UI is allowed to contact the origin of this URL and no
-   other identity provider.
    If the provider is unreachable, the application keeps running,
    and requests that need a signed-in user answer HTTP 503 until it is
    reachable again.
@@ -242,42 +246,71 @@ Adriano refuses to start with only one of them.
 
    :Required: yes, for production sign-in
    :Default: none
-   :Example: ``adriano-web``
+   :Example: ``adriano``
 
-   Client ID of the web UI at your identity provider.
-   Register it as a public client using the authorization code flow
-   with PKCE (:doc:`deploy/index`).
-   Must be set together with :envvar:`ADRIANO_OIDC_AUTHORITY`.
+   Client ID of Adriano at your identity provider.
+   Register it as a confidential client using the authorization code
+   flow with PKCE (:doc:`deploy/index`).
+   Must be set together with :envvar:`ADRIANO_OIDC_AUTHORITY`,
+   :envvar:`ADRIANO_OIDC_CLIENT_SECRET` and
+   :envvar:`ADRIANO_SESSION_KEY`.
+
+.. envvar:: ADRIANO_OIDC_CLIENT_SECRET
+
+   :Required: yes, for production sign-in
+   :Default: none
+   :Example: ``<secret from the provider>``
+
+   Secret of the confidential client.
+   Adriano presents it when it exchanges the sign-in code and renews
+   tokens.
+   It is a secret: keep it out of version control and out of logs.
+
+.. envvar:: ADRIANO_SESSION_KEY
+
+   :Required: yes, with OIDC or with the development sign-in
+   :Default: none
+   :Example: output of
+      ``python -c "from cryptography.fernet import Fernet;
+      print(Fernet.generate_key().decode())"``
+
+   Fernet key that encrypts the sessions (claims and provider tokens)
+   in the database.
+   It is a secret.
+   Every replica must use the same key.
+   Changing it signs every user out.
+   A value that is not a valid key stops the container at start-up.
+
+.. envvar:: ADRIANO_SESSION_IDLE_MINUTES
+
+   :Required: no
+   :Default: ``480``
+   :Example: ``60``
+
+   A session ends after this many minutes without a request.
+   Activity extends it, but never beyond
+   :envvar:`ADRIANO_SESSION_MAX_HOURS`.
+
+.. envvar:: ADRIANO_SESSION_MAX_HOURS
+
+   :Required: no
+   :Default: ``24``
+   :Example: ``12``
+
+   A session ends this many hours after sign-in, however active the
+   user is.
+   The user then signs in again, usually without a password prompt
+   while the provider session lasts.
 
 .. envvar:: ADRIANO_OIDC_SCOPE
 
    :Required: no
-   :Default: ``openid profile email``
+   :Default: ``openid profile email offline_access``
    :Example: ``openid profile email offline_access``
 
    Scopes requested at sign-in.
-   Add ``offline_access`` if your provider should issue refresh
-   tokens for background session renewal.
-
-.. envvar:: ADRIANO_OIDC_REDIRECT_URI
-
-   :Required: no
-   :Default: ``<web UI address>/auth/callback``
-   :Example: ``https://adriano.example.com/auth/callback``
-
-   Where the identity provider sends the browser back after sign-in.
-   Register exactly this address as a redirect URI of the client.
-   Override it only if the public address differs from the address
-   the browser sees.
-
-.. envvar:: ADRIANO_OIDC_POST_LOGOUT_REDIRECT_URI
-
-   :Required: no
-   :Default: the web UI address
-   :Example: ``https://adriano.example.com/``
-
-   Where the identity provider sends the browser after sign-out.
-   Register it as an allowed post-logout redirect URI.
+   Keep ``offline_access``: without it the provider issues no refresh
+   token, and sessions end when the first access token expires.
 
 .. envvar:: ADRIANO_OIDC_ISSUER
 
@@ -320,8 +353,9 @@ Adriano refuses to start with only one of them.
 
    Development only.
    When true *and* :envvar:`ADRIANO_DEV_SHARED_SECRET` is set,
-   the API offers an endpoint that issues a sign-in token for any
-   user and any roles, without a password.
+   the API offers an endpoint that signs in as any user with any
+   roles, without a password (``POST /auth/dev/login``).
+   It also needs :envvar:`ADRIANO_SESSION_KEY`.
    When true without the secret, Adriano logs an error and the
    endpoint stays off.
    See :doc:`authentication`.
@@ -332,7 +366,7 @@ Adriano refuses to start with only one of them.
    :Default: none
 
    Development only.
-   When set, the API also accepts tokens signed with this secret,
+   When set, the API also accepts development sessions,
    so anyone who knows it can act as any user, including any
    reviewer.
    Adriano logs a warning at start-up and ``/healthz`` reports

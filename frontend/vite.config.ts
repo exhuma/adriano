@@ -23,13 +23,17 @@ export default defineConfig({
     proxy: {
       "/api": backendDevUrl,
       "/healthz": backendDevUrl,
-      // Dev-only token endpoint (`POST /auth/dev/token`); mounted on
-      // the backend only when `ADRIANO_DEV_AUTH_ENABLED` is set (see
-      // docs/operator/authentication.rst). Scoped to `/auth/dev`, not all of
-      // `/auth`, so the SPA's own `/auth/callback` route (the OIDC
-      // redirect target, served by the SPA itself via history
-      // fallback) is never proxied to the backend.
-      "/auth/dev": backendDevUrl,
+      // Backend-for-Frontend auth routes: sign-in redirect and
+      // callback, session check, sign-out, and (dev only) dev login.
+      // The backend is the OIDC client; the SPA has no
+      // `/auth/callback` route of its own. Proxied as-is: leave
+      // `changeOrigin` at its default (`false`) so the browser's
+      // `Host` and `Origin` still match and the backend's CSRF
+      // origin check passes.
+      "/auth": backendDevUrl,
+      // Runtime config (`window.__APP_CONFIG__`), rendered by the
+      // backend, wins over the empty stub in `public/`.
+      "/config.js": backendDevUrl,
     },
   },
 });

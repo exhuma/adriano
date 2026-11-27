@@ -6,29 +6,30 @@ Mounted by :func:`app.main.create_app` only when
 the built ``dist/``). Routing, with the API keeping precedence:
 
 - every API route (``/api/...``, ``/healthz``, ``/openapi.json``,
-  ``/api/docs``, ``/auth/dev/...``) is matched first and behaves as
+  ``/api/docs``, ``/auth/...``) is matched first and behaves as
   without the SPA;
 - ``GET /config.js`` is rendered once from :class:`~app.config.Settings`
   (module-runtime-config-spa): ``window.__APP_CONFIG__ = {...};`` with
-  exactly the keys of ``frontend/src/config.ts``'s ``RuntimeConfig``.
-  It never carries a dev-auth flag;
+  exactly the keys of ``frontend/src/config.ts``'s ``RuntimeConfig``
+  (``apiBaseUrl``, ``oidcEnabled``). It carries no OIDC client
+  settings -- the backend signs users in -- and never a dev-auth flag;
 - ``/assets/*`` (content-hashed bundle files) are served with a
   one-year ``immutable`` cache;
 - any other ``GET``/``HEAD`` that matches no route serves an existing
   top-level file of the SPA directory (e.g. ``favicon.svg``) or else
-  ``index.html`` with ``no-cache``, so history-mode deep links and
-  ``/auth/callback`` work. Unknown paths under the API prefixes (and
-  missing assets) stay plain JSON 404s.
+  ``index.html`` with ``no-cache``, so history-mode deep links work.
+  Unknown paths under the API prefixes (including ``/auth``) and
+  missing assets stay plain JSON 404s.
 
 The fallback is a ``404`` exception handler rather than a catch-all
 route, so it never shadows a route and never turns an API ``405`` into
 something else.
 
 :class:`SecurityHeadersMiddleware` adds the headers nginx used to set
-to every response (see :func:`content_security_policy`).
+to every response (see :data:`CONTENT_SECURITY_POLICY`).
 
 Public API: :func:`mount_spa`, :func:`render_config_js`,
-:func:`content_security_policy`, :class:`SecurityHeadersMiddleware`.
+:data:`CONTENT_SECURITY_POLICY`, :class:`SecurityHeadersMiddleware`.
 """
 
 import json
@@ -50,7 +51,7 @@ from app.errors import ConfigurationError
 #: below ``<prefix>/``.
 NO_FALLBACK_PREFIXES = (
     "/api",
-    "/auth/dev",
+    "/auth",
     "/healthz",
     "/openapi.json",
     "/assets",
@@ -82,30 +83,19 @@ DOCS_CSP = (
 )
 
 
-def content_security_policy(idp_origin: str | None) -> str:
-    """
-    Build the SPA's Content-Security-Policy.
-
-    ``connect-src``: oidc-client-ts fetches the IdP discovery document,
-    token and userinfo endpoints from the browser. ``frame-src``: its
-    silent renew loads the IdP authorize endpoint in a hidden iframe.
-    Vuetify sets theme CSS variables through inline ``style``
-    attributes, which needs ``style-src 'unsafe-inline'`` (there is no
-    nonce mechanism for style attributes).
-
-    :param idp_origin: ``scheme://host[:port]`` of the OIDC authority,
-        already validated by :class:`~app.config.Settings`; ``None``
-        keeps both directives at ``'self'``.
-    :returns: The header value.
-    """
-    idp = f" {idp_origin}" if idp_origin else ""
-    return (
-        "default-src 'self'; script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; font-src 'self' data:; "
-        f"img-src 'self' data:; connect-src 'self'{idp}; "
-        f"frame-src 'self'{idp}; frame-ancestors 'none'; "
-        "base-uri 'none'; form-action 'self'"
-    )
+#: The SPA's Content-Security-Policy. The browser talks only to this
+#: origin (the backend runs the OIDC flow, so no IdP origin is
+#: needed), and nothing is framed: ``frame-src 'none'``. Vuetify sets
+#: theme CSS variables through inline ``style`` attributes, which needs
+#: ``style-src 'unsafe-inline'`` (there is no nonce mechanism for style
+#: attributes). ``script-src 'self'`` admits ``/auth/landing.js``.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; font-src 'self' data:; "
+    "img-src 'self' data:; connect-src 'self'; "
+    "frame-src 'none'; frame-ancestors 'none'; "
+    "base-uri 'none'; form-action 'self'"
+)
 
 
 def render_config_js(settings: Settings) -> str:
@@ -114,22 +104,16 @@ def render_config_js(settings: Settings) -> str:
 
     The object is JSON-encoded (no template substitution, so no
     injection), and every ``<`` is escaped so no value can close a
-    ``<script>`` element even if the file is ever inlined. Unset values
-    are empty strings, which ``frontend/src/config.ts`` treats as
-    unset. ``apiBaseUrl`` is always ``""``: the API is same-origin.
+    ``<script>`` element even if the file is ever inlined.
+    ``apiBaseUrl`` is always ``""``: the API is same-origin.
+    ``oidcEnabled`` tells the SPA whether ``/auth/login`` is available.
 
     :param settings: Application settings.
     :returns: The JavaScript source.
     """
-    config = {
+    config: dict[str, object] = {
         "apiBaseUrl": "",
-        "oidcAuthority": settings.oidc_authority or "",
-        "oidcClientId": settings.oidc_client_id or "",
-        "oidcRedirectUri": settings.oidc_redirect_uri or "",
-        "oidcPostLogoutRedirectUri": (
-            settings.oidc_post_logout_redirect_uri or ""
-        ),
-        "oidcScope": settings.oidc_scope,
+        "oidcEnabled": settings.oidc_authority is not None,
     }
     encoded = json.dumps(config, indent=2).replace("<", "\\u003c")
     return f"window.__APP_CONFIG__ = {encoded};\n"
@@ -332,7 +316,4 @@ def mount_spa(app: FastAPI, settings: Settings) -> None:
         return FileResponse(index, headers={"Cache-Control": NO_CACHE})
 
     app.add_exception_handler(404, spa_fallback)
-    app.add_middleware(
-        SecurityHeadersMiddleware,
-        csp=content_security_policy(settings.oidc_origin),
-    )
+    app.add_middleware(SecurityHeadersMiddleware, csp=CONTENT_SECURITY_POLICY)

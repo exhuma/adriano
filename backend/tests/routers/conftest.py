@@ -8,9 +8,9 @@ generated ``catalog.yaml``. Tests seed records directly through the
 storage port (:func:`app.services.ingest.ingest_document`), exactly
 like the phase 04 ingest/polling tests, then exercise the HTTP routes.
 
-The ``client`` sends a dev token for an ``admin`` (read + operate) by
-default; tests replace or drop the ``Authorization`` header to check
-authentication and permissions.
+The ``client`` holds a dev session for an ``admin`` (read + operate) by
+default; tests sign in again (:func:`tests.auth_helpers.sign_in`) or
+drop the cookie to check authentication and permissions.
 """
 
 import datetime
@@ -31,7 +31,7 @@ from app.services.ingest import (
 )
 from app.storage.port import CatalogStore, RecordState
 from app.storage.postgres.store import PostgresStoreProvider
-from tests.auth_helpers import bearer
+from tests.auth_helpers import https_client, sign_in
 from tests.storage.conftest import (  # noqa: F401
     migrated_engine,
     truncate_all,
@@ -116,8 +116,8 @@ def client(
     """
     app = create_app(router_settings)
     app.dependency_overrides[get_settings] = lambda: router_settings
-    with TestClient(app) as test_client:
-        test_client.headers.update(bearer(router_settings, roles=["admin"]))
+    with https_client(app) as test_client:
+        sign_in(test_client, roles=["admin"])
         yield test_client
     app.dependency_overrides.clear()
 

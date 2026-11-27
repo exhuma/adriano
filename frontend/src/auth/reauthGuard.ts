@@ -2,20 +2,19 @@
  * Re-authentication loop guard (`module-auth-oidc-vue`).
  *
  * A 401 usually means the session expired and one redirect to the
- * IdP fixes it. But a token can be cryptographically valid yet still
- * rejected by the resource server (wrong `aud`/`iss`, or a dev token
- * whose role mapping the backend does not recognise) -- in that case
- * re-authenticating returns the same rejected token, so an unguarded
- * "401 -> redirect" handler loops forever (worse with
- * `automaticSilentRenew`, which would silently refetch the same bad
- * token). This module bounds re-authentication to a single redirect
- * per failure episode and surfaces a blocking error instead of
- * looping a second time.
+ * sign-in fixes it. But a session can be valid yet still rejected by
+ * the resource server (for example a token whose `aud`/`iss` the
+ * backend does not accept, or a role mapping it does not recognise)
+ * -- in that case signing in again returns the same rejected
+ * identity, so an unguarded "401 -> redirect" handler loops forever.
+ * This module bounds re-authentication to a single redirect per
+ * failure episode and surfaces a blocking error instead of looping a
+ * second time.
  *
  * The attempt counter lives in `sessionStorage` because it must
  * survive the full-page round trip to the IdP and back (an in-memory
  * variable would not -- the page is reloaded); it never holds a
- * token.
+ * credential.
  */
 import { ref } from "vue";
 
@@ -45,7 +44,7 @@ export interface ReauthActions {
    *
    * :returns: `true` if a redirect was started (the page is about to
    *     navigate away); `false` when there is no redirect target
-   *     (e.g. dev login, or no session at all) -- in which case the
+   *     (e.g. dev login, or OIDC not available) -- in which case the
    *     caller already dropped the rejected session.
    */
   redirectToSignIn: () => Promise<boolean>;
@@ -72,7 +71,7 @@ export function handleUnauthorized(actions: ReauthActions): void {
     sessionStorage.removeItem(ATTEMPT_KEY);
     authError.value =
       "Your session could not be authenticated, even after signing in " +
-      "again. This usually means the token was rejected for a reason " +
+      "again. This usually means the sign-in was rejected for a reason " +
       "sign-in cannot fix (for example a mismatched audience or " +
       "issuer). Sign out and try again, or contact an administrator.";
     return;

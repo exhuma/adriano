@@ -2,16 +2,19 @@
 /**
  * Application shell: app bar with navigation, auth status, and
  * backend status; the mandatory page-loading indicator; and the
- * routed view -- gated behind an authenticated session except for
- * the OIDC callback route (which is how sign-in completes) and the
- * blocking states below.
+ * routed view -- gated behind an authenticated session.
+ *
+ * On load the session is restored from the backend cookie
+ * (`useAuth().initAuth()`); until that check finishes a neutral
+ * loading state is shown, so a signed-in user never sees the sign-in
+ * screen flash on reload.
  */
 import { computed, defineAsyncComponent, ref } from "vue";
-import { useRoute } from "vue-router";
 import { useDisplay } from "vuetify";
 
 import AppBarMenu from "@/components/AppBarMenu.vue";
 import AuthBlockingScreen from "@/components/AuthBlockingScreen.vue";
+import LoadingState from "@/components/LoadingState.vue";
 import SignInScreen from "@/components/SignInScreen.vue";
 import StatusChip from "@/components/StatusChip.vue";
 import UserMenu from "@/components/UserMenu.vue";
@@ -23,7 +26,7 @@ import { useThemePreference } from "@/composables/useThemePreference";
 
 // `DevLoginDialog` (and everything it pulls in: `src/auth/devAuth.ts`,
 // `src/api/devAuth.ts`, `src/auth/devPresets.ts`, and the
-// `/auth/dev/token` and `/auth/dev/roles` endpoint paths) is
+// `/auth/dev/login` and `/auth/dev/roles` endpoint paths) is
 // loaded through a dynamic `import()` gated by the *same literal
 // expression* `src/config.ts` uses for `devAuthEnabled`, written out
 // again here rather than referencing that import: Vite/esbuild
@@ -42,7 +45,6 @@ const DevLoginDialog =
     ? defineAsyncComponent(() => import("@/components/DevLoginDialog.vue"))
     : null;
 
-const route = useRoute();
 const { state: healthState, payload: healthPayload, check: recheckHealth } = useHealth();
 
 /** Vuetify breakpoint gate: on md+ the app bar shows every item
@@ -65,7 +67,8 @@ const {
   meError,
   authMode,
   authError,
-  oidcConfigured,
+  sessionChecked,
+  oidcEnabled,
   initAuth,
   signInWithOidc,
   signOut,
@@ -74,10 +77,6 @@ const {
 initAuth();
 
 const devDialogOpen = ref(false);
-
-/** The OIDC callback route handles sign-in itself and must render
- *  regardless of auth state -- it is how sign-in completes. */
-const isCallbackRoute = computed(() => route.name === "auth-callback");
 
 /** `/healthz` reports the backend cannot authenticate anyone at all
  *  (no OIDC and no dev secret configured) -- distinct from "nobody
@@ -167,7 +166,7 @@ async function handleSignOut(): Promise<void> {
       <v-container class="d-flex align-center h-100">
         <v-app-bar-title class="flex-0-0 mr-2">adriano</v-app-bar-title>
 
-        <template v-if="mdAndUp && (signedIn || isCallbackRoute)">
+        <template v-if="mdAndUp && signedIn">
           <v-btn to="/" variant="text">Catalog</v-btn>
           <v-btn to="/sources" variant="text">Sources</v-btn>
         </template>
@@ -249,7 +248,7 @@ async function handleSignOut(): Promise<void> {
         -->
         <AppBarMenu
           v-else
-          :show-nav="signedIn || isCallbackRoute"
+          :show-nav="signedIn"
           :has-config-problem="hasConfigProblem"
           :health="showHealthChip ? healthChip : null"
           :user-display="signedIn ? me!.display : null"
@@ -268,10 +267,8 @@ async function handleSignOut(): Promise<void> {
 
     <v-main>
       <v-container id="main-content" tabindex="-1">
-        <router-view v-if="isCallbackRoute" />
-
         <AuthBlockingScreen
-          v-else-if="authError"
+          v-if="authError"
           title="Sign-in could not be completed"
           :text="authError"
         >
@@ -281,6 +278,11 @@ async function handleSignOut(): Promise<void> {
             </v-btn>
           </template>
         </AuthBlockingScreen>
+
+        <LoadingState
+          v-else-if="!sessionChecked"
+          text="Checking your session…"
+        />
 
         <AuthBlockingScreen
           v-else-if="authUnconfigured || meError?.kind === 'unavailable'"
@@ -296,7 +298,7 @@ async function handleSignOut(): Promise<void> {
 
         <SignInScreen
           v-else-if="!signedIn"
-          :oidc-available="oidcConfigured"
+          :oidc-available="oidcEnabled"
           :dev-auth-available="devAuthEnabled"
           @sign-in-oidc="signInWithOidc"
           @open-dev-login="devDialogOpen = true"

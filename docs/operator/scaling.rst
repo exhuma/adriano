@@ -2,7 +2,9 @@ Running several replicas
 ========================
 
 Adriano keeps no state of its own between requests;
-everything lives in the database.
+everything lives in the database, including the sign-in sessions,
+so a user stays signed in whichever replica answers.
+All replicas need the same :envvar:`ADRIANO_SESSION_KEY`.
 You can run as many replicas of the one image as you need behind a
 load balancer.
 

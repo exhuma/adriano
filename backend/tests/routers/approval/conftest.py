@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
 from app.main import create_app
-from tests.auth_helpers import bearer
+from tests.auth_helpers import https_client, sign_in
 from tests.routers.approval.support import (
     ClientFactory,
     catalog_yaml,
@@ -81,9 +81,9 @@ def make_client(
         settings = router_settings.model_copy(update={"config_file": str(path)})
         app = create_app(settings)
         app.dependency_overrides[get_settings] = lambda: settings
-        test_client = TestClient(app)
+        test_client = https_client(app)
         test_client.__enter__()
-        test_client.headers.update(bearer(settings, roles=["admin"]))
+        sign_in(test_client, roles=["admin"])
         clients.append(test_client)
         return test_client
 

@@ -96,7 +96,7 @@ Log lines worth alerting on:
 
 ``authentication is not configured``
    Nobody can sign in; set :envvar:`ADRIANO_OIDC_AUTHORITY`.
-``DEV AUTH ENABLED`` or ``dev HS256 tokens are accepted``
+``DEV AUTH ENABLED`` or ``dev auth is active``
    The development sign-in is on.
    Never acceptable in production.
 ``catalog config <location>: <message>``

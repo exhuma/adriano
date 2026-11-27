@@ -2,10 +2,12 @@
 """
 HTTP latency benchmark for the adriano search/browse API (phase 09).
 
-stdlib + httpx only, besides minting a dev token in-process through
-:mod:`app.auth.dev` -- exactly what ``adriano mint-dev-token`` does,
-given ``ADRIANO_DEV_SHARED_SECRET`` in the environment -- when
-``--token`` is not given. Run against a backend already started by
+stdlib + httpx only. Signs in through the dev login
+(``POST /auth/dev/login``, so the backend must run with dev auth
+enabled) unless ``--session`` gives a session cookie value, and sends
+the session cookie explicitly on every request (the cookie is
+``Secure``, so an http cookie jar would drop it). Run against a backend
+already started by
 ``task bench`` (see ``Taskfile.yml``) or by hand; see
 ``docs/developer/performance.rst`` for the full method and results.
 
@@ -39,11 +41,12 @@ from pathlib import Path
 
 import httpx
 
-from app.auth.dev import DevIdentity, mint_dev_token
-from app.config import Settings
 from app.services.seed_synthetic_text import VOCABULARY
 
 __all__ = ["main"]
+
+#: Name of the session cookie set by the dev login.
+SESSION_COOKIE = "__Host-adriano-session"
 
 _DEFAULT_PAGE_SIZE = 20
 
@@ -132,18 +135,30 @@ def _percentile(sorted_values: Sequence[float], pct: float) -> float:
     return sorted_values[index]
 
 
-def mint_token(settings: Settings, sub: str, roles: Sequence[str]) -> str:
+def dev_session(base_url: str, sub: str, roles: Sequence[str]) -> str:
     """
-    Mint a dev-only HS256 token in-process, like ``mint-dev-token``.
+    Sign in through the dev login and return the session cookie value.
 
-    :param settings: Application settings (reads the dev shared
-        secret and OIDC audience/issuer/roles-claim settings).
-    :param sub: Token subject.
+    :param base_url: Backend base URL.
+    :param sub: Session subject.
     :param roles: Role names.
-    :returns: The encoded token.
-    :raises ValueError: If ``ADRIANO_DEV_SHARED_SECRET`` is not set.
+    :returns: The session cookie value.
+    :raises ValueError: If the dev login is not available or fails.
     """
-    return mint_dev_token(settings, DevIdentity(sub=sub, roles=roles))
+    response = httpx.post(
+        f"{base_url}/auth/dev/login",
+        json={"sub": sub, "roles": list(roles)},
+        headers={"X-Adriano-CSRF": "1"},
+        timeout=30.0,
+    )
+    value = response.cookies.get(SESSION_COOKIE)
+    if response.status_code != 204 or not value:
+        raise ValueError(
+            f"dev login failed (HTTP {response.status_code}); start the "
+            "backend with ADRIANO_DEV_AUTH_ENABLED, ADRIANO_DEV_SHARED_SECRET "
+            "and ADRIANO_SESSION_KEY, or pass --session"
+        )
+    return value
 
 
 def _request(
@@ -325,9 +340,11 @@ def _parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://localhost:8100")
-    parser.add_argument("--token", help="bearer token (else minted)")
-    parser.add_argument("--mint-sub", default="bench")
-    parser.add_argument("--mint-roles", default="bench-reader")
+    parser.add_argument(
+        "--session", help="session cookie value (else a dev login)"
+    )
+    parser.add_argument("--login-sub", default="bench")
+    parser.add_argument("--login-roles", default="bench-reader")
     parser.add_argument("--source-id", default="synthetic")
     parser.add_argument("--project", default=None)
     parser.add_argument("--requests", type=int, default=400)
@@ -343,9 +360,9 @@ class _Args:
     """Typed view of the parsed CLI arguments used by :func:`main`."""
 
     base_url: str
-    token: str | None
-    mint_sub: str
-    mint_roles: str
+    session: str | None
+    login_sub: str
+    login_roles: str
     source_id: str
     project: str | None
     requests: int
@@ -355,19 +372,18 @@ class _Args:
     out: Path
 
 
-def _resolve_token(args: _Args) -> str:
+def _resolve_session(args: _Args) -> str:
     """
-    Return the bearer token to use: given, or freshly minted.
+    Return the session cookie value to use: given, or a dev login.
 
     :param args: Parsed arguments.
-    :returns: The token.
-    :raises ValueError: If no token is given and the dev secret is
-        not set.
+    :returns: The cookie value.
+    :raises ValueError: If no session is given and the dev login fails.
     """
-    if args.token:
-        return args.token
-    roles = [r.strip() for r in args.mint_roles.split(",") if r.strip()]
-    return mint_token(Settings(), args.mint_sub, roles)
+    if args.session:
+        return args.session
+    roles = [r.strip() for r in args.login_roles.split(",") if r.strip()]
+    return dev_session(args.base_url, args.login_sub, roles)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -379,15 +395,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = _Args(**vars(_parser().parse_args(argv)))
     try:
-        token = _resolve_token(args)
-    except ValueError as exc:
+        session = _resolve_session(args)
+    except (ValueError, httpx.HTTPError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     concurrencies = [int(c) for c in args.concurrency.split(",") if c]
     results: list[ScenarioStats] = []
     with httpx.Client(
         base_url=args.base_url,
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Cookie": f"{SESSION_COOKIE}={session}"},
         timeout=30.0,
     ) as client:
         scenarios = build_scenarios(
