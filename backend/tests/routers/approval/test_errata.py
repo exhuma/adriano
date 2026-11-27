@@ -111,7 +111,7 @@ def test_published_erratum_is_reported_then_verified_then_rejected(
     target, [first, second] = _seed_target(provider, errata=2)
     before = _detail(client, target)
     [entry, _] = before["errata"]
-    assert entry["id"] == first
+    assert entry["adr_uuid"] == first
     assert entry["kind"] == "published"
     assert entry["type"] == "technical"
     assert entry["section"] == "S0"
@@ -136,7 +136,7 @@ def test_published_erratum_is_reported_then_verified_then_rejected(
     assert decide(client, second, "rejected").status_code == 201
 
     after = _detail(client, target)
-    states = {e["id"]: e["approval_state"] for e in after["errata"]}
+    states = {e["adr_uuid"]: e["approval_state"] for e in after["errata"]}
     assert states == {first: "accepted", second: "rejected"}
     summary = after["errata_summary"]
     assert (summary["verified"], summary["rejected"]) == (1, 1)
@@ -162,7 +162,7 @@ def test_pushed_candidate_erratum_is_proposed(
     detail = _detail(client, target)
 
     [entry] = detail["errata"]
-    assert entry["id"] == response.json()["record_id"]
+    assert entry["adr_uuid"] == response.json()["adr_uuid"]
     assert entry["kind"] == "candidate"
     assert entry["ref"] == "feature/catalog"
     assert entry["approval_state"] == "pending"
@@ -183,7 +183,6 @@ def test_erratum_page_has_content_and_resolved_target(
     assert "New words." in detail["erratum"]["corrected_html"]
     assert detail["erratum_for"] == {
         "uuid": str(TARGET),
-        "id": target,
         "title": "Use a queue",
         "resolved": True,
     }
@@ -223,7 +222,6 @@ def test_unresolved_erratum_target(
 
     assert detail["erratum_for"] == {
         "uuid": str(missing),
-        "id": None,
         "title": None,
         "resolved": False,
     }
@@ -243,9 +241,11 @@ def test_erratum_belongs_to_its_target_wherever_it_lives(
             content=erratum_text(own).encode(),
         )
 
-    assert [e["id"] for e in _detail(client, target)["errata"]] == [str(own)]
+    assert [e["adr_uuid"] for e in _detail(client, target)["errata"]] == [
+        str(own)
+    ]
     erratum_for = _detail(client, str(own))["erratum_for"]
-    assert erratum_for["id"] == target and erratum_for["resolved"] is True
+    assert erratum_for["uuid"] == target and erratum_for["resolved"] is True
 
 
 def _search(client: TestClient, **params: Any) -> list[dict[str, Any]]:
@@ -267,18 +267,18 @@ def test_search_record_type_filter(
     errata = _search(client, record_type="erratum")
     both = _search(client, record_type="all")
 
-    assert [item["id"] for item in default] == [target]
+    assert [item["adr_uuid"] for item in default] == [target]
     assert default[0]["erratum_for_title"] is None
-    assert {item["id"] for item in errata} == {first, second}
+    assert {item["adr_uuid"] for item in errata} == {first, second}
     assert {item["erratum_for_title"] for item in errata} == {"Use a queue"}
-    assert {item["id"] for item in both} == {target, first, second}
+    assert {item["adr_uuid"] for item in both} == {target, first, second}
 
     as_user(client)
     assert decide(client, first, "accepted").status_code == 201
     needing = _search(client, record_type="erratum", needs_approval="true")
-    assert [item["id"] for item in needing] == [second]
+    assert [item["adr_uuid"] for item in needing] == [second]
     assert {
-        item["id"]
+        item["adr_uuid"]
         for item in _search(client, record_type="all", needs_approval="true")
     } == {target, second}
 

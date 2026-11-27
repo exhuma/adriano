@@ -83,7 +83,6 @@ class RecordMetadata:
     """
     Identity and authored metadata of one record.
 
-    :param id: The ADR UUID (kept next to :attr:`adr_uuid` for the API).
     :param adr_uuid: Authored UUID: the ADR's identity.
     :param decision_date: Displayed decision date.
     :param decision_date_inferred: Whether the date is only inferred
@@ -96,7 +95,6 @@ class RecordMetadata:
     :param previous_digest: Digest before the latest content change.
     """
 
-    id: uuid.UUID
     adr_uuid: uuid.UUID
     decision_date: datetime.date | None
     decision_date_inferred: bool
@@ -160,8 +158,8 @@ class SiblingInfo:
     """
     One published or candidate row of the same ADR (same UUID).
 
-    :param id: The ADR UUID (with :attr:`kind` and :attr:`ref`, the
-        row key).
+    :param adr_uuid: The ADR's UUID (with :attr:`kind` and :attr:`ref`,
+        the row key).
     :param kind: Published or candidate.
     :param source_id: Registration id.
     :param project: Project path.
@@ -175,7 +173,7 @@ class SiblingInfo:
     :param approvable: Whether this sibling's content can be decided.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     source_id: str
     project: str
@@ -236,7 +234,6 @@ class RecordDetail:
 def _metadata(record: StoredRecord) -> RecordMetadata:
     """Build :class:`RecordMetadata` from a stored row."""
     return RecordMetadata(
-        id=record.adr_uuid,
         adr_uuid=record.adr_uuid,
         decision_date=record.decision_date,
         decision_date_inferred=record.decision_date_inferred,
@@ -300,7 +297,7 @@ def _sibling(
     """Build one :class:`SiblingInfo` with its approval state."""
     approvable = is_approvable(sibling)
     return SiblingInfo(
-        id=sibling.adr_uuid,
+        adr_uuid=sibling.adr_uuid,
         kind=sibling.kind,
         source_id=sibling.source_id,
         project=sibling.project,

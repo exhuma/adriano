@@ -36,8 +36,8 @@ def _detail(
     client: TestClient, adr_uuid: uuid.UUID, ref: str | None = None
 ) -> dict[str, Any]:
     """Read one record detail (a candidate when *ref* is given)."""
-    params = {} if ref is None else {"ref": ref}
-    response = client.get(f"/api/v1/records/{adr_uuid}", params=params)
+    tail = "" if ref is None else f"/candidates/{ref}"
+    response = client.get(f"/api/v1/records/{adr_uuid}{tail}")
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -83,7 +83,7 @@ def test_siblings_and_competing_candidates_carry_approvable(
     expected = {"feature-a": False, "feature-b": True}
     assert siblings == expected
     assert competing == expected
-    assert {s["id"] for s in detail["siblings"]} == {str(ADR_UUID)}
+    assert {s["adr_uuid"] for s in detail["siblings"]} == {str(ADR_UUID)}
     for ref, flag in expected.items():
         own = _detail(client, ADR_UUID, ref)
         assert own["approval"]["approvable"] is flag
@@ -94,18 +94,30 @@ def test_search_rows_carry_approvable(
 ) -> None:
     """Ensure search rows flag unapprovable content (bad UTF-8)."""
     _seed_identity(provider)
+    broken = uuid.UUID("a9900000-0000-4000-8000-000000000009")
+    with provider.lock_registration("central") as store:
+        seed(
+            store,
+            path="doc/decisions/2024-01-02-broken.md",
+            content=_bad_encoding(adr(broken, body="Café.")),
+        )
 
-    response = client.get("/api/v1/records", params={"page_size": 50})
+    def flags(**params: object) -> dict[tuple[str, str], bool]:
+        response = client.get(
+            "/api/v1/records", params={"page_size": 50, **params}
+        )
+        assert response.status_code == 200
+        return {
+            (i["adr_uuid"], i["ref"]): i["approvable"]
+            for i in response.json()["items"]
+        }
 
-    assert response.status_code == 200
-    flags = {
-        (i["id"], i["ref"]): i["approvable"] for i in response.json()["items"]
-    }
-    assert flags == {
+    assert flags() == {
         (str(ADR_UUID), "local"): True,
-        (str(ADR_UUID), "feature-a"): False,
-        (str(ADR_UUID), "feature-b"): True,
+        (str(broken), "local"): False,
     }
+    # One hit per ADR: the newest candidate, here the approvable one.
+    assert flags(state="candidate") == {(str(ADR_UUID), "feature-b"): True}
 
 
 def test_errata_carry_approvable(
@@ -129,6 +141,6 @@ def test_errata_carry_approvable(
     detail = _detail(client, target)
 
     [item] = detail["errata"]
-    assert item["id"] == str(erratum_id)
+    assert item["adr_uuid"] == str(erratum_id)
     assert item["approvable"] is False
     assert _detail(client, erratum_id)["approval"]["approvable"] is False

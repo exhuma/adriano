@@ -50,15 +50,15 @@ def _published(client: TestClient) -> list[str]:
     """List the ids of every published record, by path."""
     response = client.get("/api/v1/records", params={"state": "published"})
     items = sorted(response.json()["items"], key=lambda item: item["path"])
-    return [item["id"] for item in items]
+    return [item["adr_uuid"] for item in items]
 
 
 def _detail(
     client: TestClient, record_id: str, ref: str | None = None
 ) -> dict[str, Any]:
     """Read a record detail (a candidate when *ref* is given)."""
-    params = {} if ref is None else {"ref": ref}
-    response = client.get(f"/api/v1/records/{record_id}", params=params)
+    tail = "" if ref is None else f"/candidates/{ref}"
+    response = client.get(f"/api/v1/records/{record_id}{tail}")
     assert response.status_code == 200
     return response.json()
 
@@ -82,12 +82,12 @@ def promoted(
     """
     pushed = push(client, candidate(ADR, path=FILE, ref=REF)).json()
     as_user(client)
-    assert decide(client, pushed["record_id"]).status_code == 201
+    assert decide(client, pushed["adr_uuid"]).status_code == 201
     _write(root, adr_text(ADR))
     _poll(client, router_settings)
     (published_id,) = _published(client)
     return {
-        "candidate": pushed["record_id"],
+        "candidate": pushed["adr_uuid"],
         "published": published_id,
         "digest": pushed["digest"],
     }
@@ -109,7 +109,9 @@ def test_promoted_record_has_no_duplicate_uuid(
     assert approval["approval_blocker"] is None
     assert approval["divergence"] is None
     assert candidate_detail["approval"]["divergence"] is None
-    assert [s["id"] for s in published["siblings"]] == [promoted["candidate"]]
+    assert [s["adr_uuid"] for s in published["siblings"]] == [
+        promoted["candidate"]
+    ]
 
 
 def test_competing_candidate_is_not_a_duplicate(
@@ -130,14 +132,14 @@ def test_competing_candidate_is_not_a_duplicate(
     as_user(client)
 
     published = _detail(client, promoted["published"])
-    competing = _detail(client, other["record_id"], "feature/other")
+    competing = _detail(client, other["adr_uuid"], "feature/other")
 
     assert "duplicate_uuid" not in _codes(published)
     assert "duplicate_uuid" not in _codes(competing)
     assert [
-        (c["id"], c["ref"])
+        (c["adr_uuid"], c["ref"])
         for c in published["approval"]["competing_candidates"]
-    ] == [(other["record_id"], "feature/other")]
+    ] == [(other["adr_uuid"], "feature/other")]
     assert published["approval"]["divergence"] is None
     assert competing["approval"]["state"] == "changed_since_acceptance"
     assert competing["approval"]["approvable"] is True
@@ -151,7 +153,7 @@ def test_divergent_published_content_stays_decidable(
     """Ensure a published row with an accepted candidate can be decided."""
     pushed = push(client, candidate(ADR, path=FILE, ref=REF)).json()
     as_user(client)
-    assert decide(client, pushed["record_id"]).status_code == 201
+    assert decide(client, pushed["adr_uuid"]).status_code == 201
     _write(root, adr_text(ADR, body="Published differently."))
     _poll(client, router_settings)
     (published_id,) = _published(client)

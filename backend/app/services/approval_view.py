@@ -15,13 +15,14 @@ Divergence (``divergence``, at most one):
 - ``published_not_accepted`` -- the record is published, its current
   digest is not accepted, and another digest of the ADR was accepted
   (typically an accepted candidate whose content differs from what was
-  published). ``other_record_ids`` holds the ADR UUID when a row still
-  holds that accepted digest (empty when none does any more).
+  published). ``other_rows`` lists the rows (UUID and ref) that still
+  hold that accepted digest (empty when none does any more).
 - ``published_differs`` -- the record is a candidate and the ADR's
-  published row holds different content (``other_record_ids``: the
-  ADR UUID, which addresses the published row).
+  published row holds different content (``other_rows``: the
+  published row).
 
-Public API: :class:`PolicySummary`, :class:`DecisionProvenance`,
+Public API: :class:`RecordRef`, :class:`PolicySummary`,
+:class:`DecisionProvenance`,
 :class:`DecisionSummary`, :class:`DivergenceKind`,
 :class:`DivergenceInfo`, :class:`CompetingCandidate`,
 :class:`ApprovalSummary`, :func:`is_approvable`,
@@ -59,6 +60,7 @@ __all__ = [
     "DivergenceInfo",
     "DivergenceKind",
     "PolicySummary",
+    "RecordRef",
     "build_approval",
     "decision_summary",
     "is_approvable",
@@ -142,6 +144,20 @@ class DecisionSummary:
     created_at: datetime.datetime
 
 
+@dataclass(frozen=True, slots=True, order=True)
+class RecordRef:
+    """
+    One row of an ADR, as other records point at it.
+
+    :param adr_uuid: The ADR's UUID.
+    :param ref: Branch/ref of the row (the published row's ref for the
+        published row).
+    """
+
+    adr_uuid: uuid.UUID
+    ref: str
+
+
 class DivergenceKind(StrEnum):
     """Kinds of published/accepted divergence (module docstring)."""
 
@@ -157,15 +173,15 @@ class DivergenceInfo:
     :param kind: Which divergence.
     :param other_digest: The accepted (or published) digest that
         differs from the current one.
-    :param other_record_ids: The ADR UUID if a row currently holds
-        *other_digest* (see the module docstring).
+    :param other_rows: The rows that currently hold *other_digest*
+        (see the module docstring), sorted.
     :param other_accepted: Whether *other_digest* is accepted.
     :param message: Reader-facing explanation.
     """
 
     kind: DivergenceKind
     other_digest: str
-    other_record_ids: tuple[uuid.UUID, ...]
+    other_rows: tuple[RecordRef, ...]
     other_accepted: bool
     message: str
 
@@ -175,7 +191,8 @@ class CompetingCandidate:
     """
     Another candidate of the ADR with different content.
 
-    :param id: The ADR UUID (with :attr:`ref`, the candidate's key).
+    :param adr_uuid: The ADR's UUID (with :attr:`ref`, the candidate's
+        key).
     :param ref: Branch/ref of the candidate.
     :param path: File path.
     :param digest: Its digest.
@@ -183,7 +200,7 @@ class CompetingCandidate:
     :param approvable: Whether its content can be decided at all.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     ref: str
     path: str
     digest: str
@@ -321,8 +338,12 @@ def _divergence(
         return DivergenceInfo(
             kind=DivergenceKind.PUBLISHED_NOT_ACCEPTED,
             other_digest=accepted.digest,
-            other_record_ids=tuple(
-                {s.adr_uuid for s in siblings if s.digest == accepted.digest}
+            other_rows=tuple(
+                sorted(
+                    RecordRef(s.adr_uuid, s.ref)
+                    for s in siblings
+                    if s.digest == accepted.digest
+                )
             ),
             other_accepted=True,
             message="a different revision of this ADR was accepted; the "
@@ -336,7 +357,7 @@ def _divergence(
     return DivergenceInfo(
         kind=DivergenceKind.PUBLISHED_DIFFERS,
         other_digest=published.digest,
-        other_record_ids=(published.adr_uuid,),
+        other_rows=(RecordRef(published.adr_uuid, published.ref),),
         other_accepted=published.digest in accepted_digests,
         message="the published revision of this ADR differs from this "
         "candidate",
@@ -367,7 +388,7 @@ def _competing_candidate(
     """Build one :class:`CompetingCandidate` with its state."""
     approvable = is_approvable(sibling)
     return CompetingCandidate(
-        id=sibling.adr_uuid,
+        adr_uuid=sibling.adr_uuid,
         ref=sibling.ref,
         path=sibling.path,
         digest=sibling.digest,

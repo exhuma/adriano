@@ -75,14 +75,15 @@ class OutboundLinkInfo:
     One outbound link and whether it resolved.
 
     :param link_type: The authored relationship.
-    :param target_uuid: The authored target UUID.
-    :param target_id: The target UUID when it resolved, else ``None``.
+    :param target_uuid: The authored target UUID; it addresses the
+        target's published row (``/records/{uuid}``).
+    :param resolved: Whether the target is in the catalog.
     :param target_title: Resolved target title, or ``None``.
     """
 
     link_type: LinkType
     target_uuid: uuid.UUID
-    target_id: uuid.UUID | None
+    resolved: bool
     target_title: str | None
 
 
@@ -92,12 +93,12 @@ class InboundLinkInfo:
     A link from another record to the one being viewed.
 
     :param link_type: ``updated_by`` or ``obsoleted_by``.
-    :param source_id: UUID of the linking record.
+    :param source_uuid: UUID of the linking record (a published ADR).
     :param source_title: Title of the linking record.
     """
 
     link_type: InboundType
-    source_id: uuid.UUID
+    source_uuid: uuid.UUID
     source_title: str
 
 
@@ -107,13 +108,11 @@ class ErratumForInfo:
     The decision an erratum corrects (its ``erratum-for``).
 
     :param uuid: The authored target UUID.
-    :param id: The target UUID when it resolved, else ``None``.
     :param title: Resolved target title, or ``None``.
     :param resolved: Whether the target is in the catalog.
     """
 
     uuid: uuid.UUID
-    id: uuid.UUID | None
     title: str | None
     resolved: bool
 
@@ -194,9 +193,9 @@ def _erratum_target_issues(
     :param summaries: The record's relationship summaries.
     :returns: One warning, or nothing.
     """
-    if erratum_for is None or erratum_for.id is None:
+    if erratum_for is None or not erratum_for.resolved:
         return ()
-    target = summaries.get(erratum_for.id)
+    target = summaries.get(erratum_for.uuid)
     if target is None or target.record_kind is not RecordKind.ERRATUM:
         return ()
     return (
@@ -232,7 +231,7 @@ def _outbound_links(
         OutboundLinkInfo(
             link_type=link.link_type,
             target_uuid=link.target_uuid,
-            target_id=link.target_uuid if link.resolved else None,
+            resolved=link.resolved,
             target_title=(
                 titles.get(link.target_uuid) if link.resolved else None
             ),
@@ -248,7 +247,7 @@ def _inbound_links(
     return tuple(
         InboundLinkInfo(
             link_type=link.link_type,
-            source_id=link.source_uuid,
+            source_uuid=link.source_uuid,
             source_title=titles.get(link.source_uuid, ""),
         )
         for link in links
@@ -272,9 +271,8 @@ def _erratum_for(
         if link.link_type is LinkType.CORRECTS:
             return ErratumForInfo(
                 uuid=link.target_uuid,
-                id=link.target_id,
                 title=link.target_title,
-                resolved=link.target_id is not None,
+                resolved=link.resolved,
             )
     return None
 

@@ -1,9 +1,11 @@
 """
-``POST /api/v1/records/{id}/decisions``: accept or reject content.
+``POST /api/v1/records/{uuid}/decisions``: accept or reject content.
 
 Needs a signed-in caller with ``read``; reviewing itself is decided by
 the approval policy, not by a permission. All checks and error codes
-live in :mod:`app.services.decisions`; the response is the stored,
+live in :mod:`app.services.decisions`. A candidate is decided by
+its ``ref`` query parameter (a ref may contain slashes and cannot end
+a path that continues with ``/decisions``); the response is the stored,
 append-only event (201) with server-set id and timestamp.
 """
 
@@ -58,13 +60,13 @@ def reviewer_from(principal: Principal) -> Reviewer:
 
 
 @router.post(
-    "/records/{record_id}/decisions",
+    "/records/{adr_uuid}/decisions",
     response_model=DecisionSummaryOut,
     status_code=201,
     responses=_RESPONSES,
 )
 def post_decision(
-    record_id: uuid.UUID,
+    adr_uuid: uuid.UUID,
     body: DecisionIn,
     ref: str | None = Query(default=None, max_length=255, description=_REF),
     principal: Principal = Depends(_read),
@@ -74,7 +76,7 @@ def post_decision(
     """
     Record an accept/reject decision for the record's current digest.
 
-    :param record_id: The ADR UUID.
+    :param adr_uuid: The ADR UUID.
     :param body: Action, optional comment and expected digest.
     :param ref: A candidate's ref; omitted for the published row.
     :param principal: The authenticated caller (``read`` required).
@@ -84,7 +86,7 @@ def post_decision(
     """
     event = record_decision(
         provider,
-        record_id,
+        adr_uuid,
         ref=ref,
         action=body.action,
         comment=body.comment,

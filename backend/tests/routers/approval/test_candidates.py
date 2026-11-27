@@ -53,12 +53,14 @@ def test_put_creates_then_is_idempotent(
     assert body["updated"] is False
     assert body["deduplicated"] is False
     assert body["digest"].startswith("sha256-v1:")
-    assert body["record_id"] == str(ADR)
-    assert body["catalog_path"] == (f"/records/{ADR}?ref=feature%2Fcatalog")
+    assert body["adr_uuid"] == str(ADR)
+    assert body["catalog_path"] == (
+        f"/records/{ADR}/candidates/feature/catalog"
+    )
     assert second.status_code == 200
     assert second.json() == {**body, "created": False}
     assert _revision_count(clean_engine) == revisions
-    detail = client.get(f"/api/v1/records/{body['record_id']}").json()
+    detail = client.get(f"/api/v1/records/{body['adr_uuid']}").json()
     assert detail["metadata"]["kind"] == "candidate"
     assert detail["metadata"]["digest"] == body["digest"]
     assert detail["metadata"]["previous_digest"] is None
@@ -76,9 +78,9 @@ def test_put_replace_updates_digest_and_keeps_previous(
 
     assert changed.status_code == 200
     assert changed.json()["updated"] is True
-    assert changed.json()["record_id"] == first["record_id"]
+    assert changed.json()["adr_uuid"] == first["adr_uuid"]
     assert changed.json()["digest"] != first["digest"]
-    detail = client.get(f"/api/v1/records/{first['record_id']}").json()
+    detail = client.get(f"/api/v1/records/{first['adr_uuid']}").json()
     assert detail["metadata"]["previous_digest"] == first["digest"]
 
 
@@ -279,7 +281,7 @@ def test_candidate_never_overwrites_published(
     response = push(client, candidate(ADR, path=path))
 
     assert response.status_code == 201
-    assert response.json()["record_id"] == str(published_id)
+    assert response.json()["adr_uuid"] == str(published_id)
     with provider.unit_of_work() as store:
         published = store.get_published(published_id)
         assert published is not None
@@ -303,7 +305,7 @@ def test_delivery_id_is_deduplicated(client: TestClient) -> None:
     assert again.status_code == 200
     assert again.json()["deduplicated"] is True
     assert again.json()["digest"] == first.json()["digest"]
-    record = client.get(f"/api/v1/records/{first.json()['record_id']}")
+    record = client.get(f"/api/v1/records/{first.json()['adr_uuid']}")
     assert record.json()["metadata"]["digest"] == first.json()["digest"]
 
 
@@ -352,8 +354,8 @@ def test_intake_decisions_and_diff_never_open_an_adapter(
 
     pushed = push(client, candidate(ADR)).json()
     as_user(client)
-    decided = decide(client, pushed["record_id"])
-    diff = client.get(f"/api/v1/records/{pushed['record_id']}/diff")
+    decided = decide(client, pushed["adr_uuid"])
+    diff = client.get(f"/api/v1/records/{pushed['adr_uuid']}/diff")
     listed = client.get("/api/v1/records", params={"needs_approval": "true"})
 
     assert decided.status_code == 201

@@ -18,7 +18,7 @@ CandidateSubmission`, published in OpenAPI through ``openapi_extra``.
 """
 
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -94,15 +94,16 @@ def _out(result: IntakeResult) -> CandidateResultOut:
     :param result: The intake outcome.
     :returns: The response body.
     """
-    query = urlencode({"ref": result.ref})
+    ref = quote(result.ref, safe="/")
     return CandidateResultOut(
-        record_id=result.adr_uuid,
+        adr_uuid=result.adr_uuid,
+        ref=result.ref,
         digest=result.digest,
         created=result.created,
         updated=result.updated,
         deduplicated=result.deduplicated,
         issues=[IssueOut.model_validate(issue) for issue in result.issues],
-        catalog_path=f"/records/{result.adr_uuid}?{query}",
+        catalog_path=f"/records/{result.adr_uuid}/candidates/{ref}",
     )
 
 

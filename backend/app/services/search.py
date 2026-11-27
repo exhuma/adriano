@@ -26,10 +26,13 @@ moves only when the content digest changes (``last_seen_at`` is the
 poll heartbeat), newest first. Every order ends with title and the
 row key (UUID, state, ref), so pages are stable.
 
-**Rows, not ADRs.** A hit is one row: an ADR's published row or one of
-its candidates, so an ADR with candidates can appear more than once
-(filter by ``state`` to avoid that). ``id`` is the ADR UUID; with
-``kind`` and ``ref`` it addresses the row.
+**One hit per ADR.** A hit is the row the catalog shows for the ADR:
+its published row, else its most recently updated candidate (see
+:mod:`app.storage.postgres.search`). ``adr_uuid`` addresses the ADR
+(``/records/{uuid}``); ``kind`` and ``ref`` say which row the hit
+is. The ``state`` filter selects the row kind instead (``candidate``:
+the newest candidate of every ADR). The query and the other filters
+apply to that one row.
 
 **Erratum target titles.** An erratum hit carries the title of the
 decision it corrects (``erratum_for_title``). The targets of all
@@ -106,8 +109,8 @@ class CatalogSearchItem:
     """
     One search result row.
 
-    :param id: The ADR UUID (with :attr:`kind` and :attr:`ref`, the row
-        key).
+    :param adr_uuid: The ADR's UUID (with :attr:`kind` and :attr:`ref`,
+        the row key).
     :param title: Display title.
     :param source_id: Registration id.
     :param project: Project path.
@@ -124,7 +127,7 @@ class CatalogSearchItem:
         decision it corrects, when that resolves.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     title: str
     source_id: str
     project: str
@@ -216,7 +219,7 @@ def _search_item(
     :returns: The search result row.
     """
     return CatalogSearchItem(
-        id=item.adr_uuid,
+        adr_uuid=item.adr_uuid,
         title=item.title,
         source_id=item.source_id,
         project=item.project,

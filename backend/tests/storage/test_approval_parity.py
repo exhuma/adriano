@@ -25,6 +25,7 @@ from app.storage.port import (
     MAX_PAGE_SIZE,
     CatalogStore,
     NewDecision,
+    RecordState,
     SearchFilters,
     SearchItem,
 )
@@ -119,11 +120,23 @@ ERRATA: dict[str, tuple[list[DecisionAction], str]] = {
     "erratum_rejected": ([R], "rejected"),
 }
 
-ROW_COUNT = (
+#: Search hits per ``state`` filter: one row per ADR (the published row,
+#: else the newest candidate; with ``state=candidate`` the newest
+#: candidate of every ADR that has one).
+ADR_COUNT = len(SCENARIOS) + len(MULTI_ROW) + len(ERRATA)
+PUBLISHED_COUNT = (
     len(SCENARIOS)
-    + sum(len(rows) for rows, _, _ in MULTI_ROW.values())
     + len(ERRATA)
+    + sum("main" in rows for rows, _, _ in MULTI_ROW.values())
 )
+CANDIDATE_COUNT = sum(
+    any(ref != "main" for ref in rows) for rows, _, _ in MULTI_ROW.values()
+)
+EXPECTED_TOTAL = {
+    None: ADR_COUNT,
+    RecordState.PUBLISHED: PUBLISHED_COUNT,
+    RecordState.CANDIDATE: CANDIDATE_COUNT,
+}
 
 POLICIES = {
     "missing": None,
@@ -300,20 +313,24 @@ def _all_pages(
         page += 1
 
 
+@pytest.mark.parametrize("kind", list(EXPECTED_TOTAL))
 @pytest.mark.parametrize("query", [None, "divergent", "body"])
 @pytest.mark.parametrize("policy_name", list(POLICIES))
 def test_sql_state_matches_domain(
-    scenarios: PostgresStoreProvider, policy_name: str, query: str | None
+    scenarios: PostgresStoreProvider,
+    policy_name: str,
+    query: str | None,
+    kind: RecordState | None,
 ) -> None:
     """Ensure every row's SQL state equals the domain evaluation."""
     policy = POLICIES[policy_name]
     with scenarios.unit_of_work() as store:
         page = store.search(
-            query, SearchFilters(), 1, MAX_PAGE_SIZE, policy=policy
+            query, SearchFilters(kind=kind), 1, MAX_PAGE_SIZE, policy=policy
         )
         needs = store.search(
             query,
-            SearchFilters(needs_approval=True),
+            SearchFilters(needs_approval=True, kind=kind),
             1,
             MAX_PAGE_SIZE,
             policy=policy,
@@ -327,9 +344,10 @@ def test_sql_state_matches_domain(
                 item.digest,
                 approvable=True,
             )
-    assert page.items
+    # Candidate bodies never contain the word "body".
+    assert page.items or (query == "body" and kind is RecordState.CANDIDATE)
     if query is None:
-        assert page.total == ROW_COUNT
+        assert page.total == EXPECTED_TOTAL[kind]
     for item in page.items:
         assert item.approval_state is expected[_key(item)].state, item.title
     assert [_key(item) for item in needs.items] == [
@@ -362,26 +380,31 @@ def test_fixture_covers_every_required_state(
 ) -> None:
     """Ensure the fixture exercises the expected state per scenario."""
     with scenarios.unit_of_work() as store:
-        page = store.search(
-            None,
-            SearchFilters(),
-            1,
-            MAX_PAGE_SIZE,
-            policy=POLICIES["required"],
-        )
+        items = [
+            item
+            for kind in (RecordState.PUBLISHED, RecordState.CANDIDATE)
+            for item in store.search(
+                None,
+                SearchFilters(kind=kind),
+                1,
+                MAX_PAGE_SIZE,
+                policy=POLICIES["required"],
+            ).items
+        ]
     by_location = {
         (item.source_id, item.project, item.title): item.approval_state
-        for item in page.items
+        for item in items
     }
     for name, (_, state) in SCENARIOS.items():
         assert by_location["central", "platform", name] == state, name
-    by_ref = {
-        (item.adr_uuid, item.ref): item.approval_state for item in page.items
-    }
+    by_ref = {(item.adr_uuid, item.ref): item.approval_state for item in items}
     for name, (_, _, states) in MULTI_ROW.items():
         for ref, state in states.items():
             key = (scenario_uuid(name), ref)
-            assert by_ref[key] == state, (name, ref)
+            if key in by_ref:  # a search hit is one row per ADR
+                assert by_ref[key] == state, (name, ref)
+    # Of competing candidates only the newest is a hit.
+    assert (scenario_uuid("competing_candidates"), "feature-b") in by_ref
 
 
 @pytest.mark.parametrize("query", [None, "divergent"])

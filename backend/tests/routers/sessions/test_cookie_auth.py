@@ -194,8 +194,8 @@ def test_every_api_route_requires_authentication(
     # Candidate intake uses CI push tokens instead of sessions, but it
     # is covered by the same sweep: no credentials -> 401.
     assert set(api["/api/v1/candidates"]) == {"put", "post"}
-    assert "/api/v1/records/{record_id}/decisions" in api
-    assert "/api/v1/records/{record_id}/diff" in api
+    assert "/api/v1/records/{adr_uuid}/decisions" in api
+    assert "/api/v1/records/{adr_uuid}/diff" in api
     for template, operations in api.items():
         path = re.sub(r"\{[^}]+\}", ZERO_UUID, template)
         for method in operations:

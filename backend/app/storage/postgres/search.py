@@ -57,6 +57,14 @@ configuration (exact tokens: identifiers, UUIDs, paths) OR'ed with the
 ``english`` configuration (stemmed body words), matching how the
 ``record.search`` vector is built by the migration trigger.
 
+**One hit per ADR.** :func:`_target_rows` keeps, per ADR UUID, only
+the row the catalog shows for it: the published row, else the most
+recently updated candidate (ties broken by ref, the rule of
+:func:`app.services.record_lookup.find_record`). With the ``state``
+filter set, the filter picks the row kind instead: ``published`` is
+already one row per ADR, ``candidate`` keeps the newest candidate of
+each ADR. The text query and the other filters apply to that row.
+
 Public API: :data:`NEEDS_APPROVAL_STATES`, :func:`approval_join`,
 :func:`search`.
 """
@@ -73,6 +81,7 @@ from sqlalchemy import (
     func,
     literal,
     literal_column,
+    or_,
     select,
 )
 from sqlalchemy.orm import Session
@@ -80,6 +89,7 @@ from sqlalchemy.orm import Session
 from app.domain.approval import ApprovalStateCode, DecisionAction, Policy
 from app.storage.port import (
     MAX_PAGE_SIZE,
+    RecordState,
     SearchFilters,
     SearchPage,
     SearchSort,
@@ -206,6 +216,36 @@ def _tsquery(query: str | None) -> ColumnElement | None:
     return simple.op("||")(english)
 
 
+def _target_rows(kind: RecordState | None) -> ColumnElement[bool]:
+    """
+    Restrict the rows to one per ADR (see the module docstring).
+
+    :param kind: The ``state`` filter, if any.
+    :returns: The condition on ``record``.
+    """
+    other = RECORD.alias("other")
+    candidate = literal(RecordState.CANDIDATE.value)
+    published = literal(RecordState.PUBLISHED.value)
+    newer = (
+        _same_uuid(other, RECORD),
+        other.c.kind == candidate,
+        or_(
+            other.c.updated_at > RECORD.c.updated_at,
+            and_(
+                other.c.updated_at == RECORD.c.updated_at,
+                other.c.ref > RECORD.c.ref,
+            ),
+        ),
+    )
+    newest_candidate = and_(RECORD.c.kind == candidate, ~exists().where(*newer))
+    if kind is RecordState.PUBLISHED:
+        return RECORD.c.kind == published
+    if kind is RecordState.CANDIDATE:
+        return newest_candidate
+    held = exists().where(_same_uuid(other, RECORD), other.c.kind == published)
+    return or_(RECORD.c.kind == published, and_(~held, newest_candidate))
+
+
 def _conditions(
     filters: SearchFilters, tsquery: ColumnElement | None
 ) -> list[ColumnElement[bool]]:
@@ -217,13 +257,11 @@ def _conditions(
     :param tsquery: Text query, if any.
     :returns: Conditions to AND together.
     """
-    result: list[ColumnElement[bool]] = []
+    result: list[ColumnElement[bool]] = [_target_rows(filters.kind)]
     if filters.source_id is not None:
         result.append(RECORD.c.source_id == filters.source_id)
     if filters.project is not None:
         result.append(RECORD.c.project == filters.project)
-    if filters.kind is not None:
-        result.append(RECORD.c.kind == filters.kind.value)
     if filters.record_kind is not None:
         result.append(RECORD.c.record_kind == filters.record_kind.value)
     if tsquery is not None:

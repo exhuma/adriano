@@ -60,7 +60,7 @@ def test_legacy_fields_and_a_missing_link_target(
     [outbound] = body["outbound_links"]
     assert outbound["link_type"] == "obsoletes"
     assert outbound["target_uuid"] == str(U2)
-    assert outbound["target_id"] is None
+    assert outbound["resolved"] is False
     assert outbound["target_title"] is None
     assert body["approval"]["state"] == "pending"
     assert body["approval"]["needs_approval"] is True
@@ -86,13 +86,13 @@ def test_links_resolve_by_uuid_across_registrations(
     new = client.get(f"/api/v1/records/{U2}").json()
 
     [inbound] = old["inbound_links"]
-    assert (inbound["source_id"], inbound["source_title"]) == (str(U2), "New")
+    assert (inbound["source_uuid"], inbound["source_title"]) == (str(U2), "New")
     assert old["status"] == "obsoleted"
     [outbound] = new["outbound_links"]
     assert outbound == {
         "link_type": "obsoletes",
         "target_uuid": str(U1),
-        "target_id": str(U1),
+        "resolved": True,
         "target_title": "Old",
     }
     assert new["issues"] == []
@@ -159,7 +159,7 @@ def test_inbound_obsoleted_by_and_derived_status(
     assert body["status"] == "obsoleted"
     [inbound] = body["inbound_links"]
     assert inbound["link_type"] == "obsoleted_by"
-    assert inbound["source_id"] == str(new_id)
+    assert inbound["source_uuid"] == str(new_id)
     assert inbound["source_title"] == "New decision"
 
 
@@ -192,7 +192,7 @@ def test_a_document_without_uuid_is_not_a_record(
 
     assert valid_response.status_code == 200
     assert valid_response.json()["metadata"]["title"] == "Still fine"
-    assert [item["id"] for item in listing["items"]] == [str(valid_id)]
+    assert [item["adr_uuid"] for item in listing["items"]] == [str(valid_id)]
     assert [r.code.value for r in entry.reasons] == ["missing_frontmatter"]
 
 
@@ -233,5 +233,5 @@ def test_detail_siblings_exclude_the_record_itself(
     response = client.get(f"/api/v1/records/{published_id}")
 
     [sibling] = response.json()["siblings"]
-    assert sibling["id"] == str(candidate_id)
+    assert sibling["adr_uuid"] == str(candidate_id)
     assert sibling["kind"] == "candidate"

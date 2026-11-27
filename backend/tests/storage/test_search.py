@@ -72,16 +72,14 @@ def titles(provider: PostgresStoreProvider, query: str | None) -> list[str]:
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
-        (
-            "postgresql",
-            ["Use PostgreSQL/candidate", "Use PostgreSQL/published"],
-        ),
+        ("postgresql", ["Use PostgreSQL/published"]),
         ("relational", ["Use PostgreSQL/published"]),
         ("kafka_topic", ["Adopt a message queue/published"]),
         (str(U2), ["Adopt a message queue/published"]),
         ("payments", ["Adopt a message queue/published"]),
         ("2024-02-01-queue", ["Adopt a message queue/published"]),
-        ("decide", ["Use PostgreSQL/candidate"]),
+        # Only the candidate says it: a hit is the ADR's one shown row.
+        ("decide", []),
         ("nothing-like-this", []),
         ("!!!", []),
     ],
@@ -99,7 +97,7 @@ def test_blank_query_lists_everything_by_title(
     """Ensure a blank query returns all rows ordered by title."""
     result = titles(seeded, "  ")
     assert result[0] == "Adopt a message queue/published"
-    assert len(result) == 3
+    assert len(result) == 2
     assert titles(seeded, None) == result
 
 
@@ -121,7 +119,7 @@ def test_title_match_ranks_first(provider: PostgresStoreProvider) -> None:
 @pytest.mark.parametrize(
     ("filters", "count"),
     [
-        (SearchFilters(source_id="central"), 2),
+        (SearchFilters(source_id="central"), 1),
         (SearchFilters(source_id="other"), 1),
         (SearchFilters(project="payments"), 1),
         (SearchFilters(kind=RecordState.CANDIDATE), 1),

@@ -91,7 +91,9 @@ def test_search_survives_a_legacy_self_targeting_erratum(
 
     assert response.status_code == 200
     [item] = [
-        hit for hit in response.json()["items"] if hit["id"] == str(erratum_id)
+        hit
+        for hit in response.json()["items"]
+        if hit["adr_uuid"] == str(erratum_id)
     ]
     assert item["erratum_for_title"] is None
 
@@ -124,7 +126,9 @@ def test_search_with_a_self_targeting_erratum_with_updates(
     detail = client.get(f"/api/v1/records/{erratum_id}")
 
     assert response.status_code == 200
-    assert str(erratum_id) in {hit["id"] for hit in response.json()["items"]}
+    assert str(erratum_id) in {
+        hit["adr_uuid"] for hit in response.json()["items"]
+    }
     assert detail.status_code == 200
     body = detail.json()
     codes = _codes(body)
@@ -164,7 +168,7 @@ def test_erratum_of_an_erratum(
     assert first["errata_summary"]["proposed"] == 0
     assert "erratum_target_is_erratum" not in _codes(first)
     assert second["erratum_for"]["resolved"] is True
-    assert second["erratum_for"]["id"] == str(first_id)
+    assert second["erratum_for"]["uuid"] == str(first_id)
     [issue] = [
         issue
         for issue in second["issues"]

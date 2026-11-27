@@ -58,15 +58,15 @@ def _published_id(client: TestClient) -> str:
         "items"
     ]
     assert len(items) == 1
-    return items[0]["id"]
+    return items[0]["adr_uuid"]
 
 
 def _detail(
     client: TestClient, record_id: str, ref: str | None = None
 ) -> dict[str, object]:
     """Read a record detail (a candidate when *ref* is given)."""
-    params = {} if ref is None else {"ref": ref}
-    response = client.get(f"/api/v1/records/{record_id}", params=params)
+    tail = "" if ref is None else f"/candidates/{ref}"
+    response = client.get(f"/api/v1/records/{record_id}{tail}")
     assert response.status_code == 200
     return response.json()
 
@@ -98,7 +98,7 @@ def accepted(client: TestClient, router_settings: Settings) -> dict[str, str]:
     """
     pushed = push(client, candidate(ADR, path=FILE)).json()
     as_user(client)
-    assert decide(client, pushed["record_id"]).status_code == 201
+    assert decide(client, pushed["adr_uuid"]).status_code == 201
     return pushed
 
 
@@ -126,7 +126,7 @@ def test_identical_content_is_accepted_when_published(
     assert history[0]["current_digest"] is True
     assert history[0]["provenance"]["kind"] == "candidate"
     assert approval["divergence"] is None
-    candidate_state = _approval(client, accepted["record_id"], REF)["state"]
+    candidate_state = _approval(client, accepted["adr_uuid"], REF)["state"]
     assert candidate_state == "accepted"
     diff = client.get(f"/api/v1/records/{published_id}/diff").json()
     assert diff["base"] is None
@@ -159,8 +159,10 @@ def test_edited_content_needs_new_approval_and_diffs(
     divergence = approval["divergence"]
     assert isinstance(divergence, dict)
     assert divergence["kind"] == "published_not_accepted"
-    assert divergence["other_record_ids"] == [accepted["record_id"]]
-    candidate_view = _approval(client, accepted["record_id"], REF)
+    assert divergence["other_rows"] == [
+        {"adr_uuid": accepted["adr_uuid"], "ref": REF}
+    ]
+    candidate_view = _approval(client, accepted["adr_uuid"], REF)
     assert candidate_view["state"] == "accepted"
     candidate_divergence = candidate_view["divergence"]
     assert isinstance(candidate_divergence, dict)
@@ -183,7 +185,7 @@ def test_diff_refuses_unrelated_digests(
 ) -> None:
     """Ensure the diff endpoint is not an arbitrary snapshot reader."""
     other = push(client, candidate(uuid.uuid4(), ref="feature/b")).json()
-    url = f"/api/v1/records/{accepted['record_id']}/diff"
+    url = f"/api/v1/records/{accepted['adr_uuid']}/diff"
 
     unrelated = client.get(url, params={"from": other["digest"]})
     unknown = client.get(url, params={"to": "sha256-v1:" + "0" * 64})
@@ -200,9 +202,9 @@ def test_candidate_diff_uses_previous_revision(client: TestClient) -> None:
         client, candidate(ADR, content=adr_text(ADR, body="Second."))
     ).json()
 
-    diff = client.get(f"/api/v1/records/{first['record_id']}/diff").json()
+    diff = client.get(f"/api/v1/records/{first['adr_uuid']}/diff").json()
     same = client.get(
-        f"/api/v1/records/{first['record_id']}/diff",
+        f"/api/v1/records/{first['adr_uuid']}/diff",
         params={"from": second["digest"], "to": second["digest"]},
     ).json()
 
@@ -227,21 +229,22 @@ def test_needs_approval_filter_across_states(
     pending = push(client, candidate(uuid.uuid4(), ref="feature/p")).json()
     rejected = push(client, candidate(uuid.uuid4(), ref="feature/r")).json()
     as_user(client)
-    assert decide(client, rejected["record_id"], "rejected").status_code == 201
+    assert decide(client, rejected["adr_uuid"], "rejected").status_code == 201
 
     def needing(test_client: TestClient) -> set[tuple[str, str]]:
         response = test_client.get(
             "/api/v1/records", params={"needs_approval": "true"}
         )
-        return {(item["id"], item["ref"]) for item in response.json()["items"]}
+        return {
+            (item["adr_uuid"], item["ref"]) for item in response.json()["items"]
+        }
 
-    accepted_row = (accepted["record_id"], REF)
+    # One hit per ADR: the accepted ADR shows its (changed) published row.
     everything = {
-        accepted_row,
         (changed, "local"),
-        (pending["record_id"], "feature/p"),
-        (rejected["record_id"], "feature/r"),
+        (pending["adr_uuid"], "feature/p"),
+        (rejected["adr_uuid"], "feature/r"),
     }
-    assert needing(client) == everything - {accepted_row}
+    assert needing(client) == everything
     assert needing(make_client(None)) == everything
     assert needing(make_client(REQUIRED_FALSE)) == set()

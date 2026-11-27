@@ -102,8 +102,8 @@ class ErratumInfo:
     Content fields are ``None`` (and ``corrected_html`` empty) when the
     row was stored before erratum content was (``has_content`` false).
 
-    :param id: The erratum's UUID (with :attr:`ref` and :attr:`kind`,
-        its row key).
+    :param adr_uuid: The erratum's UUID (with :attr:`ref` and
+        :attr:`kind`, its row key).
     :param kind: ``published`` or ``candidate`` (a proposal).
     :param ref: Branch/ref of the erratum content.
     :param source_id: Registration id of the erratum.
@@ -124,7 +124,7 @@ class ErratumInfo:
     :param has_content: Whether structured content is stored.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     ref: str
     source_id: str
@@ -229,7 +229,7 @@ def _info(
     state = evaluate(policy, events, row.digest, approvable).state
     content = row.erratum
     return ErratumInfo(
-        id=row.adr_uuid,
+        adr_uuid=row.adr_uuid,
         kind=row.kind,
         ref=row.ref,
         source_id=row.source_id,

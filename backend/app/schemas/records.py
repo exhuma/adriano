@@ -47,7 +47,7 @@ class SearchItemOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     title: str
     source_id: str
     project: str
@@ -77,7 +77,6 @@ class MetadataOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
     adr_uuid: uuid.UUID
     decision_date: datetime.date | None
     decision_date_inferred: bool
@@ -121,7 +120,7 @@ class OutboundLinkOut(BaseModel):
 
     link_type: LinkType
     target_uuid: uuid.UUID
-    target_id: uuid.UUID | None
+    resolved: bool
     target_title: str | None
 
 
@@ -131,7 +130,7 @@ class InboundLinkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     link_type: InboundType
-    source_id: uuid.UUID
+    source_uuid: uuid.UUID
     source_title: str
 
 
@@ -148,7 +147,7 @@ class ErratumOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     ref: str
     source_id: str
@@ -208,7 +207,6 @@ class ErratumForOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: uuid.UUID
-    id: uuid.UUID | None
     title: str | None
     resolved: bool
 
@@ -218,7 +216,7 @@ class SiblingOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     source_id: str
     project: str
@@ -276,6 +274,15 @@ class DecisionSummaryOut(BaseModel):
     created_at: datetime.datetime
 
 
+class RecordRefOut(BaseModel):
+    """One row of an ADR: its UUID and the ref it was read from."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    adr_uuid: uuid.UUID
+    ref: str
+
+
 class DivergenceOut(BaseModel):
     """Content divergence between the rows of the record's ADR."""
 
@@ -283,7 +290,7 @@ class DivergenceOut(BaseModel):
 
     kind: DivergenceKind
     other_digest: str
-    other_record_ids: list[uuid.UUID]
+    other_rows: list[RecordRefOut]
     other_accepted: bool
     message: str
 
@@ -293,7 +300,7 @@ class CompetingCandidateOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     ref: str
     path: str
     digest: str

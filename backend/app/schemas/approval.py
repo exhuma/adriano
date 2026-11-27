@@ -19,7 +19,7 @@ MAX_COMMENT_LENGTH = 2000
 
 
 class DecisionIn(BaseModel):
-    """Body of ``POST /api/v1/records/{id}/decisions``."""
+    """Body of ``POST /api/v1/records/{uuid}/decisions``."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,7 +40,8 @@ class CandidateResultOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    record_id: uuid.UUID
+    adr_uuid: uuid.UUID
+    ref: str
     digest: str
     created: bool
     updated: bool
