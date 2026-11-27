@@ -18,6 +18,7 @@ from app.domain.records import (
     parse_record,
 )
 from app.domain.relationships import RecordSummary, resolve_relationships
+from app.services.decisions import approval_blocker
 
 ERRATUM_UUID = "7c1e0000-1a2b-4c3d-8e9f-001122334455"
 TARGET_UUID = "0b0c2f4e-1a2b-4c3d-8e9f-001122334455"
@@ -225,7 +226,7 @@ def test_valid_erratum_parses_without_issues(kind: ErratumType) -> None:
         corrected="Use port 8443.",
         notes="TLS is mandatory.",
     )
-    assert record.approvable
+    assert approval_blocker(record) is None
 
 
 def test_missing_type_is_an_error() -> None:
@@ -284,14 +285,14 @@ def test_missing_or_bad_target_is_an_error(
     assert "`erratum-for`" in message
 
 
-def test_erratum_without_uuid_is_not_approvable() -> None:
-    """Ensure an erratum still needs its own ``uuid``."""
+def test_erratum_without_uuid_is_not_indexed() -> None:
+    """Ensure an erratum still needs its own ``uuid`` to be indexed."""
     raw = f"---\nerratum-for: {TARGET_UUID}\ntype: technical\n---\n{BODY}"
 
     record = parse(raw.encode())
 
     assert IssueCode.MISSING_UUID in codes(record.issues)
-    assert not record.approvable
+    assert record.not_indexed_reasons
     assert record.links.corrects is None
 
 

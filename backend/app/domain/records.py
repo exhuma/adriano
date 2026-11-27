@@ -163,19 +163,6 @@ class ParsedRecord:
         return has_errors(self.issues)
 
     @property
-    def approval_blocker(self) -> str | None:
-        """
-        Explain why this content cannot be approved, if it cannot.
-
-        :returns: A reader-facing reason, or ``None`` if approvable.
-        """
-        if not self.encoding_ok:
-            return "the file is not valid UTF-8"
-        if self.adr_uuid is None:
-            return "the record has no valid `uuid`"
-        return None
-
-    @property
     def not_indexed_reasons(self) -> tuple[Issue, ...]:
         """
         Explain why this document cannot be indexed, if it cannot.
@@ -193,15 +180,6 @@ class ParsedRecord:
         return reasons or (
             error(IssueCode.MISSING_UUID, "the document has no valid `uuid`"),
         )
-
-    @property
-    def approvable(self) -> bool:
-        """
-        Tell whether a reviewer may accept or reject this content.
-
-        :returns: ``True`` with a valid UUID and valid UTF-8.
-        """
-        return self.approval_blocker is None
 
     def issue_dicts(self) -> list[dict[str, str]]:
         """

@@ -317,10 +317,10 @@ Computed when read
 When a record can be decided
 ----------------------------
 
-``ParsedRecord.approvable`` is true unless the file is not valid
-UTF-8.
-(A document without a valid UUID never becomes a record.)
-For stored rows the same rule is
-:py:obj:`app.services.approval_view.is_approvable`.
+A stored row can be decided unless its file is not valid UTF-8
+(:py:obj:`app.services.decisions.approval_blocker`;
+:py:obj:`app.services.approval_view.is_approvable` is the same rule as
+a flag).
+A document without a valid UUID never becomes a record.
 Other issues, including errors such as ``bad_date``, are shown but do
 not block a decision.

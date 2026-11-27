@@ -134,8 +134,7 @@ def approval_blocker(record: Approvable) -> str | None:
     """
     Explain why a stored row's content cannot be decided at all.
 
-    Mirrors :attr:`app.domain.records.ParsedRecord.approval_blocker`
-    (a stored row always has a valid UUID).
+    A stored row always has a valid UUID, so only the encoding blocks.
 
     :param record: The row.
     :returns: A reader-facing reason, or ``None`` if approvable.

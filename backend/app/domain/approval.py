@@ -16,7 +16,7 @@ this order (storage queries that filter by state must mirror them):
    ``changed_since_acceptance`` (needs approval);
 6. otherwise -> ``pending`` (needs approval).
 
-``approvable`` (see :attr:`app.domain.records.ParsedRecord.approvable`)
+``approvable`` (see :func:`app.services.decisions.approval_blocker`)
 does not change the state; it only controls
 :attr:`ApprovalState.can_decide`. A record with bad encoding therefore
 shows ``pending`` and cannot be decided.
