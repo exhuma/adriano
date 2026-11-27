@@ -89,7 +89,6 @@ const POLL_PROBLEM_HEADLINES: Record<string, string> = {
   listing_incomplete:
     "The file list could not be fully read; some files may be missing",
   fetch_failed: "Couldn't fetch a changed file",
-  ownership_conflict: "Skipped — already handled by an earlier registration",
   not_pollable: "This registration can't be polled",
 };
 
@@ -201,9 +200,6 @@ const POLL_PROBLEM_HINTS: Record<string, string | null> = {
   fetch_failed:
     "Poll again; if it keeps failing, check whether the file still " +
     "exists at that path and ref.",
-  ownership_conflict:
-    "Remove the overlapping scope from one of the registrations in " +
-    "catalog.yaml.",
   not_pollable: null,
 };
 
