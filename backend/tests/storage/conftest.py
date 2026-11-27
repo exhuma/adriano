@@ -36,7 +36,7 @@ TABLES = (
 )
 SOURCES = ("central", "other")
 
-#: Migration 0002's TRUNCATE guard on ``decision_event``.
+#: The migration's TRUNCATE guard on ``decision_event``.
 _TRUNCATE_GUARD = "decision_event_no_truncate"
 
 

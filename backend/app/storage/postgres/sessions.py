@@ -2,7 +2,7 @@
 PostgreSQL implementation of :mod:`app.storage.session_port`.
 
 Tables ``auth_session`` and ``auth_login`` (migration
-``0004_auth_session``). All SQL uses bound parameters. The refresh lock
+``0001_initial``). All SQL uses bound parameters. The refresh lock
 is ``SELECT ... FOR UPDATE`` on the session row, held until the unit
 of work ends.
 

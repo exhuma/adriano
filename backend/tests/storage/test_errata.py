@@ -4,9 +4,8 @@ import dataclasses
 import datetime
 import uuid
 
-from sqlalchemy import Connection, Engine, text
+from sqlalchemy import Engine, text
 
-from alembic import command
 from app.domain.approval import DecisionAction
 from app.domain.errata import ErratumType
 from app.domain.values import Links, RecordKind
@@ -18,7 +17,7 @@ from app.storage.port import (
     StoredErratum,
 )
 from app.storage.postgres.store import PostgresStoreProvider
-from tests.storage.conftest import alembic_config, put_record
+from tests.storage.conftest import put_record
 
 TARGET = uuid.UUID("0b0c2f4e-1234-4abc-8def-0123456789ab")
 OTHER = uuid.UUID("1b0c2f4e-1234-4abc-8def-0123456789ab")
@@ -154,51 +153,6 @@ def test_list_errata_for_ignores_decisions(
         store.upsert_published(decision)
         rows = store.list_errata_for(TARGET)
     assert rows == []
-
-
-def test_migration_0003_round_trip(
-    provider: PostgresStoreProvider, engine: Engine
-) -> None:
-    """Ensure 0003 downgrades and upgrades, re-polling stale errata."""
-    with provider.unit_of_work() as store:
-        erratum = store.upsert_published(
-            erratum_write(store, E1, TARGET, content=None)
-        )
-        decision = store.upsert_published(put_record(store, adr_uuid=TARGET))
-    config = alembic_config()
-    command.downgrade(config, "0002_no_truncate_decisions")
-    try:
-        with engine.connect() as connection:
-            assert _schema(connection) == (False, False)
-    finally:
-        command.upgrade(config, "head")
-    with engine.connect() as connection:
-        assert _schema(connection) == (True, True)
-        rows = connection.execute(text("SELECT id, change_token FROM record"))
-        tokens = {row.id: row.change_token for row in rows}
-    assert tokens == {erratum.id: None, decision.id: "1:1"}
-
-
-def _schema(connection: Connection) -> tuple[bool, bool]:
-    """
-    Tell whether ``record.erratum`` and its link index exist.
-
-    :param connection: An open SQLAlchemy connection.
-    :returns: ``(column exists, index exists)``.
-    """
-    column = connection.execute(
-        text(
-            "SELECT count(*) FROM information_schema.columns "
-            "WHERE table_name = 'record' AND column_name = 'erratum'"
-        )
-    ).scalar_one()
-    index = connection.execute(
-        text(
-            "SELECT count(*) FROM pg_indexes "
-            "WHERE indexname = 'ix_record_links_corrects'"
-        )
-    ).scalar_one()
-    return column == 1, index == 1
 
 
 def _decision(write: RecordWrite) -> NewDecision:

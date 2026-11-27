@@ -4,7 +4,7 @@ Erratum queries of the PostgreSQL store.
 The reverse lookup "errata of one decision" filters on the expression
 ``(links ->> 'corrects')``, written with a literal key so it matches
 the partial expression index ``ix_record_links_corrects`` (migration
-``0003_erratum_content``) exactly. A bound key (SQLAlchemy's
+``0001_initial``) exactly. A bound key (SQLAlchemy's
 ``links["corrects"].astext``) would not match the index in a generic
 plan.
 
