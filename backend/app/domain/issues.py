@@ -37,6 +37,12 @@ class IssueCode(StrEnum):
     DUPLICATE_UUID = "duplicate_uuid"
     #: Not-indexed reason: the document could not be read at its source.
     FETCH_FAILED = "fetch_failed"
+    #: Not-indexed reason (push): the document's UUID is not the pushed one.
+    UUID_MISMATCH = "uuid_mismatch"
+    #: Not-indexed reason (push): the push named the published ref.
+    PUBLISHED_REF_NOT_ALLOWED = "published_ref_not_allowed"
+    #: Not-indexed reason (push): the content exceeds the size limit.
+    CONTENT_TOO_LARGE = "content_too_large"
     MISSING_TARGET = "missing_target"
     LEGACY_ALIAS = "legacy_alias"
     LEGACY_SIGNOFF = "legacy_signoff"

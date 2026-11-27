@@ -7,10 +7,12 @@ path, ref). An upsert keeps ``first_seen_at`` and moves
 to intake (:mod:`app.services.poll_apply`).
 
 Public API: :func:`put_not_indexed`, :func:`list_not_indexed`,
+:func:`clear_pushed_duplicates`,
 :func:`page_not_indexed`, :func:`get_not_indexed`,
 :func:`count_not_indexed`, :func:`delete_not_indexed`.
 """
 
+import uuid
 from collections.abc import Collection
 
 from sqlalchemy import ColumnElement, Table, delete, func, select, tuple_
@@ -20,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.storage.port import (
     MAX_PAGE_SIZE,
     IntakeKind,
+    Location,
     NotIndexedEntry,
     NotIndexedFilters,
     NotIndexedKey,
@@ -162,6 +165,39 @@ def count_not_indexed(session: Session) -> dict[str, int]:
     """
     stmt = select(QUEUE.c.source_id, func.count()).group_by(QUEUE.c.source_id)
     return {source_id: count for source_id, count in session.execute(stmt)}
+
+
+def clear_pushed_duplicates(
+    session: Session, claims: Collection[tuple[Location, uuid.UUID]]
+) -> int:
+    """
+    Delete the push entries that claimed a UUID now indexed there.
+
+    :param session: Unit-of-work session.
+    :param claims: ``(file location, UUID)`` pairs just indexed.
+    :returns: Number of deleted entries; no query for no claims.
+    """
+    if not claims:
+        return 0
+    values = [
+        (loc.source_id, loc.project, loc.path, adr_uuid)
+        for loc, adr_uuid in claims
+    ]
+    columns = (
+        QUEUE.c.source_id,
+        QUEUE.c.project,
+        QUEUE.c.path,
+        QUEUE.c.holder_uuid,
+    )
+    stmt = (
+        delete(QUEUE)
+        .where(
+            QUEUE.c.origin == IntakeKind.PUSH.value,
+            tuple_(*columns).in_(values),
+        )
+        .returning(QUEUE.c.path)
+    )
+    return len(session.execute(stmt).all())
 
 
 def delete_not_indexed(

@@ -41,6 +41,7 @@ from app.storage.port import (
     IntakeKind,
     IntakeRun,
     IntakeStatus,
+    Location,
     NewDecision,
     NotIndexedEntry,
     NotIndexedFilters,
@@ -270,6 +271,12 @@ class PostgresCatalogStore:
     def count_not_indexed(self) -> dict[str, int]:
         """See :meth:`app.storage.port.CatalogStore.count_not_indexed`."""
         return queue.count_not_indexed(self._session)
+
+    def clear_pushed_duplicates(
+        self, claims: Collection[tuple[Location, uuid.UUID]]
+    ) -> int:
+        """See :meth:`app.storage.port.CatalogStore.clear_pushed_duplicates`."""
+        return queue.clear_pushed_duplicates(self._session, claims)
 
     def delete_not_indexed(self, keys: Collection[NotIndexedKey]) -> int:
         """See :meth:`app.storage.port.CatalogStore.delete_not_indexed`."""

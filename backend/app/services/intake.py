@@ -40,10 +40,18 @@ and a ``hint``; see ``docs``/the router for the HTTP status):
 10. document without usable frontmatter or UUID -> 422
     ``invalid_document`` with the ``issues`` list; document UUID other
     than ``adr_uuid`` -> 422 ``uuid_mismatch``;
-11. ``POST`` and the candidate ``(adr_uuid, ref)`` exists -> 409
+11. the UUID is held by a published ADR of another registration or
+    project -> 409 ``duplicate_uuid`` (the holder rule of
+    :mod:`app.services.intake_queue`; a UUID nobody holds, or held in
+    the same project, is accepted);
+12. ``POST`` and the candidate ``(adr_uuid, ref)`` exists -> 409
     ``candidate_exists``. Candidates are keyed by UUID and ref alone,
-    so a push for that UUID and ref from another registration or
-    project replaces (``PUT``) the same candidate.
+    so a ``PUT`` for that UUID and ref replaces the same candidate.
+
+Checks 11 and 12 run under the registration lock. Refused pushes that
+concern a document (checks 7, 9, 10 and 11) are written to the
+not-indexed list with origin ``push``; a later successful push for the
+same location clears that entry (see :mod:`app.services.intake_queue`).
 
 Every request records an ``intake_run`` (kind ``push``): successes
 (also deduplicated ones) with the outcome in ``counts``, failures with
@@ -91,6 +99,11 @@ from app.services.intake_checks import (
     named_source,
     peek_source_id,
     validate_submission,
+)
+from app.services.intake_queue import (
+    clear_push_entry,
+    ensure_not_held_elsewhere,
+    queue_rejection,
 )
 from app.source_config import SourceRegistration
 from app.storage.port import (
@@ -154,6 +167,8 @@ class _Attempt:
     mode: IntakeMode
     source_id: str = ""
     identity: dict[str, JsonValue] = field(default_factory=dict)
+    source: SourceRegistration | None = None
+    submission: CandidateSubmission | None = None
 
 
 def _counts(result: IntakeResult) -> dict[str, JsonValue]:
@@ -212,6 +227,7 @@ def _log_run(
 
 def _ingest(
     provider: CatalogStoreProvider,
+    source: SourceRegistration,
     prepared: PreparedDocument,
     submission: CandidateSubmission,
     attempt: _Attempt,
@@ -220,10 +236,12 @@ def _ingest(
     Store the candidate and its run log under the registration lock.
 
     :param provider: Storage provider.
+    :param source: The authenticated registration.
     :param prepared: Parsed, checked document.
     :param submission: The validated body.
     :param attempt: Run-log context.
     :returns: The outcome.
+    :raises app.errors.ConflictError: ``duplicate_uuid``.
     :raises app.errors.CandidateExistsError: ``POST`` on an existing
         candidate.
     """
@@ -232,6 +250,7 @@ def _ingest(
         if earlier is not None:
             _log_run(store, attempt, earlier)
             return earlier
+        ensure_not_held_elsewhere(store, source, submission)
         run = store.start_intake_run(
             submission.source_id,
             IntakeKind.PUSH,
@@ -253,6 +272,7 @@ def _ingest(
             deduplicated=False,
             issues=outcome.issues,
         )
+        clear_push_entry(store, source, submission)
         store.finish_intake_run(run.id, IntakeStatus.OK, counts=_counts(result))
     return result
 
@@ -297,6 +317,7 @@ def _submit(
     submission = validate_submission(raw)
     attempt.identity = _identity(submission, attempt.mode)
     source = named_source(sources, token, submission.source_id)
+    attempt.source, attempt.submission = source, submission
     check_registration(source, submission)
     with provider.unit_of_work() as store:
         earlier = _earlier(store, source.id, submission.delivery_id)
@@ -305,7 +326,7 @@ def _submit(
             return earlier
     prepared = prepare_document(build_document(source, submission))
     check_document(prepared, submission)
-    return _ingest(provider, prepared, submission, attempt)
+    return _ingest(provider, source, prepared, submission, attempt)
 
 
 def _record_failure(
@@ -331,6 +352,26 @@ def _record_failure(
             store.finish_intake_run(run.id, IntakeStatus.FAILED, errors=errors)
     except Exception:  # the refusal itself must still reach the caller
         logger.exception("could not record a failed push intake run")
+    _queue_failure(provider, attempt, error)
+
+
+def _queue_failure(
+    provider: CatalogStoreProvider, attempt: _Attempt, error: AdrianoError
+) -> None:
+    """
+    List a refused document as not indexed (never raises).
+
+    :param provider: Storage provider.
+    :param attempt: Run-log context (source and body, once known).
+    :param error: The refusal.
+    """
+    if attempt.source is None or attempt.submission is None:
+        return
+    try:
+        with provider.lock_registration(attempt.source.id) as store:
+            queue_rejection(store, attempt.source, attempt.submission, error)
+    except Exception:  # the refusal itself must still reach the caller
+        logger.exception("could not queue a refused push as not indexed")
 
 
 def submit_candidate(

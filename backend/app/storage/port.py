@@ -491,6 +491,21 @@ class CatalogStore(Protocol):
         """
         ...
 
+    def clear_pushed_duplicates(
+        self, claims: Collection[tuple[Location, uuid.UUID]]
+    ) -> int:
+        """
+        Delete the push entries that claimed a UUID now indexed there.
+
+        A pushed document rejected as a duplicate of another file's
+        UUID stops being one when the poll indexes that UUID at this
+        very file location (any ref).
+
+        :param claims: ``(file location, UUID)`` pairs just indexed.
+        :returns: Number of deleted entries; no query for no claims.
+        """
+        ...
+
     def delete_not_indexed(self, keys: Collection[NotIndexedKey]) -> int:
         """
         Delete not-indexed entries (automatic clearing only).
