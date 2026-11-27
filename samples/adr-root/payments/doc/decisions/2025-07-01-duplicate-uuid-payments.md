@@ -12,7 +12,7 @@ transition.
 
 ## Note
 
-This record's UUID
-(`6b08e79f-d1a4-42c4-b754-a409c67d4347`) is **intentionally the same**
-as `platform/doc/decisions/2025-06-01-shared-event-bus.md`. See that
-file for the explanation of the `duplicate_uuid` demonstration.
+This file holds the UUID `6b08e79f-d1a4-42c4-b754-a409c67d4347`. The
+file `platform/doc/decisions/2025-06-01-shared-event-bus.md` carries
+the same UUID on purpose and is listed as not indexed with the reason
+`duplicate_uuid`; see that file for the explanation.

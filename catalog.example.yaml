@@ -23,8 +23,11 @@
 #   scope           type-specific project filter (optional)
 #   intake          [poll], [push] or [poll, push] (default [poll])
 #   push_tokens_env env var names of the CI push bearer tokens
-# Earlier entries own a (project, path) first: if two registrations
-# yield the same file, the first one in this list keeps it.
+# An ADR is identified by its UUID alone, across all registrations
+# and projects. If two files carry one UUID, the file already indexed
+# keeps it and the other is listed as "not indexed"; when both are
+# new in one poll, the order of this list decides, then the project,
+# then the path.
 
 sources:
   # A filesystem source reads ADR files from a folder mounted into
