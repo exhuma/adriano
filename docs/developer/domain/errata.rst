@@ -41,7 +41,7 @@ Body
 Storage
    The link is stored as ``links.corrects``
    (the internal name predates the ``erratum-for`` spelling).
-   ``record.erratum`` (JSONB, migration ``0003``) holds the type,
+   ``record.erratum`` (JSONB) holds the type,
    section, reporter, date and the sanitized HTML of the three
    sections; the raw Markdown stays in the revision snapshot.
    The partial expression index ``ix_record_links_corrects`` serves the
@@ -54,13 +54,12 @@ The corrected decision is never touched
    Filing, verifying or rejecting an erratum changes neither the
    decision's digest, nor its approval state, nor its history.
 
-Resolution uses the normal link tiers
-   ``erratum-for`` resolves like any link: same project first, then
-   same registration, then global.
-   An erratum belongs to a decision when its link resolves to a row of
-   that decision's identity, so it shows on the published row and on
-   candidate revisions alike.
-   An ambiguous link belongs to no decision.
+Resolution is by UUID
+   ``erratum-for`` resolves like any link, by UUID alone.
+   An erratum belongs to a decision when its link names that
+   decision's UUID, so it shows on the published row and on candidate
+   revisions alike, whichever project or registration either file is
+   in.
 
 Errata correct decisions only
    An erratum never lists errata of its own.
@@ -81,7 +80,7 @@ Counting errata on a decision
 -----------------------------
 
 The detail page's ``errata_summary`` counts **published** errata by the
-approval state of each erratum's own identity and digest:
+approval state of each erratum's own UUID and digest:
 
 * ``verified``: ``accepted``, and also ``not_required``,
   because both stand as published without further action
@@ -127,4 +126,4 @@ Issue codes
    Computed when read: ``erratum-for`` resolves to another erratum.
 
 None of these block a decision on the erratum;
-like any record, only a missing UUID or bad encoding does.
+like any record, only bad encoding does.

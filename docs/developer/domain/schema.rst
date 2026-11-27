@@ -11,19 +11,15 @@ Migrations
 ----------
 
 ``0001_initial``
-   All tables, partial unique indexes, the search-vector trigger and
-   GIN index, the append-only trigger on ``decision_event``
-   (``UPDATE`` and ``DELETE``) and ``COMMENT ON`` for non-obvious
-   columns.
+   All tables, the partial unique index ``uq_record_published_uuid``,
+   the GIN index on the search vector, the partial expression index on
+   ``links ->> 'corrects'`` and ``COMMENT ON`` for non-obvious
+   objects.
 
-``0002_no_truncate_decisions``
-   A ``BEFORE TRUNCATE`` trigger on ``decision_event`` reusing the same
-   function.
-
-``0003_erratum_content``
-   ``record.erratum`` and the ``ix_record_links_corrects`` index.
-   It also clears the change token of erratum rows stored earlier,
-   so the next poll re-ingests them with the current parser.
+``0002_triggers_and_search``
+   The search-vector trigger and the append-only triggers on
+   ``decision_event`` (``UPDATE``, ``DELETE`` and ``TRUNCATE``) with
+   their functions.
 
 Every migration is hand-written and has a working ``downgrade()``.
 
@@ -34,10 +30,11 @@ Tables
 
    erDiagram
      source_registration ||--o{ record : "source_id"
-     source_registration ||--o{ decision_event : "source_id"
+     source_registration ||--o{ not_indexed : "source_id"
      revision ||--o{ record : "digest, previous_digest"
      revision ||--o{ decision_event : "digest"
-     record }o..o{ decision_event : "identity, no FK"
+     revision ||--o{ not_indexed : "digest"
+     record }o..o{ decision_event : "adr_uuid, no FK"
 
      source_registration {
        text id PK "id from catalog.yaml"
@@ -51,14 +48,12 @@ Tables
        text content "canonical text"
      }
      record {
-       uuid id PK "surrogate, used in URLs"
-       text kind "published or candidate"
+       uuid adr_uuid PK "the authored UUID"
+       text kind PK "published or candidate"
+       text ref PK
        text source_id FK
        text project
        text path
-       text ref
-       text record_key "UUID or src: fallback"
-       uuid adr_uuid "nullable"
        text digest FK
        text previous_digest FK
        text record_kind "decision or erratum"
@@ -68,9 +63,7 @@ Tables
      }
      decision_event {
        uuid id PK
-       text source_id FK
-       text project
-       text record_key
+       uuid adr_uuid
        text digest FK
        text action "accepted or rejected"
        text actor_issuer
@@ -78,6 +71,18 @@ Tables
        text policy_id
        int policy_version
        timestamptz created_at
+     }
+     not_indexed {
+       text source_id PK
+       text project PK
+       text path PK
+       text ref PK
+       text origin "poll or push"
+       jsonb reasons
+       text digest FK "nullable"
+       uuid holder_uuid "duplicates only"
+       timestamptz first_seen_at
+       timestamptz last_seen_at
      }
      intake_run {
        uuid id PK
@@ -90,7 +95,8 @@ Tables
 ``source_registration``
    One row per registration in ``catalog.yaml``, synced at startup.
    Removed registrations are disabled with a ``config_error``, never
-   deleted, so their records and decisions keep their foreign keys.
+   deleted, so their records and not-indexed entries keep their
+   foreign keys.
    Also holds poll status: ``last_attempt_at``, ``last_success_at``,
    ``last_status`` and ``last_error`` (JSON, no secrets).
 
@@ -102,7 +108,9 @@ Tables
    updated.
 
 ``record``
-   One row per published file or candidate (see :doc:`records`).
+   One row per published ADR or candidate (see :doc:`records`).
+   The primary key is ``(adr_uuid, kind, ref)``; source, project and
+   path are plain attributes.
    Beyond the columns in the diagram it stores ``change_token``,
    ``metadata`` (the parsed frontmatter), ``title`` and
    ``title_source``, ``decision_date`` and ``decision_date_inferred``,
@@ -112,13 +120,22 @@ Tables
 
 ``decision_event``
    The append-only approval history (see :doc:`approval`).
-   Beyond the diagram it stores ``adr_uuid`` (never null: records
-   without a UUID cannot be decided), ``actor_display``,
+   Beyond the diagram it stores ``actor_display``,
    ``actor_email``, ``comment`` and ``provenance``
-   (record id, kind, ref, path and source URL at decision time).
-   It refers to records by logical identity, not by foreign key,
+   (kind, source, project, ref, path and source URL at decision time,
+   a snapshot that is never read back as a reference).
+   It refers to the ADR by ``adr_uuid``, not by foreign key,
    because the decision outlives any one row: a published row created
-   later with the same identity and digest inherits the decision.
+   later with the same UUID and digest inherits the decision.
+
+``not_indexed``
+   One row per document intake could not index, keyed by location and
+   ref (see :doc:`records`).
+   It stores the ``reasons`` (JSON issues), the digest of the rejected
+   content in ``revision`` when it could be read, ``holder_uuid`` for a
+   duplicate, ``change_token`` (so a poll can skip an unchanged file;
+   empty makes the next poll read it again) and ``source_url``.
+   Rows are removed only by intake.
 
 ``intake_run``
    One row per poll of a registration and per push request,
@@ -130,15 +147,16 @@ Tables
 Constraints and indexes
 -----------------------
 
-``uq_record_published_location``
-   Unique ``(source_id, project, path)`` where ``kind = 'published'``.
+``uq_record_published_uuid``
+   Unique ``adr_uuid`` where ``kind = 'published'``:
+   one published row per ADR.
+   Together with the primary key ``(adr_uuid, kind, ref)`` it also
+   makes candidates unique per UUID and ref.
 
-``uq_record_candidate_identity_ref``
-   Unique ``(source_id, project, record_key, ref)`` where
-   ``kind = 'candidate'``.
-
-``ix_record_identity``
-   ``(source_id, project, record_key)``, for siblings and decisions.
+``ix_record_location``
+   ``(source_id, project, path)``, not unique.
+   A listing knows paths before it knows content, so change-token
+   lookups use it.
 
 ``ix_record_search``
    GIN index on ``record.search``.
@@ -147,8 +165,8 @@ Constraints and indexes
    Partial expression index on ``links ->> 'corrects'``, only for rows
    that have the link (errata).
 
-``uq_decision_event_identity_digest``
-   Unique ``(source_id, project, record_key, digest)``:
+``uq_decision_event_uuid_digest``
+   Unique ``(adr_uuid, digest)``:
    one formal decision per content revision.
    It also serves every approval-state lookup.
 
@@ -158,7 +176,8 @@ Constraints and indexes
 
 ``CHECK`` constraints restrict the enumerated text columns
 (``kind``, ``title_source``, ``record_kind``, ``action``,
-``last_status``, intake ``kind`` and ``status``).
+``last_status``, ``origin`` of a not-indexed entry, intake ``kind`` and
+``status``).
 
 Triggers
 --------

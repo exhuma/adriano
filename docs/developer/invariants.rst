@@ -27,13 +27,15 @@ Reads never call a source
 Push never writes a published row
    :mod:`app.services.intake` always ingests as ``RecordState.CANDIDATE``
    and refuses the literal ``published_ref``.
-   Published and candidate rows live under separate partial unique
-   indexes, so an upsert of one kind cannot hit a row of the other.
+   ``kind`` is part of the primary key and the unique index of
+   published rows is partial, so an upsert of one kind cannot hit a
+   row of the other.
 
    *Tests:* ``test_candidate_never_overwrites_published``,
    ``test_published_ref_is_refused``
    (``routers/approval/test_candidates.py``),
-   ``test_partial_unique_indexes``
+   ``test_published_uuid_is_unique_across_sources_and_projects``,
+   ``test_candidates_are_keyed_by_uuid_and_ref``
    (``storage/test_records.py``).
 
 Polling writes only published rows and never deletes candidates
@@ -100,17 +102,50 @@ One broken file affects only itself
    *Tests:* ``domain/test_records.py``
    (``test_parse_record_never_raises``, property-based).
 
-No UUID is ever invented
-   :py:obj:`app.domain.values.record_key` falls back to
-   ``src:<source_id>/<project>/<path>``.
+The authored UUID is the only identity
+   A published row is the one row of its UUID, whatever the source,
+   project or path.
+   A file that moves keeps its row and approvals.
+   The file already indexed under a UUID keeps it: a second file with
+   the same UUID is not indexed, and a push for a UUID held in another
+   registration or project is refused with 409 ``duplicate_uuid``.
 
-   *Tests:* ``domain/test_records.py``.
+   *Tests:* ``services/test_poll_identity.py``
+   (``test_renamed_file_keeps_its_identity``,
+   ``test_move_across_projects_keeps_identity``,
+   ``test_existing_holder_wins_over_a_new_file``),
+   ``storage/test_records.py``
+   (``test_published_uuid_is_unique_across_sources_and_projects``,
+   ``test_move_keeps_first_seen_and_digest_history``),
+   ``routers/approval/test_push_queue.py``
+   (``test_a_uuid_held_in_another_project_is_refused_and_queued``).
+
+No UUID is ever invented
+   A document without a valid authored UUID is not a record; it is
+   listed as not indexed.
+
+   *Tests:* ``services/test_poll_not_indexed.py``
+   (``test_document_without_uuid_is_listed_not_indexed``).
+
+The not-indexed list is cleared only by intake
+   Entries disappear when a poll indexes the location, when a complete
+   listing no longer has it, when the registration is removed, or, for
+   a push entry, when a push or a poll indexes the same file location.
+   A poll never clears a push entry for not listing it.
+   There is no route or action that deletes an entry.
+
+   *Tests:* ``services/test_poll_not_indexed.py``
+   (``test_fixed_document_is_indexed_and_cleared``,
+   ``test_removed_file_clears_its_entry_on_a_complete_listing``,
+   ``test_poll_never_clears_push_entries``),
+   ``routers/approval/test_push_queue.py``
+   (``test_a_poll_clears_the_duplicate_it_now_indexes``).
 
 Approval and audit
 ------------------
 
-At most one decision per identity and digest
-   ``uq_decision_event_identity_digest``;
+At most one decision per UUID and digest
+   ``uq_decision_event_uuid_digest``;
    the insert uses ``ON CONFLICT DO NOTHING`` and a lost race becomes
    ``DecisionExistsError`` and HTTP 409 ``already_decided``.
 
@@ -144,7 +179,7 @@ A missing policy never means "not required"
    ``test_catalog_config.py``.
 
 Unapprovable content cannot be decided
-   No valid UUID or invalid UTF-8 means 409 ``not_approvable``.
+   Invalid UTF-8 means 409 ``not_approvable``.
 
    *Tests:* ``test_unapprovable_records_cannot_be_decided``
    (``routers/approval/test_decisions.py``).
@@ -158,7 +193,7 @@ Acceptance follows the digest, never the row
    ``test_edited_content_needs_new_approval_and_diffs``).
 
 An erratum never changes its target
-   Errata are decided on their own identity and digest.
+   Errata are decided on their own UUID and digest.
 
    *Tests:* ``test_published_erratum_is_reported_then_verified_then_rejected``
    (``routers/approval/test_errata.py``).
