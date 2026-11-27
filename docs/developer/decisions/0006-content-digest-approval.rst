@@ -1,7 +1,11 @@
 0006: Bind approval to identity and content digest
 ==================================================
 
-:Status: Accepted
+:Status: Accepted; superseded in part by
+   :doc:`0023-uuid-is-the-only-identity`.
+   The identity is the ADR UUID alone, so decisions are keyed by UUID
+   and digest and promotion follows the UUID across projects and
+   registrations.
 :Date: 2026-10-19
 
 Context

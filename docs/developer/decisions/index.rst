@@ -37,3 +37,5 @@ the status line then says which entry supersedes it.
    0020-single-image
    0021-extra-ca-certificates
    0022-backend-for-frontend-session
+   0023-uuid-is-the-only-identity
+   0024-not-indexed-list

@@ -1,7 +1,11 @@
 0005: Poll publishes, push proposes, one ingest path
 ====================================================
 
-:Status: Accepted
+:Status: Accepted; superseded in part by
+   :doc:`0023-uuid-is-the-only-identity`.
+   Published rows are unique per UUID, candidates per UUID and ref, and
+   a push is refused when another project or registration holds the
+   UUID.
 :Date: 2026-10-19
 
 Context
