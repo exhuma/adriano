@@ -34,7 +34,12 @@ Public API: :func:`ensure_not_held_elsewhere`, :func:`queue_rejection`,
 
 from app.domain.issues import Issue, IssueCode, error
 from app.errors import AdrianoError, ConflictError
-from app.services.ingest import PreparedDocument, prepare_document
+from app.services.ingest import (
+    PreparedDocument,
+    not_indexed_entry,
+    prepare_document,
+    queue_document,
+)
 from app.services.intake_checks import (
     CandidateSubmission,
     build_document,
@@ -131,7 +136,7 @@ def queue_rejection(
     source: SourceRegistration,
     submission: CandidateSubmission,
     refusal: AdrianoError,
-) -> bool:
+) -> None:
     """
     Write a refused push to the not-indexed list, if it belongs there.
 
@@ -139,38 +144,40 @@ def queue_rejection(
     :param source: The authenticated registration.
     :param submission: The validated body.
     :param refusal: Why the push was refused.
-    :returns: Whether an entry was written (see the module docstring).
     """
     if refusal.code not in _REASONS:
-        return False
+        return
     prepared = _prepared(source, submission)
+    reasons = _reasons(refusal, prepared)
+    holder_uuid = (
+        submission.adr_uuid if refusal.code == "duplicate_uuid" else None
+    )
     if prepared is not None:
-        store.put_revision(prepared.digest, prepared.text)
-    store.put_not_indexed(
-        NotIndexedWrite(
-            key=_key(source, submission),
-            origin=IntakeKind.PUSH,
-            reasons=_reasons(refusal, prepared),
-            digest=None if prepared is None else prepared.digest,
-            holder_uuid=(
-                submission.adr_uuid
-                if refusal.code == "duplicate_uuid"
-                else None
+        queue_document(
+            store,
+            prepared,
+            not_indexed_entry(
+                prepared,
+                IntakeKind.PUSH,
+                reasons=reasons,
+                holder_uuid=holder_uuid,
             ),
         )
-    )
-    return True
-
-
-def _key(
-    source: SourceRegistration, submission: CandidateSubmission
-) -> NotIndexedKey:
-    """Build the location key a push names."""
-    return NotIndexedKey(
-        source.id,
-        submission.project,
-        document_path(source, submission),
-        submission.ref,
+        return
+    # No storable content (so no document to build): key it by hand.
+    store.put_not_indexed(
+        NotIndexedWrite(
+            key=NotIndexedKey(
+                source.id,
+                submission.project,
+                document_path(source, submission),
+                submission.ref,
+            ),
+            origin=IntakeKind.PUSH,
+            reasons=reasons,
+            digest=None,
+            holder_uuid=holder_uuid,
+        )
     )
 
 
@@ -186,7 +193,7 @@ def clear_push_entry(
     :param source: The authenticated registration.
     :param submission: The validated body of the accepted push.
     """
-    key = _key(source, submission)
+    key = build_document(source, submission).key
     entry = store.get_not_indexed(key)
     if entry is not None and entry.origin is IntakeKind.PUSH:
         store.delete_not_indexed([key])
