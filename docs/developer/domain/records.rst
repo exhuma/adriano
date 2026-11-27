@@ -160,7 +160,8 @@ Entries are cleared only by intake:
 
 * when a poll indexes a document at that location;
 * when a complete listing no longer contains the location;
-* when its registration is removed from the configuration;
+* when its registration is removed from the configuration, whatever
+  the origin of the entry;
 * for a push entry, when a successful push or a poll indexes a
   document at the same file location, whatever the ref.
 

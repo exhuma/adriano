@@ -325,7 +325,10 @@ def clear_removed_sources(
     store: CatalogStore, configured: Iterable[str]
 ) -> int:
     """
-    Clear the poll entries of registrations no longer configured.
+    Clear the entries of registrations no longer configured.
+
+    Both origins go: no push can arrive for an unconfigured
+    registration, so a push entry could never clear otherwise.
 
     :param store: Store of the caller's unit of work.
     :param configured: Ids of the configured registrations.
@@ -334,7 +337,7 @@ def clear_removed_sources(
     known = set(configured)
     stale = [
         entry.key
-        for entry in store.list_not_indexed(origin=IntakeKind.POLL)
+        for entry in store.list_not_indexed()
         if entry.key.source_id not in known
     ]
     return store.delete_not_indexed(stale)

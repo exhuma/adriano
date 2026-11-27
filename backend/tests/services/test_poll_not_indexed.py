@@ -225,6 +225,28 @@ async def test_removed_registration_clears_its_entries(
     assert entries(provider) == []
 
 
+async def test_removed_registration_clears_its_push_entries(
+    tmp_path: Path, provider: PostgresStoreProvider, world: FakeSource
+) -> None:
+    """Ensure a registration dropped from the config loses push entries."""
+    await service(
+        provider, make_config(tmp_path, {"one": world}, ["one"])
+    ).poll_all()
+    pushed = NotIndexedWrite(
+        key=NotIndexedKey("one", "platform", "doc/decisions/x.md", "feature"),
+        origin=IntakeKind.PUSH,
+        reasons=(error(IssueCode.BAD_UUID, "bad"),),
+    )
+    with provider.unit_of_work() as store:
+        store.put_not_indexed(pushed)
+    other = FakeSource()
+    config = make_config(tmp_path, {"two": other}, ["two"])
+
+    await service(provider, config).poll_all()
+
+    assert entries(provider) == []
+
+
 async def test_poll_never_clears_push_entries(
     polling: PollingService, provider: PostgresStoreProvider, world: FakeSource
 ) -> None:

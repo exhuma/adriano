@@ -56,7 +56,8 @@ An entry is removed when:
 * a poll indexes a document at that location, for example after the
   author fixed the file;
 * a complete listing no longer contains the file;
-* its registration is removed from the catalog file;
+* its registration is removed from the catalog file (pushed entries
+  too);
 * for a pushed entry, a later successful push or a poll indexes a
   document at the same file location, whatever the ref.
 

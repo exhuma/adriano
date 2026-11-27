@@ -36,7 +36,9 @@ Entries clear only automatically:
 * when a poll indexes a document at that location;
 * when a complete listing no longer contains the location;
 * for a push entry, when a successful push or a poll indexes a
-  document at the same file location, whatever the ref.
+  document at the same file location, whatever the ref;
+* when its registration is removed from the configuration, whatever
+  the origin of the entry.
 
 A poll never clears a push entry for not listing it, because a pushed
 branch is not in the listing.
