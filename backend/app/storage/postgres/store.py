@@ -43,7 +43,9 @@ from app.storage.port import (
     IntakeStatus,
     NewDecision,
     NotIndexedEntry,
+    NotIndexedFilters,
     NotIndexedKey,
+    NotIndexedPage,
     NotIndexedWrite,
     PollStatus,
     RecordState,
@@ -254,6 +256,20 @@ class PostgresCatalogStore:
     ) -> list[NotIndexedEntry]:
         """See :meth:`app.storage.port.CatalogStore.list_not_indexed`."""
         return queue.list_not_indexed(self._session, source_id, origin)
+
+    def page_not_indexed(
+        self, filters: NotIndexedFilters, page: int, page_size: int
+    ) -> NotIndexedPage:
+        """See :meth:`app.storage.port.CatalogStore.page_not_indexed`."""
+        return queue.page_not_indexed(self._session, filters, page, page_size)
+
+    def get_not_indexed(self, key: NotIndexedKey) -> NotIndexedEntry | None:
+        """See :meth:`app.storage.port.CatalogStore.get_not_indexed`."""
+        return queue.get_not_indexed(self._session, key)
+
+    def count_not_indexed(self) -> dict[str, int]:
+        """See :meth:`app.storage.port.CatalogStore.count_not_indexed`."""
+        return queue.count_not_indexed(self._session)
 
     def delete_not_indexed(self, keys: Collection[NotIndexedKey]) -> int:
         """See :meth:`app.storage.port.CatalogStore.delete_not_indexed`."""

@@ -43,7 +43,9 @@ from app.domain.relationships import RecordSummary
 from app.storage.errata_values import StoredErratum
 from app.storage.queue_values import (
     NotIndexedEntry,
+    NotIndexedFilters,
     NotIndexedKey,
+    NotIndexedPage,
     NotIndexedWrite,
 )
 from app.storage.values import (
@@ -87,7 +89,9 @@ __all__ = [
     "MAX_PAGE_SIZE",
     "NewDecision",
     "NotIndexedEntry",
+    "NotIndexedFilters",
     "NotIndexedKey",
+    "NotIndexedPage",
     "NotIndexedWrite",
     "PollStatus",
     "RecordState",
@@ -451,6 +455,39 @@ class CatalogStore(Protocol):
         :param source_id: Restrict to one registration; ``None`` = all.
         :param origin: Restrict to one intake; ``None`` = both.
         :returns: Entries ordered by key.
+        """
+        ...
+
+    def page_not_indexed(
+        self, filters: NotIndexedFilters, page: int, page_size: int
+    ) -> NotIndexedPage:
+        """
+        List one page of not-indexed entries, newest first.
+
+        :param filters: Filters.
+        :param page: 1-based page number.
+        :param page_size: Page size, 1 to :data:`MAX_PAGE_SIZE`.
+        :returns: The page, ordered by ``last_seen_at`` descending, then
+            by key.
+        :raises ValueError: If *page* or *page_size* is out of bounds.
+        """
+        ...
+
+    def get_not_indexed(self, key: NotIndexedKey) -> NotIndexedEntry | None:
+        """
+        Fetch one not-indexed entry.
+
+        :param key: Its location.
+        :returns: The entry, or ``None``.
+        """
+        ...
+
+    def count_not_indexed(self) -> dict[str, int]:
+        """
+        Count not-indexed entries per registration.
+
+        :returns: Count by registration id; registrations without
+            entries are absent.
         """
         ...
 

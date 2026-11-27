@@ -33,7 +33,13 @@ def as_roles(client: TestClient) -> AsRoles:
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/v1/records", "/api/v1/sources", "/api/v1/facets"]
+    "path",
+    [
+        "/api/v1/records",
+        "/api/v1/sources",
+        "/api/v1/facets",
+        "/api/v1/not-indexed",
+    ],
 )
 def test_reader_can_browse(
     client: TestClient, as_roles: AsRoles, path: str
@@ -45,7 +51,13 @@ def test_reader_can_browse(
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/v1/records", "/api/v1/sources", "/api/v1/facets"]
+    "path",
+    [
+        "/api/v1/records",
+        "/api/v1/sources",
+        "/api/v1/facets",
+        "/api/v1/not-indexed",
+    ],
 )
 def test_roles_without_read_are_forbidden(
     client: TestClient, as_roles: AsRoles, path: str

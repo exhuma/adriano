@@ -84,6 +84,8 @@ class SourceSummary:
     :param last_status: Outcome of the latest poll.
     :param last_error: Secret-free error details of the latest poll.
     :param stale: Whether the indexed content may be out of date.
+    :param not_indexed_count: Documents of this registration that
+        intake could not index (see :mod:`app.services.not_indexed_view`).
     """
 
     id: str
@@ -98,6 +100,7 @@ class SourceSummary:
     last_status: PollStatus
     last_error: JsonValue
     stale: bool
+    not_indexed_count: int
 
 
 def config_error_code(
@@ -144,6 +147,7 @@ def list_sources(
     :returns: One summary per stored registration, ordered by id.
     """
     config_by_id = {source.id: source for source in config_sources}
+    not_indexed = store.count_not_indexed()
     summaries = []
     for registration in store.list_registrations():
         config = config_by_id.get(registration.id)
@@ -165,6 +169,7 @@ def list_sources(
                 last_status=registration.last_status,
                 last_error=registration.last_error,
                 stale=is_stale(registration, now, stale_after_minutes),
+                not_indexed_count=not_indexed.get(registration.id, 0),
             )
         )
     return tuple(summaries)

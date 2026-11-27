@@ -13,14 +13,15 @@ Plain frozen dataclasses, independent of any ORM; kept apart from
 through :mod:`app.storage.port`, which re-exports them.
 
 Public API: :class:`NotIndexedKey`, :class:`NotIndexedWrite`,
-:class:`NotIndexedEntry`.
+:class:`NotIndexedEntry`, :class:`NotIndexedFilters`,
+:class:`NotIndexedPage`.
 """
 
 import datetime
 import uuid
 from dataclasses import dataclass
 
-from app.domain.issues import Issue
+from app.domain.issues import Issue, IssueCode
 from app.storage.values import IntakeKind, Location
 
 
@@ -90,3 +91,37 @@ class NotIndexedEntry(NotIndexedWrite):
 
     first_seen_at: datetime.datetime
     last_seen_at: datetime.datetime
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NotIndexedFilters:
+    """
+    Filters of the not-indexed list; ``None`` means no restriction.
+
+    :param source_id: Registration id.
+    :param project: Project path.
+    :param reason: Entries carrying this reason code.
+    :param origin: Entries found by this intake.
+    """
+
+    source_id: str | None = None
+    project: str | None = None
+    reason: IssueCode | None = None
+    origin: IntakeKind | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NotIndexedPage:
+    """
+    One page of the not-indexed list.
+
+    :param items: Entries on this page, newest ``last_seen_at`` first.
+    :param total: Number of entries over all pages.
+    :param page: 1-based page number.
+    :param page_size: Requested page size.
+    """
+
+    items: tuple[NotIndexedEntry, ...]
+    total: int
+    page: int
+    page_size: int
