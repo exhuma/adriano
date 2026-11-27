@@ -1,10 +1,9 @@
 <script setup lang="ts">
 /**
- * Unified diff between two stored content snapshots of one record's
- * identity. Loads the server default (last decided snapshot, else
+ * Unified diff between two stored content snapshots of one ADR. Loads the server default (last decided snapshot, else
  * the previous revision, else "no prior revision") on mount, and
  * offers a cheap selector over the digests already known to the
- * page (current, previous, decision history, identity siblings) to
+ * page (current, previous, decision history, other rows of the ADR) to
  * compare any other pair without a second network round trip for
  * the option list itself.
  */
@@ -25,8 +24,10 @@ import { formatDateTime } from "@/utils/dates";
 import { shortDigest } from "@/utils/digest";
 
 const props = defineProps<{
-  /** Record id to diff. */
-  recordId: string;
+  /** The ADR's UUID. */
+  adrUuid: string;
+  /** The candidate's ref; `null` when the published row is shown. */
+  candidateRef: string | null;
   /** The record's current digest. */
   currentDigest: string;
   /** The record's previous stored digest, if any. */
@@ -40,9 +41,9 @@ const props = defineProps<{
   /** When the owning registration last indexed successfully, for the
    *  header (`null` if it never has). */
   lastIndexedAt: string | null;
-  /** Decision history of the identity, for the digest selector. */
+  /** Decision history of the ADR, for the digest selector. */
   history: DecisionSummaryOut[];
-  /** Identity siblings (published/candidates), for the selector. */
+  /** Other rows of the ADR (published/candidates), for the selector. */
   siblings: SiblingOut[];
   /** Competing candidates, also offered in the selector. */
   competingCandidates: CompetingCandidateOut[];
@@ -103,7 +104,8 @@ async function load(): Promise<void> {
   loadState.value = "loading";
   errorText.value = null;
   try {
-    diff.value = await getRecordDiff(props.recordId, {
+    diff.value = await getRecordDiff(props.adrUuid, {
+      ref: props.candidateRef ?? undefined,
       from: fromDigest.value,
       to: toDigest.value,
     });

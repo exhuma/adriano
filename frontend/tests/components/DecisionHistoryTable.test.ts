@@ -27,7 +27,6 @@ function decisionEvent(
     policy_id: "global",
     policy_version: 1,
     provenance: {
-      record_id: "11111111-1111-1111-1111-111111111111",
       kind: "published",
       source_id: null,
       project: null,

@@ -17,6 +17,7 @@ import { computed, ref } from "vue";
 import StatusChip from "@/components/StatusChip.vue";
 import ErratumTextBlocks from "@/components/record/ErratumTextBlocks.vue";
 import type { ErratumOut } from "@/types/records";
+import { recordPath } from "@/utils/recordPaths";
 import { approvalDisplayLabel, erratumTypeLabel } from "@/utils/labels";
 
 const props = defineProps<{
@@ -37,6 +38,11 @@ const statusLabel = computed(() =>
 );
 const typeLabel = computed(() => erratumTypeLabel(props.erratum.type));
 
+/** The erratum row's own page. */
+const erratumPath = computed(() =>
+  recordPath(props.erratum.adr_uuid, props.erratum),
+);
+
 const isRejected = computed(() => props.erratum.approval_state === "rejected");
 
 /** Rejected errata start collapsed; everything else starts expanded. */
@@ -45,7 +51,7 @@ const expanded = ref(!isRejected.value);
 /** Unique id for the collapsible region, so the toggle button's
  *  `aria-controls` can reference it (module-ux-principles
  *  accessibility: semantic structure for assistive tech). */
-const bodyId = `erratum-entry-body-${props.erratum.id}`;
+const bodyId = `erratum-entry-body-${props.erratum.adr_uuid}-${props.erratum.ref}`;
 
 function toggle(): void {
   expanded.value = !expanded.value;
@@ -77,7 +83,7 @@ const reportedLine = computed(() => {
         {{ reportedLine }}
       </span>
       <v-btn
-        :to="`/records/${erratum.id}`"
+        :to="erratumPath"
         variant="text"
         size="small"
         color="primary"
@@ -102,7 +108,7 @@ const reportedLine = computed(() => {
         class="text-body-medium text-medium-emphasis"
       >
         Content not indexed yet —
-        <router-link :to="`/records/${erratum.id}`" class="text-primary">
+        <router-link :to="erratumPath" class="text-primary">
           open the erratum
         </router-link>.
       </p>

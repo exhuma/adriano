@@ -48,10 +48,10 @@ function baseProps(): SidebarProps {
   return {
     recordKind: "decision",
     kind: "published",
-    recordId: "11111111-1111-1111-1111-111111111111",
+    adrUuid: "22222222-2222-2222-2222-222222222222",
+    candidateRef: null,
     recordTitle: "Adopt gRPC for internal APIs",
     approval: approval(),
-    adrUuid: "22222222-2222-2222-2222-222222222222",
     decisionDate: "2024-12-24",
     decisionDateInferred: false,
     provenance: {
@@ -73,13 +73,13 @@ function baseProps(): SidebarProps {
     inboundLinks: [
       {
         link_type: "updated_by",
-        source_id: "ddd",
+        source_uuid: "ddd",
         source_title: "Use PostgreSQL v2",
       },
     ],
     siblings: [
       {
-        id: "eee",
+        adr_uuid: "eee",
         kind: "candidate",
         source_id: "central",
         project: "platform",

@@ -52,7 +52,9 @@ export function useDecision() {
   /**
    * Submit an accept/reject decision for one record's exact digest.
    *
-   * :param recordId: Record id.
+   * :param adrUuid: The ADR's UUID.
+   * :param candidateRef: A candidate's ref; `null` for the published
+   *     row.
    * :param action: `"accepted"` or `"rejected"`.
    * :param expectedDigest: The digest shown to the reviewer; the
    *     server refuses with `digest_changed` if the content moved on.
@@ -61,7 +63,8 @@ export function useDecision() {
    * :returns: A typed outcome; this function never throws.
    */
   async function decide(
-    recordId: string,
+    adrUuid: string,
+    candidateRef: string | null,
     action: DecisionAction,
     expectedDigest: string,
     comment?: string,
@@ -69,11 +72,15 @@ export function useDecision() {
     submitting.value = true;
     try {
       const trimmed = comment?.trim();
-      const event = await postDecision(recordId, {
-        action,
-        comment: trimmed ? trimmed : undefined,
-        expected_digest: expectedDigest,
-      });
+      const event = await postDecision(
+        adrUuid,
+        {
+          action,
+          comment: trimmed ? trimmed : undefined,
+          expected_digest: expectedDigest,
+        },
+        candidateRef ?? undefined,
+      );
       return { kind: "success", event };
     } catch (error) {
       if (error instanceof ApiError) {

@@ -54,6 +54,7 @@ vi.mock("vuetify", async (importOriginal) => {
 
 const baseSource: SourceOut = {
   id: "central",
+  not_indexed_count: 0,
   type: "filesystem",
   intake: ["poll"],
   published_ref: "local",

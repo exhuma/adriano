@@ -22,7 +22,6 @@ import type { RecordDetail } from "@/types/records";
 function baseDetail(overrides: Partial<RecordDetail> = {}): RecordDetail {
   return {
     metadata: {
-      id: "11111111-1111-1111-1111-111111111111",
       adr_uuid: "22222222-2222-2222-2222-222222222222",
       decision_date: "2024-12-24",
       decision_date_inferred: false,
@@ -163,7 +162,6 @@ describe("useRecordDetailView page title/subtitle", () => {
         },
         erratum_for: {
           uuid: "33333333-3333-3333-3333-333333333333",
-          id: "44444444-4444-4444-4444-444444444444",
           title: "Use PostgreSQL",
           resolved: true,
         },
@@ -184,7 +182,6 @@ describe("useRecordDetailView page title/subtitle", () => {
         },
         erratum_for: {
           uuid: "33333333-3333-3333-3333-333333333333",
-          id: null,
           title: null,
           resolved: false,
         },
@@ -212,16 +209,16 @@ describe("useRecordDetailView accepted-candidate note and link filters", () => {
     const { view } = mountView(
       baseDetail({
         inbound_links: [
-          { link_type: "obsoleted_by", source_id: "aaa", source_title: "Use gRPC" },
-          { link_type: "updated_by", source_id: "bbb", source_title: "Use PostgreSQL v2" },
+          { link_type: "obsoleted_by", source_uuid: "aaa", source_title: "Use gRPC" },
+          { link_type: "updated_by", source_uuid: "bbb", source_title: "Use PostgreSQL v2" },
         ],
       }),
     );
 
     expect(view.obsoletedByLinks.value).toHaveLength(1);
     expect(view.updatedByLinks.value).toHaveLength(1);
-    expect(view.obsoletedByLinks.value[0].source_id).toBe("aaa");
-    expect(view.updatedByLinks.value[0].source_id).toBe("bbb");
+    expect(view.obsoletedByLinks.value[0].source_uuid).toBe("aaa");
+    expect(view.updatedByLinks.value[0].source_uuid).toBe("bbb");
   });
 });
 

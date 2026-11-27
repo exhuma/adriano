@@ -47,8 +47,10 @@ const props = defineProps<{
    *  wording, and the erratum ("Reported"/"Verified"/…) status chip
    *  vocabulary. */
   recordKind: RecordKind;
-  /** Record id, for the decision dialog's submission. */
-  recordId: string;
+  /** The ADR's UUID, for the decision dialog's submission. */
+  adrUuid: string;
+  /** The candidate's ref, or `null` when the published row is decided. */
+  candidateRef: string | null;
   /** Title of the record being decided, passed to the decision
    *  dialog so it names the record. */
   recordTitle: string;
@@ -160,7 +162,8 @@ const showBlockedReason = computed(
       <DecideButtons
         v-if="approval.can_decide"
         class="mt-3"
-        :record-id="recordId"
+        :adr-uuid="adrUuid"
+        :candidate-ref="candidateRef"
         :record-kind="recordKind"
         :record-title="recordTitle"
         :digest="approval.digest"

@@ -10,6 +10,7 @@
  */
 import StatusChip from "@/components/StatusChip.vue";
 import type { SearchItem } from "@/types/records";
+import { recordPath } from "@/utils/recordPaths";
 import {
   candidateBranchText,
   issueIndicatorLabel,
@@ -28,7 +29,7 @@ defineProps<{
 }>();
 
 function recordHref(item: SearchItem): string {
-  return `/records/${item.id}`;
+  return recordPath(item.adr_uuid, item);
 }
 
 /** This row's primary title: for an erratum, "Erratum for <target>"

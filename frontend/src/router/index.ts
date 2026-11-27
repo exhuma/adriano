@@ -12,10 +12,22 @@ const router = createRouter({
       component: () => import("@/views/SearchView.vue"),
     },
     {
-      path: "/records/:id",
+      path: "/records/:uuid",
       name: "record",
       component: () => import("@/views/RecordView.vue"),
       props: true,
+    },
+    {
+      // The ref is a git ref and may contain slashes, so it takes the
+      // rest of the path. `ref` is a reserved attribute name in Vue,
+      // so the view receives it as `candidateRef`.
+      path: "/records/:uuid/candidates/:ref(.*)",
+      name: "record-candidate",
+      component: () => import("@/views/RecordView.vue"),
+      props: (route) => ({
+        uuid: route.params.uuid,
+        candidateRef: route.params.ref,
+      }),
     },
     {
       path: "/sources",

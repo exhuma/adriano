@@ -23,8 +23,10 @@ const MAX_COMMENT_LENGTH = 2000;
 const props = defineProps<{
   /** Whether the dialog is open (`v-model`). */
   modelValue: boolean;
-  /** Record id the decision applies to. */
-  recordId: string;
+  /** The ADR's UUID, for the decision dialog's submission. */
+  adrUuid: string;
+  /** The candidate's ref, or `null` when the published row is decided. */
+  candidateRef: string | null;
   /** The action this dialog asks the reviewer to confirm. */
   action: DecisionAction;
   /** Whether the record being decided is a normal decision or an
@@ -116,7 +118,8 @@ async function submit(): Promise<void> {
   errorMessage.value = null;
   errorHintText.value = null;
   const outcome = await decide(
-    props.recordId,
+    props.adrUuid,
+    props.candidateRef,
     props.action,
     props.digest,
     comment.value,

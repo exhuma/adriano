@@ -51,16 +51,16 @@ defineProps<{
   recordKind: RecordKind;
   /** Published or candidate; picks the "accepted" wording. */
   kind: RecordState;
-  /** Record id, for the sidebar's decision dialog. */
-  recordId: string;
+  /** The ADR's UUID, for the decision dialog's submission. */
+  adrUuid: string;
+  /** The candidate's ref, or `null` when the published row is decided. */
+  candidateRef: string | null;
   /** Title of the record being decided, passed to the decision
    *  dialog so it names the record. */
   recordTitle: string;
   /** Approval state of the record's current content (status chip,
    *  `can_decide`, digest to decide). */
   approval: ApprovalOut;
-  /** Canonical ADR UUID, or `null`/absent when the file has none. */
-  adrUuid: string | null;
   /** Authored decision date, `YYYY-MM-DD`. */
   decisionDate: string | null;
   /** Whether `decisionDate` was inferred from the filename. */
@@ -75,7 +75,7 @@ defineProps<{
   outboundLinks: OutboundLinkOut[];
   /** Other records linking to this one. */
   inboundLinks: InboundLinkOut[];
-  /** Other published/candidate rows sharing this record's identity. */
+  /** Other published/candidate rows of this ADR. */
   siblings: SiblingOut[];
   /** Unverified legacy `signed-off-by` entries from the document. */
   legacySignoffEntries: string[];
@@ -119,7 +119,8 @@ const infoCardDefaults = {
       :approval="approval"
       :kind="kind"
       :record-kind="recordKind"
-      :record-id="recordId"
+      :adr-uuid="adrUuid"
+      :candidate-ref="candidateRef"
       :record-title="recordTitle"
       :record-ref="provenance.ref"
       @decided="(event) => emit('decided', event)"

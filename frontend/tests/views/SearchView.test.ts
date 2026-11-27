@@ -31,7 +31,11 @@ function makeRouter(initialPath = "/"): Promise<Router> {
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: SearchView },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
   return router.push(initialPath).then(() => router.isReady()).then(() => router);
@@ -117,7 +121,7 @@ describe("SearchView", () => {
     const page: SearchPage = {
       items: [
         {
-          id: "11111111-1111-1111-1111-111111111111",
+          adr_uuid: "11111111-1111-1111-1111-111111111111",
           title: "Use PostgreSQL",
           source_id: "central",
           project: "platform",
@@ -153,12 +157,49 @@ describe("SearchView", () => {
     expect(countRegion?.text()).toContain("Showing 1–1 of 1 record.");
   });
 
+  it("links a published hit to its ADR and a candidate hit to its own page", async () => {
+    const item = (adr_uuid: string, kind: "published" | "candidate", ref: string) => ({
+      adr_uuid,
+      title: `ADR ${adr_uuid.slice(0, 2)}`,
+      source_id: "central",
+      project: "platform",
+      path: "doc/decisions/x.md",
+      ref,
+      kind,
+      record_kind: "decision" as const,
+      approval_state: "pending" as const,
+      approvable: true,
+      issue_counts: { error: 0, warning: 0 },
+      erratum_for_title: null,
+    });
+    searchRecords.mockResolvedValue({
+      items: [
+        item("11111111-1111-1111-1111-111111111111", "published", "main"),
+        item("22222222-2222-2222-2222-222222222222", "candidate", "feature/x"),
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+    });
+
+    const { wrapper } = await mountSearchView("/");
+
+    expect(
+      wrapper.find("a[href='/records/11111111-1111-1111-1111-111111111111']").exists(),
+    ).toBe(true);
+    expect(
+      wrapper
+        .find("a[href='/records/22222222-2222-2222-2222-222222222222/candidates/feature/x']")
+        .exists(),
+    ).toBe(true);
+  });
+
   it("shows the neutral 'Blocked' status, not 'Pending approval', " +
     "for a row whose content cannot be decided (R-02)", async () => {
     const page: SearchPage = {
       items: [
         {
-          id: "66666666-6666-6666-6666-666666666666",
+          adr_uuid: "66666666-6666-6666-6666-666666666666",
           title: "No UUID here",
           source_id: "central",
           project: "platform",
@@ -186,7 +227,7 @@ describe("SearchView", () => {
 
   it("hides the 'Published' chip (the default state) but shows 'Candidate' (S-02)", async () => {
     const base: SearchPage["items"][number] = {
-      id: "22222222-2222-2222-2222-222222222222",
+      adr_uuid: "22222222-2222-2222-2222-222222222222",
       title: "Use Stripe for card payment processing",
       source_id: "central",
       project: "payments",
@@ -204,7 +245,7 @@ describe("SearchView", () => {
         base,
         {
           ...base,
-          id: "33333333-3333-3333-3333-333333333333",
+          adr_uuid: "33333333-3333-3333-3333-333333333333",
           kind: "candidate",
           ref: "feature/payments-migration",
         },
@@ -234,7 +275,7 @@ describe("SearchView", () => {
     searchRecords.mockResolvedValue({
       items: [
         {
-          id: "66666666-6666-6666-6666-666666666666",
+          adr_uuid: "66666666-6666-6666-6666-666666666666",
           title: "Retire the legacy invoicing processor integration",
           source_id: "central",
           project: "payments",
@@ -248,7 +289,7 @@ describe("SearchView", () => {
           erratum_for_title: null,
         },
         {
-          id: "77777777-7777-7777-7777-777777777777",
+          adr_uuid: "77777777-7777-7777-7777-777777777777",
           title: "Adopt gRPC for internal APIs",
           source_id: "central",
           project: "platform",
@@ -289,7 +330,7 @@ describe("SearchView", () => {
     const page: SearchPage = {
       items: [
         {
-          id: "44444444-4444-4444-4444-444444444444",
+          adr_uuid: "44444444-4444-4444-4444-444444444444",
           title: "Erratum: Consequences",
           source_id: "central",
           project: "platform",
@@ -329,7 +370,7 @@ describe("SearchView", () => {
     const page: SearchPage = {
       items: [
         {
-          id: "55555555-5555-5555-5555-555555555555",
+          adr_uuid: "55555555-5555-5555-5555-555555555555",
           title: "Erratum: orphaned",
           source_id: "central",
           project: "platform",

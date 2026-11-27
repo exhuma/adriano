@@ -13,7 +13,7 @@ import type { SiblingOut } from "@/types/records";
 
 function sibling(overrides: Partial<SiblingOut> = {}): SiblingOut {
   return {
-    id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    adr_uuid: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     kind: "candidate",
     source_id: "central",
     project: "platform",
@@ -34,7 +34,11 @@ async function mountCard(siblings: SiblingOut[]) {
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
   await router.push("/");
@@ -70,5 +74,23 @@ describe("RecordSiblingsCard", () => {
     expect(link.classes()).toContain("text-primary");
     expect(link.classes()).toContain("d-inline-block");
     expect(link.classes()).toContain("py-1");
+  });
+
+  it("links a candidate to its own page, keeping a slashed ref intact", async () => {
+    const wrapper = await mountCard([sibling({ kind: "candidate", ref: "feature/x" })]);
+
+    expect(
+      wrapper
+        .find("a[href='/records/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee/candidates/feature/x']")
+        .exists(),
+    ).toBe(true);
+  });
+
+  it("links the published row to the ADR page", async () => {
+    const wrapper = await mountCard([sibling({ kind: "published", ref: "main" })]);
+
+    expect(
+      wrapper.find("a[href='/records/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee']").exists(),
+    ).toBe(true);
   });
 });

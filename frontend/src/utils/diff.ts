@@ -59,9 +59,9 @@ export interface KnownDigests {
   current: string;
   /** The record's previous stored digest, if any. */
   previous: string | null;
-  /** Digests from the identity's decision history. */
+  /** Digests from the ADR's decision history. */
   history: readonly string[];
-  /** Digests of identity siblings and competing candidates. */
+  /** Digests of the ADR's other rows and competing candidates. */
   others: readonly string[];
 }
 

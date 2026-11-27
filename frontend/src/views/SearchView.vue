@@ -383,7 +383,7 @@ const clearActionLabel = computed(() =>
         <ul class="results-list ma-0 mt-2 pa-0">
           <SearchResultRow
             v-for="(item, index) in results.items"
-            :key="item.id"
+            :key="item.adr_uuid"
             :item="item"
             :divided="index > 0"
           />
