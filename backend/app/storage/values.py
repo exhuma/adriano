@@ -3,6 +3,9 @@ Value types crossing the storage port.
 
 Plain frozen dataclasses and enums, independent of any ORM. Import them
 through :mod:`app.storage.port`, which re-exports everything here.
+The search, approval and intake-run values live in
+:mod:`app.storage.search_values`, :mod:`app.storage.approval_values` and
+:mod:`app.storage.intake_values`.
 
 Public API:
 
@@ -12,23 +15,15 @@ Public API:
 - values :class:`RegistrationConfig`, :class:`Registration`,
   :class:`Revision`, :class:`Location`, :class:`RecordWrite`,
   :class:`StoredRecord`, :class:`ErratumRow`, :class:`UpsertResult`,
-  :class:`ChangeTokenEntry`,
-  :class:`SearchFilters`, :class:`SearchItem`, :class:`SearchPage`,
-  :class:`FacetEntry`, :class:`NewDecision`, :class:`DecisionEvent`,
-  :class:`IntakeRun`
+  :class:`ChangeTokenEntry`
 """
 
 import datetime
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
-from app.domain.approval import (
-    ApprovalStateCode,
-    DecisionAction,
-    DecisionEventView,
-)
 from app.domain.frontmatter import JsonValue
 from app.domain.issues import Issue
 from app.domain.values import Links, RecordKind, TitleSource
@@ -353,186 +348,3 @@ class ChangeTokenEntry:
         :returns: ``(source_id, project, path)``.
         """
         return Location(self.source_id, self.project, self.path)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SearchFilters:
-    """
-    Search filters; ``None`` / ``False`` means "no filter".
-
-    :param source_id: Registration id.
-    :param project: Project path.
-    :param kind: Published or candidate.
-    :param needs_approval: Only records whose approval state needs
-        approval (:func:`app.domain.approval.evaluate`).
-    :param record_kind: Only decisions or only errata.
-    """
-
-    source_id: str | None = None
-    project: str | None = None
-    kind: RecordState | None = None
-    needs_approval: bool = False
-    record_kind: RecordKind | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SearchItem:
-    """
-    One search hit (one row: a published ADR or a candidate).
-
-    :param kind: Published or candidate.
-    :param source_id: Registration id.
-    :param project: Project path.
-    :param path: File path inside the project.
-    :param ref: Branch/ref of the content.
-    :param adr_uuid: The ADR's UUID.
-    :param digest: Current digest.
-    :param title: Display title.
-    :param record_kind: Decision or erratum.
-    :param decision_date: Displayed decision date.
-    :param decision_date_inferred: Whether the date is inferred.
-    :param issues: Validation issues.
-    :param approval_state: Approval state of the current digest, computed
-        by the store with the same rules as
-        :func:`app.domain.approval.evaluate`.
-    :param corrects: UUID an erratum corrects (``None`` for decisions).
-    """
-
-    kind: RecordState
-    source_id: str
-    project: str
-    path: str
-    ref: str
-    adr_uuid: uuid.UUID
-    digest: str
-    title: str
-    record_kind: RecordKind
-    decision_date: datetime.date | None
-    decision_date_inferred: bool
-    issues: tuple[Issue, ...]
-    approval_state: ApprovalStateCode
-    corrects: uuid.UUID | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SearchPage:
-    """
-    One page of search results.
-
-    :param items: Hits on this page.
-    :param total: Number of hits over all pages.
-    :param page: 1-based page number.
-    :param page_size: Requested page size.
-    """
-
-    items: tuple[SearchItem, ...]
-    total: int
-    page: int
-    page_size: int
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FacetEntry:
-    """
-    ADR count for one ``(source_id, project)`` pair.
-
-    Used to populate the source/project filter select in the UI
-    (:meth:`app.storage.port.CatalogStore.list_facets`); counts
-    decisions (one per UUID, published or only proposed as a
-    candidate), never errata.
-
-    :param source_id: Registration id.
-    :param project: Project path.
-    :param count: Number of decision UUIDs in this source and project.
-    """
-
-    source_id: str
-    project: str
-    count: int
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class NewDecision:
-    """
-    A decision to append.
-
-    :param adr_uuid: UUID of the decided ADR.
-    :param digest: Digest of the decided content.
-    :param action: Accepted or rejected.
-    :param actor_issuer: Reviewer token issuer.
-    :param actor_subject: Reviewer token subject.
-    :param actor_display: Reviewer display name, if known.
-    :param actor_email: Reviewer verified email, if known.
-    :param comment: Optional reviewer comment.
-    :param policy_id: Applied policy id.
-    :param policy_version: Applied policy version.
-    :param provenance: Historical snapshot of the decided row: kind,
-        source, project, ref, path and source URL at decision time.
-    """
-
-    adr_uuid: uuid.UUID
-    digest: str
-    action: DecisionAction
-    actor_issuer: str
-    actor_subject: str
-    actor_display: str | None
-    actor_email: str | None
-    comment: str | None
-    policy_id: str
-    policy_version: int
-    provenance: JsonObject = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DecisionEvent(NewDecision):
-    """
-    A stored, append-only decision event.
-
-    :param id: Stable event id.
-    :param created_at: Server timestamp.
-    """
-
-    id: uuid.UUID
-    created_at: datetime.datetime
-
-    def as_view(self) -> DecisionEventView:
-        """
-        Convert to the domain view used by approval evaluation.
-
-        :returns: The event view.
-        """
-        return DecisionEventView(
-            id=str(self.id),
-            digest=self.digest,
-            action=self.action,
-            created_at=self.created_at,
-        )
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class IntakeRun:
-    """
-    One poll or push intake run.
-
-    :param id: Run id.
-    :param source_id: Registration id as requested.
-    :param kind: Poll or push.
-    :param identity: Who triggered the run (no secrets).
-    :param delivery_id: Client-supplied push delivery id, if any.
-    :param started_at: Start time.
-    :param finished_at: End time, ``None`` while running.
-    :param status: Run status.
-    :param counts: Outcome counters.
-    :param errors: Error details.
-    """
-
-    id: uuid.UUID
-    source_id: str
-    kind: IntakeKind
-    identity: JsonValue
-    delivery_id: str | None
-    started_at: datetime.datetime
-    finished_at: datetime.datetime | None
-    status: IntakeStatus
-    counts: JsonValue
-    errors: JsonValue
