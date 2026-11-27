@@ -19,14 +19,16 @@ A = "doc/decisions/2024-01-01-a.md"
 B = "doc/decisions/sub/2024-01-02-b.md"
 
 
-def adr(title: str) -> str:
+def adr(title: str, adr_uuid: uuid.UUID | None = None) -> str:
     """
-    Build a valid ADR document with a fresh UUID.
+    Build a valid ADR document.
 
     :param title: Title.
+    :param adr_uuid: Its UUID; default: a fresh one (a new ADR).
     :returns: The text.
     """
-    return f"---\nuuid: {uuid.uuid4()}\ntitle: {title}\n---\nBody.\n"
+    adr_uuid = adr_uuid or uuid.uuid4()
+    return f"---\nuuid: {adr_uuid}\ntitle: {title}\n---\nBody.\n"
 
 
 def make_config(
@@ -170,7 +172,7 @@ async def test_changed_content_is_refetched_and_updated(
     polling = service(provider, make_config(tmp_path, {"one": world}, ["one"]))
     await polling.poll_all()
     before = tokens(provider)[("platform", A)]
-    world.put("platform", A, adr("A2"), "t2")
+    world.put("platform", A, adr("A2", before.adr_uuid), "t2")
     world.fetched.clear()
 
     (outcome,) = await polling.poll_all()
@@ -197,7 +199,8 @@ async def test_unchanged_document_with_new_token_is_refreshed(
     assert outcome.counts.tokens_refreshed == 2  # A in both projects
     after = tokens(provider)[("platform", A)]
     assert after.change_token == "head2:t1"
-    assert after.digest == before.digest and after.id == before.id
+    assert after.digest == before.digest
+    assert after.adr_uuid == before.adr_uuid
 
 
 async def test_complete_poll_deletes_removed_files_and_projects(
@@ -280,7 +283,8 @@ async def test_listing_and_fetch_failures_are_partial(
     polling = service(provider, make_config(tmp_path, {"one": world}, ["one"]))
     await polling.poll_all()
     before = tokens(provider)
-    world.put("platform", A, adr("A2"), "t2")
+    kept = before[("platform", A)].adr_uuid
+    world.put("platform", A, adr("A2", kept), "t2")
     world.fail_fetch.add(A)
     world.fail_listing.add("payments")
 
@@ -309,13 +313,12 @@ async def test_one_failing_registration_does_not_affect_others(
     assert len(tokens(provider, "two")) == 3
 
 
-async def test_first_registration_in_config_order_owns_a_location(
+async def test_same_location_in_two_registrations_is_two_adrs(
     tmp_path: Path, provider: PostgresStoreProvider, world: FakeSource
 ) -> None:
-    """Ensure overlapping registrations do not duplicate records."""
+    """Ensure a location is no identity: two files, two UUIDs, two ADRs."""
     overlap = FakeSource()
     overlap.put("platform", A, adr("Other A"), "x1")
-    overlap.put("other", A, adr("Unique"), "x1")
     config = make_config(
         tmp_path, {"one": world, "two": overlap}, ["one", "two"]
     )
@@ -323,10 +326,9 @@ async def test_first_registration_in_config_order_owns_a_location(
     first, second = await service(provider, config).poll_all()
 
     assert first.status is PollStatus.OK and second.status is PollStatus.OK
-    assert set(tokens(provider, "two")) == {("other", A)}
-    assert second.counts.skipped_owned == 1
-    conflict = [p for p in second.problems if p.code == "ownership_conflict"]
-    assert [(p.project, p.path) for p in conflict] == [("platform", A)]
+    assert ("platform", A) in tokens(provider, "one")
+    assert set(tokens(provider, "two")) == {("platform", A)}
+    assert second.counts.created == 1
 
 
 async def test_poll_source_rejects_unknown_and_disabled_sources(

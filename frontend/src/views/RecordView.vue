@@ -51,8 +51,13 @@ import type { DecisionSummaryOut } from "@/types/approval";
 import type { RecordDetail } from "@/types/records";
 
 const props = defineProps<{
-  /** Record id from the route (`/records/:id`). */
-  id: string;
+  /** The ADR's UUID from the route (`/records/:uuid`). */
+  uuid: string;
+  /** The candidate's ref from the route
+   *  (`/records/:uuid/candidates/:ref`, slashes allowed); absent on
+   *  the ADR page, which shows the published row, else the newest
+   *  candidate. */
+  candidateRef?: string;
 }>();
 
 type LoadState = "loading" | "loaded" | "not-found" | "error";
@@ -96,15 +101,23 @@ const snackbarVisible = computed({
   },
 });
 
+/** The ref decisions and diffs address: a candidate's own ref, or
+ *  `null` for the published row (the default of both routes). */
+const decidedRef = computed(() =>
+  detail.value?.metadata.kind === "candidate"
+    ? detail.value.provenance.ref
+    : null,
+);
+
 /** Full page load: used for the first mount and whenever the route's
- *  `id` changes, so it owns `loadState` (loading/not-found/error
+ *  UUID or candidate ref changes, so it owns `loadState` (loading/not-found/error
  *  states replace the page). */
 async function load(): Promise<void> {
   const currentRequest = ++requestId.value;
   loadState.value = "loading";
   errorText.value = null;
   try {
-    const nextDetail = await withLoading(() => getRecord(props.id));
+    const nextDetail = await withLoading(() => getRecord(props.uuid, props.candidateRef));
     if (currentRequest !== requestId.value) {
       return; // Superseded by a newer request; discard (P11-R-16).
     }
@@ -138,7 +151,7 @@ async function load(): Promise<void> {
 async function refreshInPlace(): Promise<void> {
   const currentRequest = ++requestId.value;
   try {
-    const nextDetail = await withLoading(() => getRecord(props.id));
+    const nextDetail = await withLoading(() => getRecord(props.uuid, props.candidateRef));
     if (currentRequest !== requestId.value) {
       return;
     }
@@ -162,7 +175,7 @@ async function focusSidebarHeading(): Promise<void> {
 }
 
 watch(
-  () => props.id,
+  () => [props.uuid, props.candidateRef],
   () => {
     digestChangedBanner.value = false;
     snackbarText.value = null;
@@ -278,7 +291,8 @@ async function onDigestChanged(): Promise<void> {
             :approval="detail.approval"
             :kind="detail.metadata.kind"
             :record-kind="detail.metadata.record_kind"
-            :record-id="props.id"
+            :adr-uuid="detail.metadata.adr_uuid"
+            :candidate-ref="decidedRef"
             :record-title="pageTitle"
             :record-ref="detail.provenance.ref"
             :has-validation-issues="detail.issues.length > 0"
@@ -288,7 +302,8 @@ async function onDigestChanged(): Promise<void> {
 
           <DiffPanel
             v-if="showDiff"
-            :record-id="props.id"
+            :adr-uuid="detail.metadata.adr_uuid"
+            :candidate-ref="decidedRef"
             :current-digest="detail.metadata.digest"
             :previous-digest="detail.metadata.previous_digest"
             :source-id="detail.provenance.source_id"
@@ -305,10 +320,10 @@ async function onDigestChanged(): Promise<void> {
           <RecordSidebar
             :record-kind="detail.metadata.record_kind"
             :kind="detail.metadata.kind"
-            :record-id="props.id"
+            :adr-uuid="detail.metadata.adr_uuid"
+            :candidate-ref="decidedRef"
             :record-title="pageTitle"
             :approval="detail.approval"
-            :adr-uuid="detail.metadata.adr_uuid"
             :decision-date="detail.metadata.decision_date"
             :decision-date-inferred="detail.metadata.decision_date_inferred"
             :provenance="detail.provenance"

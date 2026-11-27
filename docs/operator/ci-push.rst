@@ -8,12 +8,18 @@ Adriano as a **candidate**.
 Reviewers can then accept or reject it before it is published.
 When the identical file later appears on the published ref,
 the next poll recognises it and the earlier decision carries over.
+A candidate belongs to the ADR with the same ``uuid``,
+wherever the file lives.
 
 Push works for every source type, folders included.
 Any job or script that can send an HTTP request can push.
 
 Pushes never change published records and never touch the approval
 history.
+A push is accepted for a UUID that no published record holds, or whose
+record is in the same registration and project as the push.
+A UUID held by another project or registration is refused, so one
+project cannot add candidates to another project's ADR.
 
 Setting up a registration for pushes
 ------------------------------------
@@ -74,6 +80,8 @@ JSON body:
 ``adr_uuid`` : required
    The ``uuid`` from the record's frontmatter.
    It must match the content.
+   It is the only identity of the ADR; ``project`` and ``path`` say
+   where the file lives.
 ``ref`` : required
    The ref the content comes from, for example a branch.
    It may not be the registration's ``published_ref``.
@@ -93,7 +101,7 @@ JSON body:
    only way Adriano can tell that a reviewer is the author.
 
 ``PUT`` creates the candidate or replaces the previous content for
-the same project, record and ref.
+the same ``adr_uuid`` and ref.
 ``POST`` with the same body only creates, and answers
 ``409 candidate_exists`` if the candidate is already there.
 
@@ -184,11 +192,14 @@ A successful answer looks like this:
 
 .. code-block:: json
 
-   {"record_id": "0b6c2f4e-...", "digest": "sha256-v1:a0b7e2...",
+   {"adr_uuid": "0b6c2f4e-...", "ref": "feature/redis-cache",
+    "digest": "sha256-v1:a0b7e2...",
     "created": true, "updated": false, "deduplicated": false,
-    "issues": [], "catalog_path": "/records/0b6c2f4e-..."}
+    "issues": [],
+    "catalog_path": "/records/0b6c2f4e-.../candidates/feature/redis-cache"}
 
-``catalog_path`` is the record's page in the web UI.
+``catalog_path`` is the candidate's page in the web UI, as a path
+below the address of Adriano: ``/records/{adr_uuid}/candidates/{ref}``.
 ``issues`` lists problems in the file that do not block the push,
 such as a broken link; reviewers see them too.
 
@@ -205,6 +216,10 @@ Errors carry a ``code`` and a ``hint``:
    The project is not in the registration's ``scope``.
 ``409 candidate_exists``
    ``POST`` only: the candidate already exists; use ``PUT``.
+``409 duplicate_uuid``
+   Another project or registration already holds the ``adr_uuid``.
+   Give the file its own UUID.
+   The answer does not say where the UUID is held.
 ``413 payload_too_large``, ``413 content_too_large``
    The request or the file is too large (file limit 1 MiB).
 ``422 invalid_request``
@@ -218,6 +233,23 @@ Errors carry a ``code`` and a ``hint``:
    ``adr_uuid`` differs from the uuid in the file.
 ``422 bad_encoding``
    The content is not valid text.
+
+Rejected pushes in the not-indexed list
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A push refused for a reason that concerns the document is also listed
+on the **Not indexed** page, with the project, path and ref of the
+push and, when it could be stored, the content
+(:doc:`not-indexed`).
+That covers ``422 invalid_document``, ``422 uuid_mismatch``,
+``422 published_ref_not_allowed``, ``422 bad_encoding``,
+``413 content_too_large`` and ``409 duplicate_uuid``.
+Authentication and scope errors, malformed requests and
+``409 candidate_exists`` are not listed.
+
+The entry clears by itself when a later push for the same location
+succeeds, or when a poll indexes a document at that file location.
+Repeated refusals of one location keep a single entry.
 
 .. note::
 

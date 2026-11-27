@@ -5,6 +5,7 @@
  * paths and query strings.
  */
 import { api } from "@/api";
+import { toQueryString } from "@/api/query";
 import type { RecordDiffOut } from "@/types/approval";
 import type {
   RecordDetail,
@@ -13,22 +14,9 @@ import type {
   SearchParams,
 } from "@/types/records";
 import type { FacetsOut } from "@/types/sources";
+import { encodeRefPath } from "@/utils/recordPaths";
 
 export type { RecordDetail, SearchItem, SearchPage, SearchParams };
-
-/** Build a query string from a params object, dropping empty/false
- *  values so the URL stays minimal. */
-function toQueryString<T extends object>(params: T): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
-    if (value === undefined || value === null || value === "" || value === false) {
-      continue;
-    }
-    search.set(key, String(value));
-  }
-  const text = search.toString();
-  return text.length > 0 ? `?${text}` : "";
-}
 
 /**
  * Search the catalog with the phase 1 filters.
@@ -45,15 +33,21 @@ export function searchRecords(params: SearchParams): Promise<SearchPage> {
 }
 
 /**
- * Fetch one record's detail page.
+ * Fetch one ADR's detail page.
  *
- * :param id: Record id (surrogate UUID, not the authored `adr_uuid`).
+ * :param adrUuid: The ADR's UUID.
+ * :param ref: A candidate's ref (slashes allowed); omitted for the
+ *     ADR page, which shows the published row, else the newest
+ *     candidate.
  * :returns: The detail payload.
- * :throws ApiError: With `status === 404` when the record does not
- *     exist.
+ * :throws ApiError: With `status === 404` when the ADR (or the
+ *     candidate at that ref) does not exist.
  */
-export function getRecord(id: string): Promise<RecordDetail> {
-  return api.get<RecordDetail>(`/api/v1/records/${encodeURIComponent(id)}`);
+export function getRecord(adrUuid: string, ref?: string): Promise<RecordDetail> {
+  const base = `/api/v1/records/${encodeURIComponent(adrUuid)}`;
+  return api.get<RecordDetail>(
+    ref === undefined ? base : `${base}/candidates/${encodeRefPath(ref)}`,
+  );
 }
 
 /**
@@ -67,6 +61,8 @@ export function getFacets(): Promise<FacetsOut> {
 
 /** Digests to diff; omitted sides fall back to the server default. */
 export interface DiffParams {
+  /** A candidate's ref; omitted for the published row. */
+  ref?: string;
   /** Base digest (query `from`); default: last decided, else previous. */
   from?: string;
   /** Target digest (query `to`); default: the current digest. */
@@ -74,19 +70,23 @@ export interface DiffParams {
 }
 
 /**
- * Diff two stored snapshots of a record's identity.
+ * Diff two stored snapshots of an ADR.
  *
- * :param id: Record id.
- * :param params: Optional base/target digests; only digests related
- *     to the record are accepted (404 `unknown_revision` otherwise).
+ * :param adrUuid: The ADR's UUID.
+ * :param params: Optional row ref and base/target digests; only
+ *     digests related to the ADR are accepted (404 `unknown_revision` otherwise).
  * :returns: The diff payload.
  */
 export function getRecordDiff(
-  id: string,
+  adrUuid: string,
   params: DiffParams = {},
 ): Promise<RecordDiffOut> {
-  const query = toQueryString({ from: params.from, to: params.to });
+  const query = toQueryString({
+    ref: params.ref,
+    from: params.from,
+    to: params.to,
+  });
   return api.get<RecordDiffOut>(
-    `/api/v1/records/${encodeURIComponent(id)}/diff${query}`,
+    `/api/v1/records/${encodeURIComponent(adrUuid)}/diff${query}`,
   );
 }

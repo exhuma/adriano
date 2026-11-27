@@ -56,8 +56,7 @@ States
 ------
 
 The state belongs to a record's **current digest**,
-evaluated from all decision events of its logical identity
-``(source_id, project, record_key)``.
+evaluated from all decision events of its ADR UUID.
 :py:obj:`app.domain.approval.evaluate` applies these rules in order:
 
 .. md-mermaid::
@@ -66,7 +65,7 @@ evaluated from all decision events of its logical identity
      start(["record with current digest"])
      p{"policy configured<br/>and valid?"}
      r{"policy required?"}
-     e{"decision for this<br/>identity and digest?"}
+     e{"decision for this<br/>UUID and digest?"}
      a{"that decision<br/>is accepted?"}
      o{"any acceptance of<br/>another digest?"}
      pm["policy_missing<br/>needs approval"]
@@ -95,9 +94,10 @@ SQL so the filter paginates correctly;
 ``tests/storage/test_approval_parity.py`` keeps the two in step.
 
 ``approvable`` does not change the state.
-A record without a valid UUID, or with bad encoding, shows ``pending``
+A record with bad encoding shows ``pending``
 (or ``changed_since_acceptance``) with a reason and cannot be decided;
 the UI labels it "Blocked".
+A document without a valid UUID is not a record and has no state.
 
 Candidates, published rows and promotion
 ----------------------------------------
@@ -113,7 +113,7 @@ Acceptance before publication
    An accepted candidate is authoritative for implementation.
 
 Promotion
-   Decisions are keyed by identity and digest, not by row.
+   Decisions are keyed by UUID and digest, not by row.
    When a poll later finds the same digest on the published ref,
    the published row is ``accepted`` ("Accepted — published") with the
    full history.
@@ -128,26 +128,31 @@ Divergence
    Acceptance never moves across digests.
 
 Competing candidates
-   Several candidates of one identity on different refs are separate
+   Several candidates of one ADR on different refs are separate
    rows with independent states.
    The detail page lists the others with their states;
    deciding one never affects another digest.
 
-Across projects
-   The same UUID in another project or registration is another
-   identity (flagged ``duplicate_uuid``); promotion never crosses it.
+Moves
+   A UUID is one ADR wherever its file lives.
+   When the file moves to another path, project or registration, the
+   published row keeps its decisions, so the state does not change
+   (:doc:`records`).
 
 Recording a decision
 --------------------
 
-``POST /api/v1/records/{id}/decisions`` with
+``POST /api/v1/records/{uuid}/decisions`` with
 ``{action, comment?, expected_digest?}``
 (``comment`` up to 2,000 characters).
 :py:obj:`app.services.decisions.decision_blocker` checks, in order,
 and the same function gives the detail page its ``can_decide`` flag
 and reason:
 
-1. the record exists, else 404 ``record_not_found``;
+1. the record exists, else 404 ``record_not_found``
+   (the optional ``ref`` query parameter picks a candidate; without it
+   the published row is decided, or the newest candidate when there is
+   no published row);
 2. the policy is configured, else 409 ``policy_missing``;
 3. the policy requires approval, else 409 ``approval_not_required``;
 4. the caller is eligible, else 403 ``not_eligible``;
@@ -156,17 +161,17 @@ and reason:
 7. ``expected_digest``, when sent, equals the current digest,
    else 409 ``digest_changed`` (a reviewer never decides content they
    did not see);
-8. no decision exists yet for this identity and digest,
+8. no decision exists yet for this UUID and digest,
    else 409 ``already_decided``.
 
 The event is appended with ``ON CONFLICT DO NOTHING`` against
-``uq_decision_event_identity_digest``, so two concurrent decisions on
+``uq_decision_event_uuid_digest``, so two concurrent decisions on
 one digest produce exactly one event and one 409.
 The server sets the event id and ``created_at``;
 the event also stores the actor's ``issuer``, ``subject``,
 display name and email, the policy id and version,
-and provenance (record id, kind, ref, path and source URL at decision
-time).
+and provenance (kind, source, project, ref, path and source URL at
+decision time).
 
 One decision per digest means a rejection is final for that content.
 Changed content has a new digest and a fresh ``pending`` or
@@ -190,7 +195,7 @@ This is a documented limit of the policy, not a security guarantee.
 Diffs
 -----
 
-``GET /api/v1/records/{id}/diff`` (:mod:`app.services.diff`) is a unified
+``GET /api/v1/records/{uuid}/diff`` (:mod:`app.services.diff`) is a unified
 diff between two stored revisions, labelled with both digests.
 The default base is the identity's last decided revision other than the
 current one (latest acceptance, else latest rejection,
@@ -217,7 +222,7 @@ last indexed.
 Errata
 ------
 
-An erratum is approved exactly like a decision, on its own identity and
+An erratum is approved exactly like a decision, on its own UUID and
 digest; the corrected decision is never touched.
 The UI words the states as a report:
 

@@ -11,7 +11,9 @@ The relationship part comes from
 :mod:`app.services.record_relationships`, the errata part from
 :mod:`app.services.errata_view`, the approval part from
 :mod:`app.services.approval_view`; this module adds metadata,
-provenance, freshness, identity siblings and legacy sign-offs.
+provenance, freshness, the other rows of the ADR (siblings) and
+legacy sign-offs. The row is found with
+:func:`app.services.record_lookup.find_record`.
 
 Public API: :class:`RecordMetadata`, :class:`RecordProvenance`,
 :class:`RecordFreshness`, :class:`SiblingInfo`, :class:`RecordDetail`,
@@ -48,6 +50,7 @@ from app.services.errata_view import (
     build_errata,
     erratum_content,
 )
+from app.services.record_lookup import RecordAddress, find_record
 from app.services.record_relationships import (
     ErratumForInfo,
     InboundLinkInfo,
@@ -80,8 +83,7 @@ class RecordMetadata:
     """
     Identity and authored metadata of one record.
 
-    :param id: Record id.
-    :param adr_uuid: Authored UUID, if valid.
+    :param adr_uuid: Authored UUID: the ADR's identity.
     :param decision_date: Displayed decision date.
     :param decision_date_inferred: Whether the date is only inferred
         from the filename.
@@ -93,8 +95,7 @@ class RecordMetadata:
     :param previous_digest: Digest before the latest content change.
     """
 
-    id: uuid.UUID
-    adr_uuid: uuid.UUID | None
+    adr_uuid: uuid.UUID
     decision_date: datetime.date | None
     decision_date_inferred: bool
     kind: RecordState
@@ -155,9 +156,10 @@ class RecordFreshness:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SiblingInfo:
     """
-    One published or candidate row sharing a record's logical identity.
+    One published or candidate row of the same ADR (same UUID).
 
-    :param id: Record id.
+    :param adr_uuid: The ADR's UUID (with :attr:`kind` and :attr:`ref`,
+        the row key).
     :param kind: Published or candidate.
     :param source_id: Registration id.
     :param project: Project path.
@@ -171,7 +173,7 @@ class SiblingInfo:
     :param approvable: Whether this sibling's content can be decided.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     source_id: str
     project: str
@@ -192,8 +194,8 @@ class RecordDetail:
 
     :param metadata: Identity and authored metadata.
     :param issues: Stored validation issues followed by read-time
-        relationship issues (``missing_target``, ``ambiguous_target``,
-        ``duplicate_uuid``).
+        relationship issues (``missing_target``,
+        ``erratum_target_is_erratum``).
     :param rendered_html: Sanitized HTML rendering of the body.
     :param provenance: Where the content came from.
     :param freshness: Freshness of the owning registration.
@@ -205,8 +207,8 @@ class RecordDetail:
     :param erratum: For an erratum, its structured content.
     :param erratum_for: For an erratum, the decision it corrects.
     :param status: Derived display status.
-    :param siblings: Every row (published and candidates) of this
-        record's identity, including this one.
+    :param siblings: The other rows (published and candidates) of
+        this record's ADR.
     :param legacy_signoff_unverified: Unverified legacy
         ``signed-off-by`` values; never an approval.
     :param approval: Approval state, policy summary and history.
@@ -232,7 +234,6 @@ class RecordDetail:
 def _metadata(record: StoredRecord) -> RecordMetadata:
     """Build :class:`RecordMetadata` from a stored row."""
     return RecordMetadata(
-        id=record.id,
         adr_uuid=record.adr_uuid,
         decision_date=record.decision_date,
         decision_date_inferred=record.decision_date_inferred,
@@ -296,7 +297,7 @@ def _sibling(
     """Build one :class:`SiblingInfo` with its approval state."""
     approvable = is_approvable(sibling)
     return SiblingInfo(
-        id=sibling.id,
+        adr_uuid=sibling.adr_uuid,
         kind=sibling.kind,
         source_id=sibling.source_id,
         project=sibling.project,
@@ -335,7 +336,7 @@ def _legacy_signoff(metadata: JsonObject) -> tuple[str, ...]:
 
 def get_record_detail(
     store: CatalogStore,
-    record_id: uuid.UUID,
+    address: RecordAddress,
     *,
     policy: Policy | None,
     policy_status: PolicyStatus,
@@ -348,7 +349,8 @@ def get_record_detail(
     Assemble everything the record detail page shows.
 
     :param store: Store of the caller's unit of work.
-    :param record_id: Record id.
+    :param address: The record row: ADR UUID and optional candidate ref
+        (see :func:`~app.services.record_lookup.find_record`).
     :param policy: The configured policy, or ``None`` if missing or
         invalid.
     :param policy_status: Configuration status of the policy.
@@ -361,13 +363,13 @@ def get_record_detail(
         from ``catalog.yaml``).
     :returns: The detail, or ``None`` if the record does not exist.
     """
-    record = store.get_record(record_id)
+    record = find_record(store, address)
     if record is None:
         return None
-    siblings = store.list_identity_siblings(record.identity)
-    decision_events = store.list_decisions(record.identity)
+    siblings = store.list_records(record.adr_uuid)
+    decision_events = store.list_decisions(record.adr_uuid)
     event_views = [event.as_view() for event in decision_events]
-    relationships = build_relationships(store, record, siblings)
+    relationships = build_relationships(store, record)
     errata = build_errata(store, relationships.errata, policy)
     registration = store.get_registration(record.source_id)
     config_source = next(
@@ -389,7 +391,7 @@ def get_record_detail(
         erratum_for=relationships.erratum_for,
         status=relationships.status,
         siblings=_siblings(
-            (s for s in siblings if s.id != record.id), policy, event_views
+            (s for s in siblings if not s.is_row(record)), policy, event_views
         ),
         legacy_signoff_unverified=_legacy_signoff(record.metadata),
         approval=build_approval(

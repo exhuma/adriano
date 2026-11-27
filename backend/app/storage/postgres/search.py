@@ -8,10 +8,10 @@ before pagination:
 
 1. no valid policy -> ``policy_missing``;
 2. policy not required -> ``not_required``;
-3. the event for (identity, current digest) is accepted ->
+3. the event for (ADR UUID, current digest) is accepted ->
    ``accepted``;
 4. that event is rejected -> ``rejected``;
-5. an accepted event for the identity exists (necessarily for another
+5. an accepted event for the UUID exists (necessarily for another
    digest, because rules 3/4 did not apply) ->
    ``changed_since_acceptance``;
 6. otherwise ``pending``.
@@ -20,16 +20,16 @@ Rules 1 and 2 depend only on the policy and are resolved in Python to a
 constant. A parity test compares this expression with the domain
 function on a fixture set.
 
-Rules 3/4 join ``decision_event`` on identity and digest directly: the
-unique constraint ``uq_decision_event_identity_digest`` (one formal
+Rules 3/4 join ``decision_event`` on UUID and digest directly: the
+unique constraint ``uq_decision_event_uuid_digest`` (one formal
 decision per content hash, see
 ``docs/developer/decisions/0006-content-digest-approval.rst``) guarantees at
 most one event, so that event *is* the domain's "latest event for the
 current digest" and the join never duplicates a record row. Rule 5
-is an ``EXISTS`` over the identity's accepted events, which
+is an ``EXISTS`` over the UUID's accepted events, which
 PostgreSQL plans as a hashed subplan (one scan of the accepted events)
 when many rows are evaluated and as per-row probes of
-``uq_decision_event_identity_digest`` (identity prefix) for a single
+``uq_decision_event_uuid_digest`` (UUID prefix) for a single
 page. This replaced two correlated ``ORDER BY ... LIMIT 1`` subqueries
 that ran ~20,000 index probes per statement at 20,000 records and
 whose cost estimate pushed PostgreSQL into ~0.4-0.8 s of JIT
@@ -48,13 +48,22 @@ including "needs approval".
 **Order.** :class:`~app.storage.port.SearchSort` picks a descending
 leading key (text rank for ``relevance`` with a query, ``updated_at``
 for ``recent``, none for ``title``) followed by the lower-cased title
-and the id, so equal leading keys still give stable pages. Both page
+and the row key (UUID, state, ref), so equal leading keys still give
+stable pages. Both page
 paths (with and without "needs approval") use the same key list.
 
 Text queries use ``websearch_to_tsquery`` with the ``simple``
 configuration (exact tokens: identifiers, UUIDs, paths) OR'ed with the
 ``english`` configuration (stemmed body words), matching how the
 ``record.search`` vector is built by the migration trigger.
+
+**One hit per ADR.** :func:`_target_rows` keeps, per ADR UUID, only
+the row the catalog shows for it: the published row, else the most
+recently updated candidate (ties broken by ref, the rule of
+:func:`app.services.record_lookup.find_record`). With the ``state``
+filter set, the filter picks the row kind instead: ``published`` is
+already one row per ADR, ``candidate`` keeps the newest candidate of
+each ADR. The text query and the other filters apply to that row.
 
 Public API: :data:`NEEDS_APPROVAL_STATES`, :func:`approval_join`,
 :func:`search`.
@@ -72,6 +81,7 @@ from sqlalchemy import (
     func,
     literal,
     literal_column,
+    or_,
     select,
 )
 from sqlalchemy.orm import Session
@@ -79,6 +89,7 @@ from sqlalchemy.orm import Session
 from app.domain.approval import ApprovalStateCode, DecisionAction, Policy
 from app.storage.port import (
     MAX_PAGE_SIZE,
+    RecordState,
     SearchFilters,
     SearchPage,
     SearchSort,
@@ -103,17 +114,13 @@ NEEDS_APPROVAL_STATES: frozenset[ApprovalStateCode] = frozenset(
 _SIMPLE = literal_column("'simple'::regconfig")
 _ENGLISH = literal_column("'english'::regconfig")
 
-_IDENTITY = ("source_id", "project", "record_key")
-
 _SEARCH_COLUMNS = (
-    "id",
     "kind",
     "source_id",
     "project",
     "path",
     "ref",
     "adr_uuid",
-    "record_key",
     "digest",
     "title",
     "record_kind",
@@ -129,15 +136,19 @@ _UPDATED_KEY = "updated_key"
 _TITLE_KEY = "title_key"
 
 
-def _same_identity(left: FromClause, right: FromClause) -> ColumnElement:
-    """
-    Match the logical identity columns of two relations.
+#: Row key columns closing every sort order (a row is unique by them).
+_ROW_KEY = ("adr_uuid", "kind", "ref")
 
-    :param left: Relation with ``source_id``, ``project``, ``record_key``.
-    :param right: Relation with the same columns.
-    :returns: The AND of the three equalities.
+
+def _same_uuid(left: FromClause, right: FromClause) -> ColumnElement[bool]:
     """
-    return and_(*(left.c[name] == right.c[name] for name in _IDENTITY))
+    Match the ADR UUID of two relations.
+
+    :param left: Relation with ``adr_uuid``.
+    :param right: Relation with ``adr_uuid``.
+    :returns: The equality.
+    """
+    return left.c.adr_uuid == right.c.adr_uuid
 
 
 def approval_join(
@@ -146,8 +157,8 @@ def approval_join(
     """
     Join record rows to the evidence their approval state depends on.
 
-    :param base: ``record`` or a subquery of it exposing the identity
-        columns and ``digest``.
+    :param base: ``record`` or a subquery of it exposing ``adr_uuid``
+        and ``digest``.
     :param policy: The configured policy, or ``None`` if missing or
         invalid.
     :returns: The relation to select from (*base* itself when the
@@ -162,13 +173,13 @@ def approval_join(
     current = DECISION.alias("current_decision")
     accepted = DECISION.alias("accepted_decision")
     accepted_any = exists().where(
-        _same_identity(accepted, base),
+        _same_uuid(accepted, base),
         accepted.c.action == DecisionAction.ACCEPTED.value,
     )
     joined = base.outerjoin(
         current,
         and_(
-            _same_identity(current, base),
+            _same_uuid(current, base),
             current.c.digest == base.c.digest,
         ),
     )
@@ -205,6 +216,36 @@ def _tsquery(query: str | None) -> ColumnElement | None:
     return simple.op("||")(english)
 
 
+def _target_rows(kind: RecordState | None) -> ColumnElement[bool]:
+    """
+    Restrict the rows to one per ADR (see the module docstring).
+
+    :param kind: The ``state`` filter, if any.
+    :returns: The condition on ``record``.
+    """
+    other = RECORD.alias("other")
+    candidate = literal(RecordState.CANDIDATE.value)
+    published = literal(RecordState.PUBLISHED.value)
+    newer = (
+        _same_uuid(other, RECORD),
+        other.c.kind == candidate,
+        or_(
+            other.c.updated_at > RECORD.c.updated_at,
+            and_(
+                other.c.updated_at == RECORD.c.updated_at,
+                other.c.ref > RECORD.c.ref,
+            ),
+        ),
+    )
+    newest_candidate = and_(RECORD.c.kind == candidate, ~exists().where(*newer))
+    if kind is RecordState.PUBLISHED:
+        return RECORD.c.kind == published
+    if kind is RecordState.CANDIDATE:
+        return newest_candidate
+    held = exists().where(_same_uuid(other, RECORD), other.c.kind == published)
+    return or_(RECORD.c.kind == published, and_(~held, newest_candidate))
+
+
 def _conditions(
     filters: SearchFilters, tsquery: ColumnElement | None
 ) -> list[ColumnElement[bool]]:
@@ -216,13 +257,11 @@ def _conditions(
     :param tsquery: Text query, if any.
     :returns: Conditions to AND together.
     """
-    result: list[ColumnElement[bool]] = []
+    result: list[ColumnElement[bool]] = [_target_rows(filters.kind)]
     if filters.source_id is not None:
         result.append(RECORD.c.source_id == filters.source_id)
     if filters.project is not None:
         result.append(RECORD.c.project == filters.project)
-    if filters.kind is not None:
-        result.append(RECORD.c.kind == filters.kind.value)
     if filters.record_kind is not None:
         result.append(RECORD.c.record_kind == filters.record_kind.value)
     if tsquery is not None:
@@ -254,7 +293,8 @@ def _lead_key(tsquery: ColumnElement | None, sort: SearchSort) -> Label | None:
     :param sort: Requested order.
     :returns: The labelled key (``updated_at`` for ``recent``, the text
         rank for ``relevance`` with a query), or ``None`` when the order
-        is title, id only (``title``, or ``relevance`` without a query).
+        is title and row key only (``title``, or ``relevance`` without
+        a query).
     """
     if sort is SearchSort.RECENT:
         return RECORD.c.updated_at.label(_UPDATED_KEY)
@@ -265,13 +305,14 @@ def _lead_key(tsquery: ColumnElement | None, sort: SearchSort) -> Label | None:
 
 def _sort_keys(lead: Label | None) -> list[ColumnElement]:
     """
-    Build the result order over ``record``: lead key, title, id.
+    Build the result order over ``record``: lead key, title, row key.
 
     :param lead: Leading key from :func:`_lead_key`, if any.
-    :returns: Sort expressions, in order (the last one is ``id``).
+    :returns: Sort expressions, in order (the row key columns last).
     """
     keys: list[ColumnElement] = [] if lead is None else [lead]
-    keys += [func.lower(RECORD.c.title).label(_TITLE_KEY), RECORD.c.id]
+    keys.append(func.lower(RECORD.c.title).label(_TITLE_KEY))
+    keys += [RECORD.c[name] for name in _ROW_KEY]
     return keys
 
 
@@ -285,7 +326,7 @@ def _key_columns(
     :param lead: Leading key from :func:`_lead_key`, if any.
     :returns: The key columns, in order.
     """
-    names = ([] if lead is None else [lead.name]) + [_TITLE_KEY, "id"]
+    names = ([] if lead is None else [lead.name]) + [_TITLE_KEY, *_ROW_KEY]
     return [relation.c[name] for name in names]
 
 
@@ -326,7 +367,7 @@ def _needs_approval_page(
     columns = [RECORD.c[name] for name in _SEARCH_COLUMNS]
     keys = _sort_keys(lead)
     inner = (
-        select(*columns, *keys[:-1], state.label("approval_state"))
+        select(*columns, *keys[: -len(_ROW_KEY)], state.label("approval_state"))
         .select_from(source)
         .where(*where)
         .subquery("hit")
@@ -360,7 +401,9 @@ def _browse_page(
     """
     count = select(func.count()).select_from(RECORD).where(*conditions)
     keys = _sort_keys(lead)
-    columns = [RECORD.c[name] for name in _SEARCH_COLUMNS if name != "id"]
+    columns = [
+        RECORD.c[name] for name in _SEARCH_COLUMNS if name not in _ROW_KEY
+    ]
     paged = (
         select(*columns, *keys)
         .where(*conditions)

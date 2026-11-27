@@ -16,8 +16,10 @@ import type { DecisionAction, DecisionSummaryOut } from "@/types/approval";
 import type { RecordKind } from "@/types/records";
 
 defineProps<{
-  /** Record id, for the decision dialog's submission. */
-  recordId: string;
+  /** The ADR's UUID, for the decision dialog's submission. */
+  adrUuid: string;
+  /** The candidate's ref, or `null` when the published row is decided. */
+  candidateRef: string | null;
   /** Decision or erratum; picks the button and dialog wording. */
   recordKind: RecordKind;
   /** Title of the record being decided, passed straight through to
@@ -76,7 +78,8 @@ function onDialogModel(open: boolean): void {
 
     <DecisionDialog
       :model-value="dialogOpen"
-      :record-id="recordId"
+      :adr-uuid="adrUuid"
+      :candidate-ref="candidateRef"
       :action="dialogAction"
       :record-kind="recordKind"
       :record-title="recordTitle"

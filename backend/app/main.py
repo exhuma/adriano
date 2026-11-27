@@ -47,6 +47,7 @@ from app.routers import (
     facets,
     health,
     me,
+    not_indexed,
     records,
     sources,
 )
@@ -146,6 +147,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(records.router)
     app.include_router(sources.router)
     app.include_router(facets.router)
+    app.include_router(not_indexed.router)
     app.include_router(decisions.router)
     app.include_router(candidates.router)
     _mount_dev_auth(app, settings)

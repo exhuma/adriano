@@ -26,8 +26,10 @@ const props = defineProps<{
   kind: RecordState;
   /** Decision or erratum; picks the heading and status vocabulary. */
   recordKind: RecordKind;
-  /** Record id, for the decision dialog's submission. */
-  recordId: string;
+  /** The ADR's UUID, for the decision dialog's submission. */
+  adrUuid: string;
+  /** The candidate's ref, or `null` when the published row is decided. */
+  candidateRef: string | null;
   /** Title of the record being decided, passed to the decision
    *  dialog so it names the record. */
   recordTitle: string;
@@ -81,7 +83,8 @@ const statusLabel = computed(() =>
       </div>
       <DecideButtons
         v-if="approval.can_decide"
-        :record-id="recordId"
+        :adr-uuid="adrUuid"
+        :candidate-ref="candidateRef"
         :record-kind="recordKind"
         :record-title="recordTitle"
         :digest="approval.digest"

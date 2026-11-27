@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Append-only decision history of one record's identity: action,
+ * Append-only decision history of one ADR: action,
  * reviewer, timestamp, comment, digest, and provenance for every
  * accept/reject event, oldest first (as the API returns it). The
  * action wording switches to "Verified" for an accepted erratum
@@ -15,7 +15,7 @@ import { decisionActionLabel } from "@/utils/labels";
 import { shortDigest } from "@/utils/digest";
 
 const props = defineProps<{
-  /** Every decision event of the record's identity, oldest first. */
+  /** Every decision event of the ADR, oldest first. */
   history: DecisionSummaryOut[];
   /** Whether the viewed record is a normal decision or an erratum;
    *  picks the "Accepted" vs "Verified" wording for the accepted

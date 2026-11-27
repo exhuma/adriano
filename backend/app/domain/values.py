@@ -2,8 +2,7 @@
 Value types shared by record parsing, relationships and storage.
 
 Public API: :class:`RecordKind`, :class:`TitleSource`, :class:`LinkType`,
-:class:`Links` (``to_dict`` / ``from_dict`` for the stored JSON shape),
-:class:`Identity` and :func:`record_key`.
+:class:`Links` (``to_dict`` / ``from_dict`` for the stored JSON shape).
 """
 
 import uuid
@@ -93,45 +92,3 @@ class Links:
             obsoletes=tuple(uuid.UUID(str(item)) for item in obsoletes),
             corrects=None if corrects is None else uuid.UUID(str(corrects)),
         )
-
-
-@dataclass(frozen=True, slots=True, order=True)
-class Identity:
-    """
-    Logical identity of an ADR: record key within registration + project.
-
-    :param source_id: Source registration id.
-    :param project: Owning project path.
-    :param record_key: UUID string or fallback key (:func:`record_key`).
-    """
-
-    source_id: str
-    project: str
-    record_key: str
-
-    def __str__(self) -> str:
-        """
-        Render the identity for messages and logs.
-
-        :returns: ``<source_id>/<project>/<record_key>``.
-        """
-        return f"{self.source_id}/{self.project}/{self.record_key}"
-
-
-def record_key(
-    adr_uuid: uuid.UUID | None, source_id: str, project: str, path: str
-) -> str:
-    """
-    Compute the stable record key used in the logical identity.
-
-    :param adr_uuid: Authored UUID, if valid.
-    :param source_id: Source registration id.
-    :param project: Owning project path.
-    :param path: File path inside the project.
-    :returns: The lowercase UUID string, or
-        ``src:<source_id>/<project>/<path>`` when there is no valid UUID.
-        A UUID is never invented.
-    """
-    if adr_uuid is not None:
-        return str(adr_uuid)
-    return f"src:{source_id}/{project}/{path}"

@@ -4,24 +4,18 @@ Erratum queries of the PostgreSQL store.
 The reverse lookup "errata of one decision" filters on the expression
 ``(links ->> 'corrects')``, written with a literal key so it matches
 the partial expression index ``ix_record_links_corrects`` (migration
-``0003_erratum_content``) exactly. A bound key (SQLAlchemy's
+``0001_initial``) exactly. A bound key (SQLAlchemy's
 ``links["corrects"].astext``) would not match the index in a generic
 plan.
 
-The title lookup for erratum search hits
-(:func:`list_published_by_uuid`) returns only published rows: a link
-resolves against published rows (plus the linking record's own
-identity, which never applies to a decision an erratum corrects), see
-:mod:`app.services.record_relationships`. It deliberately does **not**
-filter on ``record_kind``: the detail page resolves ``erratum-for``
-against rows of every kind (so a decision and an erratum sharing a
-UUID are ambiguous there), and the search titles must resolve the
-same way. Callers must therefore expect erratum rows (an erratum of
-an erratum, or the hit itself when its ``erratum-for`` is its own
-UUID) and full ``links`` on every returned summary.
+:func:`published_titles` returns the titles of published rows only: a
+link resolves against published rows (see
+:mod:`app.services.record_relationships`). It deliberately does not
+filter on ``record_kind``, so an erratum of an erratum is labelled with
+the corrected erratum's title, as its detail page does.
 
 Public API: :data:`CORRECTS_TARGET`, :func:`list_errata_for`,
-:func:`list_published_by_uuid`.
+:func:`published_titles`.
 """
 
 import uuid
@@ -38,9 +32,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from app.domain.relationships import RecordSummary
-from app.domain.values import Identity, Links, RecordKind
-from app.storage.port import ErratumRow, LinkTarget, RecordState
+from app.storage.port import ErratumRow, RecordState
 from app.storage.postgres import convert
 from app.storage.postgres.models import RecordRow
 
@@ -53,14 +45,12 @@ CORRECTS_TARGET: ColumnElement[str] = RECORD.c.links.op(
 )(literal_column("'corrects'"))
 
 _ERRATUM_COLUMNS = (
-    RECORD.c.id,
     RECORD.c.kind,
     RECORD.c.source_id,
     RECORD.c.project,
     RECORD.c.path,
     RECORD.c.ref,
     RECORD.c.adr_uuid,
-    RECORD.c.record_key,
     RECORD.c.digest,
     RECORD.c.title,
     RECORD.c.erratum,
@@ -78,7 +68,7 @@ def list_errata_for(
     :param session: Unit-of-work session.
     :param target_uuid: UUID of the corrected decision.
     :returns: Published rows first, then by source, project, path, ref
-        and id.
+        and UUID.
     """
     stmt = (
         select(*_ERRATUM_COLUMNS)
@@ -92,60 +82,27 @@ def list_errata_for(
             RECORD.c.project,
             RECORD.c.path,
             RECORD.c.ref,
-            RECORD.c.id,
+            RECORD.c.adr_uuid,
         )
     )
     rows = session.execute(stmt).mappings()
     return [convert.erratum_row(row) for row in rows]
 
 
-def list_published_by_uuid(
+def published_titles(
     session: Session, uuids: Collection[uuid.UUID]
-) -> list[LinkTarget]:
+) -> dict[uuid.UUID, str]:
     """
-    List the published rows holding any of *uuids*, with their titles.
+    Look up the titles of the published rows of some UUIDs.
 
     :param session: Unit-of-work session.
-    :param uuids: Authored UUIDs; empty means no query.
-    :returns: One entry per matching published row of any record kind,
-        with its full links, ordered by id.
+    :param uuids: ADR UUIDs; empty means no query.
+    :returns: Title by UUID, for UUIDs with a published row.
     """
     if not uuids:
-        return []
-    stmt = (
-        select(
-            RECORD.c.id,
-            RECORD.c.source_id,
-            RECORD.c.project,
-            RECORD.c.record_key,
-            RECORD.c.adr_uuid,
-            RECORD.c.links,
-            RECORD.c.record_kind,
-            RECORD.c.path,
-            RECORD.c.updated_at,
-            RECORD.c.title,
-        )
-        .where(
-            RECORD.c.kind == RecordState.PUBLISHED.value,
-            RECORD.c.adr_uuid.in_(list(uuids)),
-        )
-        .order_by(RECORD.c.id)
+        return {}
+    stmt = select(RECORD.c.adr_uuid, RECORD.c.title).where(
+        RECORD.c.kind == RecordState.PUBLISHED.value,
+        RECORD.c.adr_uuid.in_(list(uuids)),
     )
-    return [
-        LinkTarget(
-            summary=RecordSummary(
-                key=str(row["id"]),
-                identity=Identity(
-                    row["source_id"], row["project"], row["record_key"]
-                ),
-                adr_uuid=row["adr_uuid"],
-                links=Links.from_dict(row["links"]),
-                record_kind=RecordKind(row["record_kind"]),
-                path=row["path"],
-                published=True,
-                updated_at=row["updated_at"],
-            ),
-            title=row["title"],
-        )
-        for row in session.execute(stmt).mappings()
-    ]
+    return {row.adr_uuid: row.title for row in session.execute(stmt)}

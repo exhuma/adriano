@@ -130,10 +130,31 @@ Fix the cause (credentials, network, mount, permissions), then
 poll again.
 The banner disappears with the next ``ok`` poll.
 
+Moved files and duplicate UUIDs
+-------------------------------
+
+A record belongs to the ``uuid`` in its file, not to the file's
+location.
+When a poll finds a UUID in a new place, because the file was moved,
+renamed or transferred to another project or registration, the record
+moves with it and keeps its page address, its history and its
+approvals.
+
+The file already indexed under a UUID keeps it.
+A second file with the same UUID is not indexed and appears in the
+:doc:`not-indexed list <not-indexed>`.
+A file gives up its UUID only when a complete listing no longer has
+the file, or when the file now carries another UUID or none.
+A file that could not be read keeps its UUID until it can be read
+again.
+When two new files claim one UUID in the same poll, the registration
+listed first in the catalog file wins, then the project, then the path.
+
 When records are removed
 ------------------------
 
 A published record is removed from the catalog only when a poll
-listed its project completely and the file was no longer there.
+listed its project completely and the file was no longer there, or
+the file no longer carries its UUID.
 Candidates pushed by CI are never removed by a poll.
 Approval history is never removed.

@@ -4,9 +4,9 @@ Promotion of an accepted candidate must not look like a duplicate.
 Regression for the phase 07 smoke: a candidate pushed on a feature ref
 is accepted, the identical file is then published (filesystem poll),
 and the published record's detail page reported ``duplicate_uuid``
-against its own candidate. Rows of one identity are revisions of one
-decision; only different identities, or two published files of one
-project claiming one UUID, are duplicates.
+against its own candidate. Rows of one UUID are revisions of one ADR;
+only a second file claiming an indexed UUID is a duplicate, and it is
+not indexed at all (it goes to the not-indexed list).
 """
 
 import uuid
@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.storage.postgres.store import PostgresStoreProvider
 from tests.auth_helpers import sign_in
 from tests.routers.approval.support import (
     adr_text,
@@ -49,12 +50,15 @@ def _published(client: TestClient) -> list[str]:
     """List the ids of every published record, by path."""
     response = client.get("/api/v1/records", params={"state": "published"})
     items = sorted(response.json()["items"], key=lambda item: item["path"])
-    return [item["id"] for item in items]
+    return [item["adr_uuid"] for item in items]
 
 
-def _detail(client: TestClient, record_id: str) -> dict[str, Any]:
-    """Read a record detail."""
-    response = client.get(f"/api/v1/records/{record_id}")
+def _detail(
+    client: TestClient, record_id: str, ref: str | None = None
+) -> dict[str, Any]:
+    """Read a record detail (a candidate when *ref* is given)."""
+    tail = "" if ref is None else f"/candidates/{ref}"
+    response = client.get(f"/api/v1/records/{record_id}{tail}")
     assert response.status_code == 200
     return response.json()
 
@@ -78,12 +82,12 @@ def promoted(
     """
     pushed = push(client, candidate(ADR, path=FILE, ref=REF)).json()
     as_user(client)
-    assert decide(client, pushed["record_id"]).status_code == 201
+    assert decide(client, pushed["adr_uuid"]).status_code == 201
     _write(root, adr_text(ADR))
     _poll(client, router_settings)
     (published_id,) = _published(client)
     return {
-        "candidate": pushed["record_id"],
+        "candidate": pushed["adr_uuid"],
         "published": published_id,
         "digest": pushed["digest"],
     }
@@ -94,7 +98,7 @@ def test_promoted_record_has_no_duplicate_uuid(
 ) -> None:
     """Ensure the published row is not a duplicate of its own candidate."""
     published = _detail(client, promoted["published"])
-    candidate_detail = _detail(client, promoted["candidate"])
+    candidate_detail = _detail(client, promoted["candidate"], REF)
 
     assert "duplicate_uuid" not in _codes(published)
     assert "duplicate_uuid" not in _codes(candidate_detail)
@@ -105,7 +109,9 @@ def test_promoted_record_has_no_duplicate_uuid(
     assert approval["approval_blocker"] is None
     assert approval["divergence"] is None
     assert candidate_detail["approval"]["divergence"] is None
-    assert [s["id"] for s in published["siblings"]] == [promoted["candidate"]]
+    assert [s["adr_uuid"] for s in published["siblings"]] == [
+        promoted["candidate"]
+    ]
 
 
 def test_competing_candidate_is_not_a_duplicate(
@@ -126,13 +132,14 @@ def test_competing_candidate_is_not_a_duplicate(
     as_user(client)
 
     published = _detail(client, promoted["published"])
-    competing = _detail(client, other["record_id"])
+    competing = _detail(client, other["adr_uuid"], "feature/other")
 
     assert "duplicate_uuid" not in _codes(published)
     assert "duplicate_uuid" not in _codes(competing)
-    assert [c["id"] for c in published["approval"]["competing_candidates"]] == [
-        other["record_id"]
-    ]
+    assert [
+        (c["adr_uuid"], c["ref"])
+        for c in published["approval"]["competing_candidates"]
+    ] == [(other["adr_uuid"], "feature/other")]
     assert published["approval"]["divergence"] is None
     assert competing["approval"]["state"] == "changed_since_acceptance"
     assert competing["approval"]["approvable"] is True
@@ -146,7 +153,7 @@ def test_divergent_published_content_stays_decidable(
     """Ensure a published row with an accepted candidate can be decided."""
     pushed = push(client, candidate(ADR, path=FILE, ref=REF)).json()
     as_user(client)
-    assert decide(client, pushed["record_id"]).status_code == 201
+    assert decide(client, pushed["adr_uuid"]).status_code == 201
     _write(root, adr_text(ADR, body="Published differently."))
     _poll(client, router_settings)
     (published_id,) = _published(client)
@@ -169,7 +176,7 @@ def test_link_to_promoted_record_resolves_once(
     root: Path,
     promoted: dict[str, str],
 ) -> None:
-    """Ensure a link to an identity with a candidate is not ambiguous."""
+    """Ensure a link to an ADR with a candidate resolves once."""
     linker = adr_text(LINKER, title="Replace the catalog").replace(
         "decision-date:", f"obsoletes: [{ADR}]\ndecision-date:"
     )
@@ -181,23 +188,28 @@ def test_link_to_promoted_record_resolves_once(
 
     assert [link["source_title"] for link in inbound] == ["Replace the catalog"]
     assert published["status"] == "obsoleted"
-    assert "ambiguous_target" not in _codes(published)
+    assert _codes(published) == []
 
 
-def test_two_published_files_with_one_uuid_are_a_duplicate(
-    client: TestClient, router_settings: Settings, root: Path
+def test_second_file_with_an_indexed_uuid_is_not_indexed(
+    client: TestClient,
+    router_settings: Settings,
+    root: Path,
+    provider: PostgresStoreProvider,
 ) -> None:
-    """Ensure two published paths sharing a UUID are an error."""
+    """Ensure the first file (by path) holds a UUID, the copy is queued."""
     _write(root, adr_text(ADR))
     _write(root, adr_text(ADR), "doc/decisions/2024-03-02-copy.md")
     _poll(client, router_settings)
 
-    first, _second = _published(client)
-    issues = [
-        issue
-        for issue in _detail(client, first)["issues"]
-        if issue["code"] == "duplicate_uuid"
-    ]
+    [held] = _published(client)
+    with provider.unit_of_work() as store:
+        [entry] = store.list_not_indexed()
 
-    assert [issue["severity"] for issue in issues] == ["error"]
-    assert "2024-03-02-copy.md" in issues[0]["message"]
+    detail = _detail(client, held)
+    assert detail["provenance"]["path"] == FILE
+    assert "duplicate_uuid" not in _codes(detail)
+    assert entry.key.path == "doc/decisions/2024-03-02-copy.md"
+    assert entry.holder_uuid == ADR
+    assert [r.code.value for r in entry.reasons] == ["duplicate_uuid"]
+    assert FILE in entry.reasons[0].message

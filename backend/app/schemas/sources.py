@@ -32,6 +32,7 @@ class SourceOut(BaseModel):
     last_status: PollStatus
     last_error: JsonValue
     stale: bool
+    not_indexed_count: int
 
 
 class FacetProjectOut(BaseModel):

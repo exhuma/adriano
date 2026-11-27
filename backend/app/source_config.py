@@ -74,7 +74,8 @@ class SourceRegistration:
 
     :param id: Stable registration id.
     :param type: Source type name.
-    :param position: Index in the configuration (ownership order).
+    :param position: Index in the configuration (it breaks ties when
+        new files claim one UUID in the same poll).
     :param config: Non-secret settings as stored in the database.
     :param enabled: ``False`` when the entry is invalid.
     :param config_error: Why the entry is disabled.

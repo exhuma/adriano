@@ -93,7 +93,7 @@ class ConflictError(AdrianoError):
 
 
 class DecisionExistsError(ConflictError):
-    """Raised when the identity already has a decision for the digest."""
+    """Raised when the ADR already has a decision for the digest."""
 
 
 class CandidateExistsError(ConflictError):

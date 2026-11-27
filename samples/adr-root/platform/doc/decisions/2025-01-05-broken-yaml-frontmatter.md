@@ -6,7 +6,7 @@ decision-date: 2025-01-05
 # Broken YAML frontmatter
 
 This file intentionally has invalid YAML frontmatter (an unterminated
-quoted string on the `title` line, with no closing `"`). It is used
-to demonstrate that one malformed record does not take down the
-whole catalog: it is stored and reported with a `bad_yaml` error, and
+quoted string on the `title` line, with no closing `"`). The
+frontmatter cannot be read, so the document is not indexed. It
+appears in the "Not indexed" list with the reason `bad_yaml`, and
 every other record stays browseable.

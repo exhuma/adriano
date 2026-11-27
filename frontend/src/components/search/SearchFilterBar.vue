@@ -13,18 +13,13 @@
  */
 import { computed } from "vue";
 
+import type { SelectOption } from "@/types/ui";
 import type {
   RecordState,
   RecordTypeFilter,
   SearchSort,
 } from "@/types/records";
 import type { StateFilter } from "@/composables/useSearchQuery";
-
-/** One labelled option for a `v-select`. */
-interface SelectOption<T> {
-  title: string;
-  value: T;
-}
 
 const props = defineProps<{
   /** Current `source` filter value, `""` for "all sources". */

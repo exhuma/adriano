@@ -15,8 +15,8 @@ from app.domain.records import (
     TitleSource,
     is_adr_filename,
     parse_record,
-    record_key,
 )
+from app.services.decisions import approval_blocker
 
 UUID_A = "0b0c2f4e-1a2b-4c3d-8e9f-001122334455"
 UUID_B = "11111111-2222-4333-8444-555555555555"
@@ -88,7 +88,7 @@ def test_complete_record_has_no_issues() -> None:
     assert record.decision_date == datetime.date(2024, 12, 24)
     assert record.links == Links(updates=(uuid.UUID(UUID_B),))
     assert record.record_kind is RecordKind.DECISION
-    assert record.approvable
+    assert approval_blocker(record) is None
 
 
 def test_legacy_record_parses_with_expected_warnings() -> None:
@@ -108,7 +108,7 @@ def test_legacy_record_parses_with_expected_warnings() -> None:
     assert all(i.severity is Severity.WARNING for i in record.issues)
     assert record.links.obsoletes == (uuid.UUID(UUID_B),)
     assert record.legacy_signoff == ("alice@example.com", "bob@example.com")
-    assert record.approvable
+    assert approval_blocker(record) is None
 
 
 def test_deprecates_merges_with_obsoletes_without_duplicates() -> None:
@@ -158,8 +158,8 @@ def test_identity_problems_are_errors_and_block_approval(
     issue = issue_for(record.issues, code)
     assert issue.severity is Severity.ERROR
     assert record.adr_uuid is None or code is IssueCode.BAD_ENCODING
-    assert not record.approvable
-    assert record.approval_blocker
+    if code is IssueCode.BAD_ENCODING:
+        assert approval_blocker(record)
 
 
 def test_bad_yaml_message_names_the_line() -> None:
@@ -208,7 +208,7 @@ def test_unknown_field_is_a_warning() -> None:
     issue = issue_for(record.issues, IssueCode.UNKNOWN_FIELD)
     assert issue.severity is Severity.WARNING
     assert "`status`" in issue.message
-    assert record.approvable
+    assert approval_blocker(record) is None
 
 
 def test_missing_date_uses_inferred_filename_date() -> None:
@@ -393,7 +393,7 @@ def test_bad_encoding_still_parses_content() -> None:
     assert record.adr_uuid == uuid.UUID(UUID_A)
     assert record.title == "Caf\ufffd"
     assert not record.encoding_ok
-    assert not record.approvable
+    assert approval_blocker(record)
 
 
 def test_result_is_json_serialisable() -> None:
@@ -419,18 +419,31 @@ def test_result_is_json_serialisable() -> None:
     )
 
 
-def test_record_key_prefers_uuid() -> None:
-    """Ensure the record key is the UUID string when available."""
-    key = record_key(uuid.UUID(UUID_A), "central", "platform", NAME)
+def test_document_without_uuid_has_not_indexed_reasons() -> None:
+    """Ensure a document without a UUID explains why it is not indexed."""
+    record = parse_record(doc("title: No identity\n"), filename=NAME)
 
-    assert key == UUID_A
+    assert record.adr_uuid is None
+    assert [i.code for i in record.not_indexed_reasons] == [
+        IssueCode.MISSING_UUID
+    ]
 
 
-def test_record_key_falls_back_to_source_location() -> None:
-    """Ensure records without a UUID are keyed by source location."""
-    key = record_key(None, "central", "platform", NAME)
+def test_unparseable_frontmatter_is_the_not_indexed_reason() -> None:
+    """Ensure broken YAML (not a missing UUID) is the reported reason."""
+    record = parse_record(b"---\nuuid: [x\n---\n", filename=NAME)
 
-    assert key == f"src:central/platform/{NAME}"
+    assert [i.code for i in record.not_indexed_reasons] == [IssueCode.BAD_YAML]
+
+
+def test_document_with_uuid_has_no_not_indexed_reasons() -> None:
+    """Ensure a valid UUID makes a document indexable despite errors."""
+    raw = f"---\nuuid: {UUID_A}\ndecision-date: nope\n---\n".encode()
+
+    record = parse_record(raw, filename=NAME)
+
+    assert record.has_errors
+    assert record.not_indexed_reasons == ()
 
 
 @given(st.binary(max_size=300))

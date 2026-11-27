@@ -10,7 +10,7 @@ Public API: :data:`MAX_BODY_BYTES`, :data:`MAX_CONTENT_BYTES`,
 :func:`peek_source_id`, :func:`decode_body`, :func:`authenticate`,
 :func:`named_source`, :func:`validate_submission`,
 :func:`check_registration`, :func:`build_document`,
-:func:`check_document`, :func:`issues_json`.
+:func:`check_document`, :func:`document_path`, :func:`issues_json`.
 """
 
 import json
@@ -51,6 +51,7 @@ __all__ = [
     "check_document",
     "check_registration",
     "decode_body",
+    "document_path",
     "issues_json",
     "named_source",
     "peek_source_id",
@@ -284,6 +285,21 @@ def check_registration(
         )
 
 
+def document_path(
+    source: SourceRegistration, submission: CandidateSubmission
+) -> str:
+    """
+    Name the file path of a pushed document.
+
+    :param source: The registration.
+    :param submission: The validated body.
+    :returns: The submitted path, else ``<registration path>/<adr_uuid>.md``
+        (without surrounding slashes).
+    """
+    path = submission.path or f"{source.path}/{submission.adr_uuid}.md"
+    return path.strip("/")
+
+
 def build_document(
     source: SourceRegistration, submission: CandidateSubmission
 ) -> IncomingDocument:
@@ -310,11 +326,10 @@ def build_document(
             code="content_too_large",
             hint="ADR files must be at most 1 MiB",
         )
-    path = submission.path or f"{source.path}/{submission.adr_uuid}.md"
     return IncomingDocument(
         source_id=source.id,
         project=submission.project,
-        path=path.strip("/"),
+        path=document_path(source, submission),
         ref=submission.ref,
         content=content,
         author=submission.author,

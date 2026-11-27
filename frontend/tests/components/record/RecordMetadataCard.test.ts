@@ -54,21 +54,6 @@ describe("RecordMetadataCard UUID display", () => {
     expect(wrapper.text()).toContain("Copied!");
   });
 
-  it("shows a fallback when there is no valid UUID", () => {
-    const wrapper = mount(RecordMetadataCard, {
-      props: {
-        adrUuid: null,
-        decisionDate: null,
-        decisionDateInferred: false,
-        recordKind: "decision",
-      },
-      global: { plugins: [vuetify] },
-    });
-
-    expect(wrapper.find("code").exists()).toBe(false);
-    expect(wrapper.text()).toContain("Not available (no valid UUID in this file)");
-  });
-
   it("labels the date field 'Decision date' for a decision and 'Report date' for an erratum", () => {
     const decisionWrapper = mountCard();
     expect(decisionWrapper.text()).toContain("Decision date");

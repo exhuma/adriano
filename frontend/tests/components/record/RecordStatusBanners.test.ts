@@ -25,7 +25,11 @@ async function mountBanners(props: {
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
   await router.push("/");
@@ -52,7 +56,7 @@ describe("RecordStatusBanners", () => {
     const wrapper = await mountBanners({
       status: "obsoleted",
       obsoletedBy: [
-        { link_type: "obsoleted_by", source_id: "aaa", source_title: "Use gRPC" },
+        { link_type: "obsoleted_by", source_uuid: "aaa", source_title: "Use gRPC" },
       ],
     });
 
@@ -67,7 +71,7 @@ describe("RecordStatusBanners", () => {
     const wrapper = await mountBanners({
       status: "updated",
       updatedBy: [
-        { link_type: "updated_by", source_id: "bbb", source_title: "Use PostgreSQL v2" },
+        { link_type: "updated_by", source_uuid: "bbb", source_title: "Use PostgreSQL v2" },
       ],
     });
 
@@ -80,10 +84,10 @@ describe("RecordStatusBanners", () => {
     const wrapper = await mountBanners({
       status: "obsoleted",
       obsoletedBy: [
-        { link_type: "obsoleted_by", source_id: "aaa", source_title: "Use gRPC" },
+        { link_type: "obsoleted_by", source_uuid: "aaa", source_title: "Use gRPC" },
       ],
       updatedBy: [
-        { link_type: "updated_by", source_id: "bbb", source_title: "Use PostgreSQL v2" },
+        { link_type: "updated_by", source_uuid: "bbb", source_title: "Use PostgreSQL v2" },
       ],
     });
 
@@ -94,8 +98,7 @@ describe("RecordStatusBanners", () => {
   it("shows a resolved erratum-for banner linking to the corrected decision, without repeating its own status chip", async () => {
     const wrapper = await mountBanners({
       erratumFor: {
-        uuid: "33333333-3333-3333-3333-333333333333",
-        id: "ccc",
+        uuid: "ccc",
         title: "Use PostgreSQL",
         resolved: true,
       },
@@ -112,7 +115,6 @@ describe("RecordStatusBanners", () => {
     const wrapper = await mountBanners({
       erratumFor: {
         uuid: "33333333-3333-3333-3333-333333333333",
-        id: null,
         title: null,
         resolved: false,
       },

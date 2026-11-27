@@ -18,7 +18,8 @@ vi.mock("@/api/records", () => ({
 }));
 
 const baseProps = {
-  recordId: "11111111-1111-1111-1111-111111111111",
+  adrUuid: "11111111-1111-1111-1111-111111111111",
+  candidateRef: null,
   currentDigest: "sha256-v1:current",
   previousDigest: null,
   sourceId: "central",

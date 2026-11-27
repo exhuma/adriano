@@ -14,7 +14,9 @@ Unit-of-work rules:
 - :meth:`CatalogStoreProvider.lock_registration` is a unit of work that
   first takes an exclusive per-registration lock, held until the unit of
   work ends. All writes for one registration (poll, push) run inside it,
-  which makes concurrent workers and replicas safe.
+  which makes concurrent workers and replicas safe. Polls also take
+  :meth:`CatalogStore.lock_published`, because a UUID is unique across
+  registrations.
 - Conflicts are reported with domain errors from :mod:`app.errors`
   (:class:`~app.errors.DecisionExistsError`,
   :class:`~app.errors.CandidateExistsError`,
@@ -23,42 +25,57 @@ Unit-of-work rules:
 
 Public API:
 
-- every value type of :mod:`app.storage.values` and
-  :mod:`app.storage.errata_values` (re-exported here)
+- every value type of :mod:`app.storage.values`,
+  :mod:`app.storage.search_values`, :mod:`app.storage.approval_values`,
+  :mod:`app.storage.intake_values`, :mod:`app.storage.errata_values`
+  and :mod:`app.storage.queue_values` (re-exported here)
 - protocols :class:`CatalogStore`, :class:`CatalogStoreProvider`
+
+:class:`CatalogStore` is composed from one protocol per concern:
+:mod:`app.storage.port_sources` (registrations, intake runs),
+:mod:`app.storage.port_records` (revisions, records),
+:mod:`app.storage.port_search`, :mod:`app.storage.port_approval` and
+:mod:`app.storage.port_queue` (not-indexed list).
 """
 
-import datetime
-import uuid
-from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager
 from typing import Protocol
 
-from app.domain.approval import Policy
-from app.domain.frontmatter import JsonValue
-from app.domain.relationships import RecordSummary
-from app.domain.values import Identity
-from app.storage.errata_values import LinkTarget, StoredErratum
+from app.storage.approval_values import DecisionEvent, NewDecision
+from app.storage.errata_values import StoredErratum
+from app.storage.intake_values import IntakeRun
+from app.storage.port_approval import ApprovalStore
+from app.storage.port_queue import NotIndexedStore
+from app.storage.port_records import RecordStore
+from app.storage.port_search import SearchStore
+from app.storage.port_sources import SourceStore
+from app.storage.queue_values import (
+    NotIndexedEntry,
+    NotIndexedFilters,
+    NotIndexedKey,
+    NotIndexedPage,
+    NotIndexedWrite,
+)
+from app.storage.search_values import (
+    FacetEntry,
+    SearchFilters,
+    SearchItem,
+    SearchPage,
+)
 from app.storage.values import (
     MAX_PAGE_SIZE,
     ChangeTokenEntry,
-    DecisionEvent,
     ErratumRow,
-    FacetEntry,
     IntakeKind,
-    IntakeRun,
     IntakeStatus,
     JsonObject,
-    NewDecision,
+    Location,
     PollStatus,
     RecordState,
     RecordWrite,
     Registration,
     RegistrationConfig,
     Revision,
-    SearchFilters,
-    SearchItem,
-    SearchPage,
     SearchSort,
     StoredRecord,
     UpsertResult,
@@ -75,9 +92,14 @@ __all__ = [
     "IntakeRun",
     "IntakeStatus",
     "JsonObject",
-    "LinkTarget",
+    "Location",
     "MAX_PAGE_SIZE",
     "NewDecision",
+    "NotIndexedEntry",
+    "NotIndexedFilters",
+    "NotIndexedKey",
+    "NotIndexedPage",
+    "NotIndexedWrite",
     "PollStatus",
     "RecordState",
     "RecordWrite",
@@ -94,340 +116,15 @@ __all__ = [
 ]
 
 
-class CatalogStore(Protocol):
+class CatalogStore(
+    SourceStore,
+    RecordStore,
+    SearchStore,
+    ApprovalStore,
+    NotIndexedStore,
+    Protocol,
+):
     """Catalog operations inside one unit of work."""
-
-    def sync_registrations(
-        self, registrations: Sequence[RegistrationConfig]
-    ) -> None:
-        """
-        Make stored registrations match the configuration.
-
-        Listed registrations are inserted or updated; an invalid one gets
-        status ``disabled``, and a re-enabled one leaves ``disabled`` for
-        ``never``. Registrations missing from the list are disabled,
-        never deleted.
-
-        :param registrations: All configured registrations.
-        """
-        ...
-
-    def get_registration(self, source_id: str) -> Registration | None:
-        """
-        Fetch one registration.
-
-        :param source_id: Registration id.
-        :returns: The registration, or ``None``.
-        """
-        ...
-
-    def list_registrations(self) -> list[Registration]:
-        """
-        List all registrations, enabled or not, ordered by id.
-
-        :returns: The registrations.
-        """
-        ...
-
-    def update_poll_status(
-        self,
-        source_id: str,
-        status: PollStatus,
-        attempted_at: datetime.datetime,
-        error: JsonValue = None,
-    ) -> None:
-        """
-        Record the outcome of a poll.
-
-        ``last_success_at`` is set to *attempted_at* only for
-        :attr:`PollStatus.OK`.
-
-        :param source_id: Registration id.
-        :param status: Poll outcome.
-        :param attempted_at: When the poll started.
-        :param error: Error details, ``None`` on success.
-        """
-        ...
-
-    def put_revision(self, digest: str, content: str) -> bool:
-        """
-        Store a snapshot unless it exists (snapshots are immutable).
-
-        :param digest: Digest string.
-        :param content: Canonical text content.
-        :returns: ``True`` if it was newly stored.
-        """
-        ...
-
-    def get_revision(self, digest: str) -> Revision | None:
-        """
-        Fetch a snapshot.
-
-        :param digest: Digest string.
-        :returns: The snapshot, or ``None``.
-        """
-        ...
-
-    def upsert_published(self, record: RecordWrite) -> UpsertResult:
-        """
-        Insert or replace the published row at a location.
-
-        Keyed by ``(source_id, project, path)``.
-
-        :param record: Row content.
-        :returns: The outcome.
-        """
-        ...
-
-    def upsert_candidate(self, record: RecordWrite) -> UpsertResult:
-        """
-        Insert or replace a candidate row.
-
-        Keyed by ``(source_id, project, record_key, ref)``.
-
-        :param record: Row content.
-        :returns: The outcome.
-        """
-        ...
-
-    def create_candidate(self, record: RecordWrite) -> UpsertResult:
-        """
-        Insert a candidate row only if its key is free.
-
-        :param record: Row content.
-        :returns: The outcome (always ``created``).
-        :raises app.errors.CandidateExistsError: If the candidate
-            ``(source_id, project, record_key, ref)`` exists.
-        """
-        ...
-
-    def get_record(self, record_id: uuid.UUID) -> StoredRecord | None:
-        """
-        Fetch one record row.
-
-        :param record_id: Record id.
-        :returns: The row, or ``None``.
-        """
-        ...
-
-    def list_change_tokens(
-        self, source_id: str, project: str | None = None
-    ) -> list[ChangeTokenEntry]:
-        """
-        List the stored change state of published files.
-
-        :param source_id: Registration id.
-        :param project: Restrict to one project; ``None`` means all.
-        :returns: Entries ordered by project and path.
-        """
-        ...
-
-    def delete_published(self, record_ids: Collection[uuid.UUID]) -> int:
-        """
-        Delete published rows (reconciliation). Candidates are kept.
-
-        :param record_ids: Ids to delete.
-        :returns: Number of deleted rows.
-        """
-        ...
-
-    def list_identity_siblings(self, identity: Identity) -> list[StoredRecord]:
-        """
-        List every row (published and candidates) of an identity.
-
-        :param identity: Logical identity.
-        :returns: Rows, published first, then by ref and path.
-        """
-        ...
-
-    def list_relationship_summaries(
-        self, kind: RecordState | None = RecordState.PUBLISHED
-    ) -> list[RecordSummary]:
-        """
-        List relationship summaries, keyed by ``str(record id)``.
-
-        :param kind: Restrict to one state; ``None`` means all rows.
-        :returns: One summary per row.
-        """
-        ...
-
-    def list_relationship_candidates(
-        self, self_uuid: uuid.UUID, link_targets: Collection[uuid.UUID]
-    ) -> list[RecordSummary]:
-        """
-        List published rows that can affect one record's relationships.
-
-        A bounded alternative to ``list_relationship_summaries(
-        RecordState.PUBLISHED)`` for a single detail request: see
-        :func:`app.storage.postgres.records.list_relationship_candidates`
-        for exactly which rows this returns and why the result is
-        equivalent for that one record's
-        :meth:`~app.domain.relationships.RelationshipIndex.view`.
-
-        :param self_uuid: The viewed record's own UUID.
-        :param link_targets: UUIDs the viewed record's own ``updates``,
-            ``obsoletes`` and ``corrects`` links target.
-        :returns: The matching published rows.
-        """
-        ...
-
-    def list_errata_for(self, target_uuid: uuid.UUID) -> list[ErratumRow]:
-        """
-        List the erratum rows whose ``corrects`` link is *target_uuid*.
-
-        Includes published rows and candidates (proposed errata), from
-        every registration and project; resolving which decision an
-        erratum applies to when the UUID is shared is up to the caller
-        (:mod:`app.domain.relationships` rules). Decisions are never
-        returned.
-
-        :param target_uuid: UUID of the corrected decision.
-        :returns: Published rows first, then by source, project, path,
-            ref and id.
-        """
-        ...
-
-    def list_published_by_uuid(
-        self, uuids: Collection[uuid.UUID]
-    ) -> list[LinkTarget]:
-        """
-        List the published rows holding any of *uuids*, with titles.
-
-        One query for a whole search page (erratum hits' targets).
-
-        :param uuids: Authored UUIDs.
-        :returns: One entry per matching published row of any record
-            kind (decisions and errata), with its full links.
-        """
-        ...
-
-    def list_facets(self) -> list[FacetEntry]:
-        """
-        Count decision rows per ``(source_id, project)``, for filter UIs.
-
-        Counts include both published and candidate rows, but not
-        errata (matching the default ``record_type=decision`` search).
-
-        :returns: One entry per non-empty ``(source_id, project)``
-            pair, ordered by source id then project.
-        """
-        ...
-
-    def search(
-        self,
-        query: str | None,
-        filters: SearchFilters,
-        page: int,
-        page_size: int,
-        *,
-        policy: Policy | None,
-        sort: SearchSort = SearchSort.RELEVANCE,
-    ) -> SearchPage:
-        """
-        Full-text search with filters and bounded pagination.
-
-        Hits are ordered by *sort* (see :class:`SearchSort`); the
-        default ranks by relevance when *query* is given, else orders
-        by title.
-
-        :param query: Free text (titles, bodies, UUIDs, paths); blank or
-            ``None`` matches everything.
-        :param filters: Filters.
-        :param page: 1-based page number.
-        :param page_size: Page size, 1 to :data:`MAX_PAGE_SIZE`.
-        :param policy: The configured policy (``None`` when missing or
-            invalid), used for approval states.
-        :param sort: Result order; ``relevance`` without a query
-            falls back to ``title``.
-        :returns: The page.
-        :raises ValueError: If *page* or *page_size* is out of bounds.
-        """
-        ...
-
-    def append_decision(self, decision: NewDecision) -> DecisionEvent:
-        """
-        Append a decision event; the server sets id and timestamp.
-
-        :param decision: The decision.
-        :returns: The stored event.
-        :raises app.errors.DecisionExistsError: If the identity already
-            has a decision for the digest.
-        """
-        ...
-
-    def list_decisions(self, identity: Identity) -> list[DecisionEvent]:
-        """
-        List all decision events of an identity, any digest.
-
-        :param identity: Logical identity.
-        :returns: Events, oldest first.
-        """
-        ...
-
-    def list_decisions_for(
-        self, identities: Collection[Identity]
-    ) -> list[DecisionEvent]:
-        """
-        List all decision events of several identities in one query.
-
-        :param identities: Logical identities.
-        :returns: Events of all of them, oldest first; group them by
-            :attr:`~app.storage.port.DecisionEvent.identity`.
-        """
-        ...
-
-    def start_intake_run(
-        self,
-        source_id: str,
-        kind: IntakeKind,
-        *,
-        identity: JsonValue = None,
-        delivery_id: str | None = None,
-    ) -> IntakeRun:
-        """
-        Record the start of an intake run.
-
-        :param source_id: Registration id as requested.
-        :param kind: Poll or push.
-        :param identity: Who triggered the run (no secrets).
-        :param delivery_id: Push delivery id, if any.
-        :returns: The running run.
-        :raises app.errors.DeliveryExistsError: If *delivery_id* was
-            already used for *source_id*.
-        """
-        ...
-
-    def finish_intake_run(
-        self,
-        run_id: uuid.UUID,
-        status: IntakeStatus,
-        *,
-        counts: JsonValue = None,
-        errors: JsonValue = None,
-    ) -> IntakeRun:
-        """
-        Record the end of an intake run.
-
-        :param run_id: Run id.
-        :param status: Final status.
-        :param counts: Outcome counters.
-        :param errors: Error details.
-        :returns: The finished run.
-        :raises LookupError: If the run does not exist.
-        """
-        ...
-
-    def find_intake_run(
-        self, source_id: str, delivery_id: str
-    ) -> IntakeRun | None:
-        """
-        Find the run of an earlier push delivery.
-
-        :param source_id: Registration id.
-        :param delivery_id: Push delivery id.
-        :returns: The run, or ``None``.
-        """
-        ...
 
 
 class CatalogStoreProvider(Protocol):

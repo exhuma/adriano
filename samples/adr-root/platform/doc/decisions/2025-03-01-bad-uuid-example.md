@@ -5,9 +5,8 @@ decision-date: 2025-03-01
 ---
 # Record with an invalid UUID
 
-This record's `uuid` field is not a syntactically valid UUID. It is
-stored anyway, keyed by its stable source location
-(`platform/doc/decisions/2025-03-01-bad-uuid-example.md`) instead of
-a UUID, reported with a `bad_uuid` error, and its UUID-based
-relationships (`updates`/`obsoletes`/`corrects`) are disabled. It
-cannot be approved until the UUID is fixed.
+This file's `uuid` field is not a syntactically valid UUID. Without
+a valid UUID the document has no identity, so it is not indexed. It
+appears in the "Not indexed" list with the reason `bad_uuid` and its
+content, and the entry disappears once the UUID is fixed and the file
+is polled again.

@@ -1,8 +1,9 @@
 """
 Validation issue value types shared by the domain modules.
 
-An issue is stored per record as ``{"severity", "code", "message"}``
-(see :meth:`Issue.to_dict` / :meth:`Issue.from_dict`). Messages are short
+An issue is stored per record (and as a reason per not-indexed
+document) as ``{"severity", "code", "message"}`` (see
+:meth:`Issue.to_dict` / :meth:`Issue.from_dict`). Messages are short
 and actionable and are meant to be shown to readers as-is.
 
 Public API: :class:`Severity`, :class:`IssueCode`, :class:`Issue`,
@@ -32,9 +33,17 @@ class IssueCode(StrEnum):
     MISSING_DATE = "missing_date"
     UNKNOWN_FIELD = "unknown_field"
     BAD_FIELD_TYPE = "bad_field_type"
+    #: Not-indexed reason: another file already holds the UUID.
     DUPLICATE_UUID = "duplicate_uuid"
+    #: Not-indexed reason: the document could not be read at its source.
+    FETCH_FAILED = "fetch_failed"
+    #: Not-indexed reason (push): the document's UUID is not the pushed one.
+    UUID_MISMATCH = "uuid_mismatch"
+    #: Not-indexed reason (push): the push named the published ref.
+    PUBLISHED_REF_NOT_ALLOWED = "published_ref_not_allowed"
+    #: Not-indexed reason (push): the content exceeds the size limit.
+    CONTENT_TOO_LARGE = "content_too_large"
     MISSING_TARGET = "missing_target"
-    AMBIGUOUS_TARGET = "ambiguous_target"
     LEGACY_ALIAS = "legacy_alias"
     LEGACY_SIGNOFF = "legacy_signoff"
     #: Retired: no longer emitted (``corrects`` is now a legacy field).

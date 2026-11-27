@@ -141,20 +141,8 @@ Errata
    ``payments/doc/decisions/errata/2023-12-04-stripe-wording-fix.md``
    is an editorial one.
 
-Invalid YAML (``bad_yaml``)
-   ``platform/doc/decisions/2025-01-05-broken-yaml-frontmatter.md``
-
-Invalid UUID (``bad_uuid``)
-   ``platform/doc/decisions/2025-03-01-bad-uuid-example.md`` falls
-   back to an identity based on its source location.
-
 Broken link (``missing_target``)
    ``platform/doc/decisions/2025-04-10-broken-link-example.md``
-
-Duplicate UUID (``duplicate_uuid``, a warning)
-   ``platform/doc/decisions/2025-06-01-shared-event-bus.md`` and
-   ``payments/doc/decisions/2025-07-01-duplicate-uuid-payments.md``
-   share one UUID across two projects.
 
 Nested folders
    ``platform/doc/decisions/2024/2024-11-01-use-feature-flags.md``
@@ -162,6 +150,24 @@ Nested folders
 Ignored file
    ``central/doc/decisions/README.md`` is not an ADR and discovery
    skips it.
+
+Not indexed
+   Three files demonstrate the "Not indexed" page,
+   one reason each.
+   They are not records, so they show up there and nowhere else:
+
+   * ``platform/doc/decisions/2025-01-05-broken-yaml-frontmatter.md``
+     has invalid YAML (``bad_yaml``).
+   * ``platform/doc/decisions/2025-03-01-bad-uuid-example.md`` has an
+     invalid UUID (``bad_uuid``).
+   * ``platform/doc/decisions/2025-06-01-shared-event-bus.md`` carries
+     the UUID of
+     ``payments/doc/decisions/2025-07-01-duplicate-uuid-payments.md``
+     (``duplicate_uuid``).
+     The payments file is indexed first, because projects are applied
+     in name order, so it holds the UUID.
+     Give the platform file a new UUID and poll again to see its entry
+     clear and the file appear in the catalog.
 
 Candidate pushes
    ``samples/candidates/`` holds push bodies, including an erratum

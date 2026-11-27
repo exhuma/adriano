@@ -71,7 +71,6 @@ describe("pollProblemLabel", () => {
     "listing_failed",
     "listing_incomplete",
     "fetch_failed",
-    "ownership_conflict",
     "not_pollable",
   ];
 
@@ -178,7 +177,6 @@ describe("recoveryHint", () => {
       "listing_failed",
       "listing_incomplete",
       "fetch_failed",
-      "ownership_conflict",
     ];
     for (const code of codes) {
       const problem: SourceProblemDisplay = {

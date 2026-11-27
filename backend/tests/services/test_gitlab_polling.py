@@ -21,14 +21,16 @@ B = "doc/decisions/sub/2024-01-02-b.md"
 C = "doc/decisions/2024-02-02-c.md"
 
 
-def adr(title: str) -> str:
+def adr(title: str, adr_uuid: uuid.UUID | None = None) -> str:
     """
-    Build a valid ADR document with a fresh UUID.
+    Build a valid ADR document.
 
     :param title: Title.
+    :param adr_uuid: Its UUID; default: a fresh one (a new ADR).
     :returns: The text.
     """
-    return f"---\nuuid: {uuid.uuid4()}\ntitle: {title}\n---\nBody.\n"
+    adr_uuid = adr_uuid or uuid.uuid4()
+    return f"---\nuuid: {adr_uuid}\ntitle: {title}\n---\nBody.\n"
 
 
 async def no_sleep(_seconds: float) -> None:
@@ -167,7 +169,8 @@ async def test_moved_head_fetches_only_changed_blobs(
     polling = service(provider, make_config(tmp_path, fake))
     await polling.poll_source("gl")
     blobs = fake.calls("blob")
-    repo(fake, "platform/api").put(B, adr("B2"))
+    kept = tokens(provider)[("platform/api", B)].adr_uuid
+    repo(fake, "platform/api").put(B, adr("B2", kept))
 
     outcome = await polling.poll_source("gl")
 

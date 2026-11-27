@@ -16,8 +16,10 @@ export type { DecisionIn, DecisionSummaryOut };
  * the server answers 409 `digest_changed` when the content moved on
  * since, instead of silently deciding content nobody reviewed.
  *
- * :param id: Record id.
+ * :param adrUuid: The ADR's UUID.
  * :param body: The action, optional comment, and expected digest.
+ * :param ref: A candidate's ref; omitted to decide the published
+ *     row.
  * :returns: The stored decision event.
  * :throws ApiError: 409 (`digest_changed`, `already_decided`,
  *     `policy_missing`, `approval_not_required`, `not_approvable`),
@@ -25,11 +27,13 @@ export type { DecisionIn, DecisionSummaryOut };
  *     (`record_not_found`).
  */
 export function postDecision(
-  id: string,
+  adrUuid: string,
   body: DecisionIn,
+  ref?: string,
 ): Promise<DecisionSummaryOut> {
+  const query = ref === undefined ? "" : `?ref=${encodeURIComponent(ref)}`;
   return api.post<DecisionSummaryOut>(
-    `/api/v1/records/${encodeURIComponent(id)}/decisions`,
+    `/api/v1/records/${encodeURIComponent(adrUuid)}/decisions${query}`,
     body,
   );
 }

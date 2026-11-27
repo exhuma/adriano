@@ -16,6 +16,7 @@
  */
 import { flushPromises, mount } from "@vue/test-utils";
 import { ref } from "vue";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api";
@@ -54,6 +55,7 @@ vi.mock("vuetify", async (importOriginal) => {
 
 const baseSource: SourceOut = {
   id: "central",
+  not_indexed_count: 0,
   type: "filesystem",
   intake: ["poll"],
   published_ref: "local",
@@ -68,8 +70,15 @@ const baseSource: SourceOut = {
 };
 
 async function mountView() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/", component: { template: "<div />" } },
+      { path: "/not-indexed", component: { template: "<div />" } },
+    ],
+  });
   const wrapper = mount(SourcesView, {
-    global: { plugins: [vuetify] },
+    global: { plugins: [vuetify, router] },
     // The snackbar teleports its content to `document.body`; attach
     // there so its text is reachable via `document.body.textContent`.
     attachTo: document.body,
@@ -296,7 +305,7 @@ describe("SourcesView", () => {
     expect(rows[0].text()).not.toContain("fake source is down");
     expect(rows[1].text()).toContain("fake source is down");
     const subRowCell = rows[1].find("td");
-    expect(subRowCell.attributes("colspan")).toBe("8");
+    expect(subRowCell.attributes("colspan")).toBe("9");
   });
 
   it("labels a config error by its stable code for an operator, " +
@@ -466,7 +475,22 @@ describe("SourcesView", () => {
     const rows = wrapper.findAll("tbody > tr");
     expect(rows.length).toBe(2);
     const subRowCell = rows[1].find("td");
-    // Registration, Status, Last attempt, Last success, Action.
-    expect(subRowCell.attributes("colspan")).toBe("5");
+    // Registration, Status, Last attempt, Last success, Not indexed,
+    // Action.
+    expect(subRowCell.attributes("colspan")).toBe("6");
+  });
+
+  it("shows the not-indexed count per registration, linking to the list filtered by that source", async () => {
+    listSources.mockResolvedValue([
+      { ...baseSource, id: "central", not_indexed_count: 3 },
+      { ...baseSource, id: "quiet", not_indexed_count: 0 },
+    ]);
+    const wrapper = await mountView();
+
+    const link = wrapper.find("a[href='/not-indexed?source=central']");
+    expect(link.exists()).toBe(true);
+    expect(link.text()).toBe("3 not indexed");
+    expect(wrapper.findAll("a[href^='/not-indexed']").length).toBe(1);
+    expect(wrapper.text()).toContain("None");
   });
 });

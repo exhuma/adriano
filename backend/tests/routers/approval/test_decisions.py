@@ -52,11 +52,11 @@ def test_reviewer_role_accepts(
     """Ensure a reviewer role accepts the exact current digest."""
     pushed = _pushed(client)
     as_user(client)
-    assert _approval(client, pushed["record_id"])["can_decide"] is True
+    assert _approval(client, pushed["adr_uuid"])["can_decide"] is True
 
     response = decide(
         client,
-        pushed["record_id"],
+        pushed["adr_uuid"],
         comment="  Looks right.  ",
         expected_digest=pushed["digest"],
     )
@@ -69,9 +69,10 @@ def test_reviewer_role_accepts(
     assert event["actor_subject"] == "rita"
     assert event["comment"] == "Looks right."
     assert (event["policy_id"], event["policy_version"]) == ("global", 3)
-    assert event["provenance"]["record_id"] == pushed["record_id"]
+    assert "record_id" not in event["provenance"]
+    assert event["provenance"]["kind"] == "candidate"
     assert event["provenance"]["ref"] == "feature/catalog"
-    approval = _approval(client, pushed["record_id"])
+    approval = _approval(client, pushed["adr_uuid"])
     assert approval["state"] == "accepted"
     assert approval["needs_approval"] is False
     assert approval["can_decide"] is False
@@ -88,10 +89,10 @@ def test_listed_user_is_eligible(
     pushed = _pushed(client)
     as_user(client, sub="carol", roles=("adr-reader",))
 
-    response = decide(client, pushed["record_id"], "rejected")
+    response = decide(client, pushed["adr_uuid"], "rejected")
 
     assert response.status_code == 201
-    assert _approval(client, pushed["record_id"])["state"] == "rejected"
+    assert _approval(client, pushed["adr_uuid"])["state"] == "rejected"
 
 
 def test_reader_is_not_eligible(
@@ -101,8 +102,8 @@ def test_reader_is_not_eligible(
     pushed = _pushed(client)
     as_user(client, sub="rob", roles=("adr-reader",))
 
-    response = decide(client, pushed["record_id"])
-    approval = _approval(client, pushed["record_id"])
+    response = decide(client, pushed["adr_uuid"])
+    approval = _approval(client, pushed["adr_uuid"])
 
     assert response.status_code == 403
     assert response.json()["code"] == "not_eligible"
@@ -119,12 +120,12 @@ def test_missing_policy_refuses_decisions(
     no_policy = make_client(None)
     as_user(no_policy)
 
-    response = decide(no_policy, pushed["record_id"])
+    response = decide(no_policy, pushed["adr_uuid"])
 
     assert response.status_code == 409
     assert response.json()["code"] == "policy_missing"
     assert "approval_policy" in response.json()["hint"]
-    approval = _approval(no_policy, pushed["record_id"])
+    approval = _approval(no_policy, pushed["adr_uuid"])
     assert approval["state"] == "policy_missing"
     assert approval["decide_blocked_code"] == "policy_missing"
 
@@ -136,11 +137,11 @@ def test_self_approval_is_refused(
     pushed = _pushed(client, author="Rita@Example.com")
     as_user(client, email="rita@example.com")
 
-    response = decide(client, pushed["record_id"])
+    response = decide(client, pushed["adr_uuid"])
 
     assert response.status_code == 403
     assert response.json()["code"] == "self_approval"
-    blocked = _approval(client, pushed["record_id"])["decide_blocked_code"]
+    blocked = _approval(client, pushed["adr_uuid"])["decide_blocked_code"]
     assert blocked == "self_approval"
 
 
@@ -151,7 +152,7 @@ def test_self_approval_by_principal_is_refused(
     pushed = _pushed(client, author=f"{DEV_ISSUER}|rita")
     as_user(client, email=None)
 
-    response = decide(client, pushed["record_id"])
+    response = decide(client, pushed["adr_uuid"])
 
     assert response.status_code == 403
     assert response.json()["code"] == "self_approval"
@@ -163,10 +164,10 @@ def test_deciding_twice_is_409(
     """Ensure one formal decision per (identity, digest)."""
     pushed = _pushed(client)
     as_user(client)
-    assert decide(client, pushed["record_id"]).status_code == 201
+    assert decide(client, pushed["adr_uuid"]).status_code == 201
     as_user(client, sub="carol", roles=("adr-reader",))
 
-    response = decide(client, pushed["record_id"], "rejected")
+    response = decide(client, pushed["adr_uuid"], "rejected")
 
     assert response.status_code == 409
     assert response.json()["code"] == "already_decided"
@@ -180,7 +181,7 @@ def test_expected_digest_mismatch_is_409(
     as_user(client)
 
     response = decide(
-        client, pushed["record_id"], expected_digest="sha256-v1:" + "0" * 64
+        client, pushed["adr_uuid"], expected_digest="sha256-v1:" + "0" * 64
     )
 
     assert response.status_code == 409
@@ -194,11 +195,11 @@ def test_rejection_needs_approval(
     pushed = _pushed(client)
     as_user(client)
 
-    assert decide(client, pushed["record_id"], "rejected").status_code == 201
+    assert decide(client, pushed["adr_uuid"], "rejected").status_code == 201
     listed = client.get("/api/v1/records", params={"needs_approval": "true"})
 
-    ids = {item["id"]: item for item in listed.json()["items"]}
-    assert ids[pushed["record_id"]]["approval_state"] == "rejected"
+    ids = {item["adr_uuid"]: item for item in listed.json()["items"]}
+    assert ids[pushed["adr_uuid"]]["approval_state"] == "rejected"
 
 
 def test_unknown_record_is_404(
@@ -220,8 +221,8 @@ def test_comment_length_and_extra_fields_are_validated(
     pushed = _pushed(client)
     as_user(client)
 
-    long_comment = decide(client, pushed["record_id"], comment="x" * 2001)
-    extra = decide(client, pushed["record_id"], digest="sha256-v1:00")
+    long_comment = decide(client, pushed["adr_uuid"], comment="x" * 2001)
+    extra = decide(client, pushed["adr_uuid"], digest="sha256-v1:00")
 
     assert long_comment.status_code == 422
     assert extra.status_code == 422
@@ -233,7 +234,7 @@ def test_decisions_need_authentication(client: TestClient) -> None:
     client.cookies.clear()
 
     response = client.post(
-        f"/api/v1/records/{pushed['record_id']}/decisions",
+        f"/api/v1/records/{pushed['adr_uuid']}/decisions",
         json={"action": "accepted"},
         headers={"Authorization": "Bearer not-a-jwt"},
     )
@@ -250,10 +251,10 @@ def test_history_survives_a_new_app_and_is_append_only(
     """Ensure decisions persist across app instances and are immutable."""
     pushed = _pushed(client)
     as_user(client)
-    event = decide(client, pushed["record_id"]).json()
+    event = decide(client, pushed["adr_uuid"]).json()
 
     restarted = make_client(POLICY)
-    history = _approval(restarted, pushed["record_id"])["history"]
+    history = _approval(restarted, pushed["adr_uuid"])["history"]
 
     assert isinstance(history, list)
     assert [h["id"] for h in history] == [event["id"]]
@@ -271,9 +272,10 @@ def test_unapprovable_records_cannot_be_decided(
     router_settings: Settings,
     provider: PostgresStoreProvider,
 ) -> None:
-    """Ensure a record without a valid UUID answers 409."""
+    """Ensure content that is not valid UTF-8 answers 409."""
+    content = f"---\nuuid: {uuid.uuid4()}\ntitle: x\n---\nCaf\xe9\n"
     with provider.lock_registration("central") as store:
-        record_id = seed(store, content=b"---\ntitle: x\n---\nBody\n")
+        record_id = seed(store, content=content.encode("latin-1"))
     as_user(client)
 
     response = decide(client, str(record_id))

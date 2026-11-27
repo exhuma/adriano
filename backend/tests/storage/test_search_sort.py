@@ -68,9 +68,11 @@ def store_one(
     :param path: File path.
     :param title: Title.
     :param body: Body text.
-    :param adr_uuid: Authored UUID, if any.
+    :param adr_uuid: Authored UUID; default: derived from the path, so
+        storing a path again updates the same ADR.
     :returns: The stored write.
     """
+    adr_uuid = adr_uuid or uuid.uuid5(uuid.NAMESPACE_URL, path)
     with provider.unit_of_work() as store:
         write = put_record(
             store, path=path, title=title, body=body, adr_uuid=adr_uuid
@@ -209,7 +211,8 @@ def same_instant(provider: PostgresStoreProvider) -> PostgresStoreProvider:
     """
     Store eight records in one transaction (one ``updated_at``).
 
-    Two pairs share a title up to case, so only the id separates them.
+    Two pairs share a title up to case, so only the row key separates
+    them.
 
     :param provider: Clean provider.
     :returns: The provider.
@@ -228,24 +231,27 @@ def page_ids(
     sort: SearchSort,
     filters: SearchFilters,
     page_size: int,
-) -> list[uuid.UUID]:
+) -> list[tuple[uuid.UUID, str, str]]:
     """
-    Walk every page and collect the hit ids in order.
+    Walk every page and collect the hit row keys in order.
 
     :param provider: Provider.
     :param sort: Requested order.
     :param filters: Filters.
     :param page_size: Page size.
-    :returns: The ids of all pages, concatenated.
+    :returns: The ``(adr_uuid, kind, ref)`` of all pages, concatenated.
     """
-    result: list[uuid.UUID] = []
+    result: list[tuple[uuid.UUID, str, str]] = []
     with provider.unit_of_work() as store:
         number = 1
         while True:
             page = store.search(
                 None, filters, number, page_size, policy=POLICY, sort=sort
             )
-            result += [item.id for item in page.items]
+            result += [
+                (item.adr_uuid, item.kind.value, item.ref)
+                for item in page.items
+            ]
             if number * page_size >= page.total:
                 return result
             number += 1
@@ -257,16 +263,20 @@ def test_recent_pages_are_stable_on_equal_timestamps(
     engine: Engine,
     filters: SearchFilters,
 ) -> None:
-    """Ensure equal ``updated_at`` values page by title, then id."""
+    """Ensure equal ``updated_at`` values page by title, then row key."""
     with engine.connect() as connection:
         instants = connection.execute(
             text("SELECT count(DISTINCT updated_at) FROM record")
         ).scalar_one()
-        expected = list(
-            connection.execute(
-                text("SELECT id FROM record ORDER BY lower(title), id")
-            ).scalars()
-        )
+        expected = [
+            tuple(row)
+            for row in connection.execute(
+                text(
+                    "SELECT adr_uuid, kind, ref FROM record "
+                    "ORDER BY lower(title), adr_uuid, kind, ref"
+                )
+            )
+        ]
     assert instants == 1
 
     paged = page_ids(same_instant, SearchSort.RECENT, filters, 3)
@@ -283,11 +293,9 @@ def accept(provider: PostgresStoreProvider, write: RecordWrite) -> None:
     :param provider: Provider.
     :param write: The stored write.
     """
-    assert write.adr_uuid is not None
     with provider.unit_of_work() as store:
         store.append_decision(
             NewDecision(
-                identity=write.identity,
                 adr_uuid=write.adr_uuid,
                 digest=write.digest,
                 action=DecisionAction.ACCEPTED,

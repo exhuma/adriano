@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Divergence and competing-candidate warnings for the record page:
- * content divergence within one identity (published vs. accepted),
- * and other candidates of the same identity holding different
+ * content divergence between the rows of one ADR (published vs.
+ * accepted), and other candidates of the same ADR holding different
  * content, each a separate concern that can occur independently.
  * A competing candidate whose content cannot be decided shows the
  * neutral "Blocked" status (R-02, `approvalDisplayLabel`).
@@ -17,11 +17,12 @@ import type { CompetingCandidateOut, DivergenceOut } from "@/types/approval";
 import type { RecordKind } from "@/types/records";
 import { shortDigest } from "@/utils/digest";
 import { approvalDisplayLabel, divergenceLabel } from "@/utils/labels";
+import { candidatePath } from "@/utils/recordPaths";
 
 defineProps<{
-  /** Content divergence within the record's identity, if any. */
+  /** Content divergence between the rows of the record's ADR, if any. */
   divergence: DivergenceOut | null;
-  /** Other candidates of the identity holding different content. */
+  /** Other candidates of the ADR holding different content. */
   competingCandidates: CompetingCandidateOut[];
   /** Whether the viewed record is a normal decision or an erratum;
    *  picks the right chip vocabulary for each competing candidate. */
@@ -38,9 +39,15 @@ defineProps<{
     class="mb-4"
   >
     <div>{{ divergence.message }}</div>
-    <ul v-if="divergence.other_record_ids.length > 0" class="mt-2">
-      <li v-for="id in divergence.other_record_ids" :key="id">
-        <router-link :to="`/records/${id}`" class="text-primary">
+    <ul v-if="divergence.other_rows.length > 0" class="mt-2">
+      <li
+        v-for="row in divergence.other_rows"
+        :key="`${row.adr_uuid}@${row.ref}`"
+      >
+        <router-link
+          :to="candidatePath(row.adr_uuid, row.ref)"
+          class="text-primary"
+        >
           View the {{ shortDigest(divergence.other_digest) }} revision
         </router-link>
       </li>
@@ -57,8 +64,11 @@ defineProps<{
       decision on one never affects another.
     </v-card-text>
     <v-list density="compact" tabindex="-1">
-      <v-list-item v-for="candidate in competingCandidates" :key="candidate.id">
-        <router-link :to="`/records/${candidate.id}`" class="text-primary">
+      <v-list-item v-for="candidate in competingCandidates" :key="candidate.ref">
+        <router-link
+          :to="candidatePath(candidate.adr_uuid, candidate.ref)"
+          class="text-primary"
+        >
           {{ candidate.ref }}
         </router-link>
         <template #append>

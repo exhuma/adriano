@@ -34,7 +34,11 @@ async function mountBody(
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
   await router.push("/");
@@ -55,13 +59,12 @@ describe("ErratumBody", () => {
   it("shows nothing extra when the target is resolved (the page's own h1 covers it)", async () => {
     const wrapper = await mountBody({
       uuid: "11111111-1111-1111-1111-111111111111",
-      id: "22222222-2222-2222-2222-222222222222",
       title: "Use PostgreSQL",
       resolved: true,
     });
 
     expect(wrapper.text()).not.toContain("Erratum for");
-    expect(wrapper.find("a[href='/records/22222222-2222-2222-2222-222222222222']").exists()).toBe(
+    expect(wrapper.find("a[href='/records/11111111-1111-1111-1111-111111111111']").exists()).toBe(
       false,
     );
   });
@@ -69,7 +72,6 @@ describe("ErratumBody", () => {
   it("falls back to the target's short UUID when unresolved, with the full value reachable", async () => {
     const wrapper = await mountBody({
       uuid: "33333333-3333-3333-3333-333333333333",
-      id: null,
       title: null,
       resolved: false,
     });
@@ -94,7 +96,6 @@ describe("ErratumBody", () => {
   it("omits its own 'Section: …' line when the header subtitle already shows it (R-11)", async () => {
     const wrapper = await mountBody({
       uuid: "11111111-1111-1111-1111-111111111111",
-      id: "22222222-2222-2222-2222-222222222222",
       title: "Use PostgreSQL",
       resolved: true,
     });

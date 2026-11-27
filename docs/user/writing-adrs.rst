@@ -25,6 +25,9 @@ Proposals (candidates)
    reviewers can accept it before it is published.
 
 Whichever way it arrives, the catalog never changes your file.
+A file the catalog cannot index, for example because it has no valid
+``uuid``, is not lost: it is listed on the **Not indexed** page with
+the reason; see :doc:`not-indexed`.
 To change a decision, edit the file and let it be collected again.
 Reviewers then see "Changed since acceptance" if it was accepted
 before.
@@ -59,10 +62,19 @@ It is written in YAML.
 uuid : required
    A unique identifier for the decision, such as
    ``0b0c2f4e-1a2b-4c3d-8e9f-001122334455``.
-   Create it once and never change it; every link to your decision
+   Create it once and never change it.
+   It is the decision's identity: every link, address and approval
    uses it.
-   Without a valid ``uuid`` the decision is shown but marked
-   **Blocked**: it cannot be accepted.
+   It must be unique in the whole catalog, across all projects and
+   sources.
+   Because the catalog follows the identifier, you can rename the
+   file or move it to another folder, project or source, and the
+   decision keeps its address, history and approvals.
+   When you copy a file to start a new decision, create a new
+   ``uuid`` for the copy.
+   Without a valid ``uuid`` the file is not indexed.
+   If another file already uses the same ``uuid``, the file that was
+   indexed first keeps it and the other is not indexed.
 
 title : optional
    The name shown in the catalog.
@@ -220,6 +232,8 @@ Check your file
 ---------------
 
 Open the decision in the catalog after it has been collected.
+If you cannot find it, look for the file on the **Not indexed** page
+(:doc:`not-indexed`).
 The title shows how many warnings and errors the file has, and the
 **Validation issues** card explains each one in plain words; see
 :doc:`reading-a-record`.
@@ -227,7 +241,8 @@ The most common causes are:
 
 * The header is not valid YAML, for example a quote that is not
   closed.
-* The ``uuid`` is missing or has a typo.
+* The ``uuid`` is missing, has a typo or is a copy of another
+  decision's.
 * A date is not written ``YYYY-MM-DD``.
 * A link points to an identifier that does not exist.
 * The file is not saved as UTF-8 text.

@@ -30,7 +30,6 @@ const event: DecisionSummaryOut = {
   policy_id: "global",
   policy_version: 1,
   provenance: {
-    record_id: "r1",
     kind: "candidate",
     source_id: "central",
     project: "platform",
@@ -46,7 +45,7 @@ describe("useDecision", () => {
     postDecision.mockResolvedValue(event);
     const { decide, submitting } = useDecision();
 
-    const promise = decide("r1", "accepted", "sha256-v1:abc", "  looks good  ");
+    const promise = decide("r1", null, "accepted", "sha256-v1:abc", "  looks good  ");
     expect(submitting.value).toBe(true);
     const outcome = await promise;
 
@@ -56,20 +55,37 @@ describe("useDecision", () => {
       action: "accepted",
       comment: "looks good",
       expected_digest: "sha256-v1:abc",
-    });
+    }, undefined);
+  });
+
+  it("sends a candidate's ref, slashes included, with the decision", async () => {
+    postDecision.mockResolvedValue(event);
+    const { decide } = useDecision();
+
+    await decide("r1", "feature/x", "accepted", "sha256-v1:abc");
+
+    expect(postDecision).toHaveBeenCalledWith(
+      "r1",
+      {
+        action: "accepted",
+        comment: undefined,
+        expected_digest: "sha256-v1:abc",
+      },
+      "feature/x",
+    );
   });
 
   it("omits a blank comment", async () => {
     postDecision.mockResolvedValue(event);
     const { decide } = useDecision();
 
-    await decide("r1", "accepted", "sha256-v1:abc", "   ");
+    await decide("r1", null, "accepted", "sha256-v1:abc", "   ");
 
     expect(postDecision).toHaveBeenCalledWith("r1", {
       action: "accepted",
       comment: undefined,
       expected_digest: "sha256-v1:abc",
-    });
+    }, undefined);
   });
 
   it("maps 409 digest_changed to a digest_changed outcome", async () => {
@@ -82,7 +98,7 @@ describe("useDecision", () => {
     );
     const { decide } = useDecision();
 
-    const outcome = await decide("r1", "accepted", "sha256-v1:stale");
+    const outcome = await decide("r1", null, "accepted", "sha256-v1:stale");
 
     expect(outcome.kind).toBe("digest_changed");
     expect(outcome).toMatchObject({
@@ -100,7 +116,7 @@ describe("useDecision", () => {
     );
     const { decide } = useDecision();
 
-    const outcome = await decide("r1", "accepted", "sha256-v1:abc");
+    const outcome = await decide("r1", null, "accepted", "sha256-v1:abc");
 
     expect(outcome).toEqual({
       kind: "error",
@@ -120,7 +136,7 @@ describe("useDecision", () => {
     );
     const { decide } = useDecision();
 
-    const outcome = await decide("r1", "rejected", "sha256-v1:abc");
+    const outcome = await decide("r1", null, "rejected", "sha256-v1:abc");
 
     expect(outcome).toEqual({
       kind: "error",
@@ -134,7 +150,7 @@ describe("useDecision", () => {
     postDecision.mockRejectedValue(new TypeError("network down"));
     const { decide } = useDecision();
 
-    const outcome = await decide("r1", "accepted", "sha256-v1:abc");
+    const outcome = await decide("r1", null, "accepted", "sha256-v1:abc");
 
     expect(outcome.kind).toBe("error");
     expect((outcome as { message: string }).message).toContain(

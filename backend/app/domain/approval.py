@@ -1,9 +1,8 @@
 """
 Approval policy, approval-state evaluation and reviewer eligibility.
 
-Approval evidence is scoped by the logical identity
-``(source_id, project, record_key)`` and the content digest. The caller
-passes only the decision events of one identity; :func:`evaluate` then
+Approval evidence is scoped by the ADR UUID and the content digest. The caller
+passes only the decision events of one ADR; :func:`evaluate` then
 derives the state of the record's **current digest**. Rules, applied in
 this order (storage queries that filter by state must mirror them):
 
@@ -17,10 +16,10 @@ this order (storage queries that filter by state must mirror them):
    ``changed_since_acceptance`` (needs approval);
 6. otherwise -> ``pending`` (needs approval).
 
-``approvable`` (see :attr:`app.domain.records.ParsedRecord.approvable`)
+``approvable`` (see :func:`app.services.decisions.approval_blocker`)
 does not change the state; it only controls
-:attr:`ApprovalState.can_decide`. A record without a valid UUID or with
-bad encoding therefore shows ``pending`` and cannot be decided.
+:attr:`ApprovalState.can_decide`. A record with bad encoding therefore
+shows ``pending`` and cannot be decided.
 
 Public API: :class:`PolicyStatus`, :class:`Policy`,
 :class:`DecisionAction`, :class:`DecisionEventView`,
@@ -145,8 +144,8 @@ def evaluate(
 
     :param policy: The configured policy, or ``None`` when it is missing
         or invalid.
-    :param identity_events: All decision events of the record's logical
-        identity (any digest).
+    :param identity_events: All decision events of the record's ADR
+        UUID (any digest).
     :param current_digest: Digest string of the record's current content.
     :param approvable: Whether the content may be decided at all.
     :returns: The state; see the module docstring for the rules.
@@ -184,7 +183,7 @@ def last_decided(
     """
     Pick the default "from" revision for a diff.
 
-    :param identity_events: All decision events of one identity.
+    :param identity_events: All decision events of one ADR UUID.
     :param exclude_digest: Digest to ignore, typically the current one.
     :returns: The latest accepted event, else the latest rejected event,
         else ``None``.

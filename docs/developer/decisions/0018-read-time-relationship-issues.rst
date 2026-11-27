@@ -1,7 +1,10 @@
 0018: Compute relationship issues at read time
 ==============================================
 
-:Status: Accepted
+:Status: Accepted; superseded in part by
+   :doc:`0023-uuid-is-the-only-identity`.
+   ``ambiguous_target`` and ``duplicate_uuid`` no longer exist: a UUID
+   identifies one ADR, so a link resolves or is ``missing_target``.
 :Date: 2026-10-19
 
 Context

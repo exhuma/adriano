@@ -15,7 +15,7 @@ import type { ErratumOut } from "@/types/records";
 
 function erratum(overrides: Partial<ErratumOut> = {}): ErratumOut {
   return {
-    id: "11111111-1111-1111-1111-111111111111",
+    adr_uuid: "11111111-1111-1111-1111-111111111111",
     kind: "published",
     ref: "main",
     source_id: "central",
@@ -43,7 +43,11 @@ async function mountSection(errata: ErratumOut[]) {
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
   await router.push("/");
@@ -70,9 +74,9 @@ describe("ErrataSection", () => {
   });
 
   it("counts only published errata in the heading, with proposed shown separately", async () => {
-    const published = erratum({ id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", kind: "published" });
+    const published = erratum({ adr_uuid: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", kind: "published" });
     const candidate = erratum({
-      id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      adr_uuid: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
       kind: "candidate",
       ref: "feature-x",
     });

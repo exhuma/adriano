@@ -246,11 +246,36 @@ Record pages say the content may be out of date
    *Check:* that the poll schedule runs (``adriano poll`` exit codes
    in your cron log), and the Sources page.
 
-An ``ownership_conflict`` warning in a poll
-   *Cause:* two registrations contain the same file;
-   the one listed first in the catalog file keeps it.
+A file is missing from the catalog
+   *Cause:* the file is not indexed. Its name does not start with a
+   date, or it is listed on the **Not indexed** page: it has no valid
+   ``uuid``, its header is not valid YAML, another file already holds
+   its UUID, or the source could not deliver it.
 
-   *Check:* the ``scope`` of both registrations.
+   *Check:* the **Not indexed** page, or the **Not indexed** count of
+   the registration on the Sources page.
+   The entry names the reason.
+   Fix the file and poll again; the entry clears by itself.
+   See :doc:`not-indexed`.
+
+A file appears on the Not indexed page with ``duplicate_uuid``
+   *Cause:* another file already holds the same UUID.
+   The file that was indexed first keeps it.
+   This usually comes from copying a file without changing its
+   ``uuid``.
+
+   *Check:* the entry links to the record that holds the UUID.
+   Give the copy a new UUID.
+
+A moved file did not move its record
+   *Cause:* the old file is still in the source or its listing was
+   incomplete, so it still holds the UUID; the new file is listed as a
+   duplicate.
+
+   *Check:* the poll result of the registration
+   (``partial`` means a listing was incomplete) and the old location.
+   Once a complete listing no longer has the old file, the next poll
+   moves the record.
 
 Approval
 --------
@@ -263,8 +288,8 @@ Every record says the approval policy is missing
 
 A reviewer cannot decide
    *Cause:* they are neither in ``reviewers.users`` nor hold a role in
-   ``reviewers.roles``; or the record has no valid uuid; or they are
-   the recorded author and self-approval is off.
+   ``reviewers.roles``; or the record's file is not valid UTF-8; or they
+   are the recorded author and self-approval is off.
 
    *Check:* their ``issuer|subject`` and roles against the policy.
 
@@ -283,6 +308,14 @@ Push answers 403 ``push_disabled`` or ``project_out_of_scope``
    project is not in its ``scope``.
 
    *Check:* the registration in the catalog file.
+
+Push answers 409 ``duplicate_uuid``
+   *Cause:* the ``adr_uuid`` is held by a published record of another
+   project or registration.
+
+   *Check:* that the file has its own UUID and that ``project`` is the
+   project the record lives in.
+   The refused push is listed on the **Not indexed** page.
 
 All other push errors are listed in
 :ref:`operator/ci-push:What the answer means`.

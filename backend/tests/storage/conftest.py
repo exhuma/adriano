@@ -21,7 +21,7 @@ from app.config import Settings
 from app.database import _make_engine_url
 from app.domain.hashing import content_digest
 from app.domain.issues import Issue
-from app.domain.values import Links, RecordKind, TitleSource, record_key
+from app.domain.values import Links, RecordKind, TitleSource
 from app.storage.port import (
     CatalogStore,
     RecordWrite,
@@ -31,12 +31,12 @@ from app.storage.postgres.store import PostgresStoreProvider
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 TABLES = (
-    "intake_run, decision_event, record, revision, source_registration, "
-    "auth_session, auth_login"
+    "intake_run, decision_event, record, not_indexed, revision, "
+    "source_registration, auth_session, auth_login"
 )
 SOURCES = ("central", "other")
 
-#: Migration 0002's TRUNCATE guard on ``decision_event``.
+#: The migration's TRUNCATE guard on ``decision_event``.
 _TRUNCATE_GUARD = "decision_event_no_truncate"
 
 
@@ -168,13 +168,14 @@ def put_record(
     :param project: Project path.
     :param path: File path.
     :param ref: Ref.
-    :param adr_uuid: Authored UUID (``None`` for a fallback key).
+    :param adr_uuid: Authored UUID (``None``: a fresh random one).
     :param title: Title.
     :param body: Body text.
     :param change_token: Change token.
     :param issues: Validation issues.
     :returns: The record write (not yet upserted).
     """
+    adr_uuid = adr_uuid or uuid.uuid4()
     content = document(adr_uuid, title, body)
     digest = str(content_digest(content.encode()))
     store.put_revision(digest, content)
@@ -184,7 +185,6 @@ def put_record(
         path=path,
         ref=ref,
         adr_uuid=adr_uuid,
-        record_key=record_key(adr_uuid, source_id, project, path),
         digest=digest,
         change_token=change_token,
         metadata={"title": title},

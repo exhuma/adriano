@@ -18,9 +18,18 @@ Adriano reads them from there and shows them in one searchable
 place.
 It never changes the originals.
 
-Each decision belongs to a **source** (where it was read from) and a
-**project** (the team or system it is about).
-You can filter by both when you search.
+Each decision is identified by the **UUID** in its header, a unique
+identifier that never changes.
+It also has a **source** (where it was read from) and a **project**
+(the team or system it is about); you can filter by both when you
+search.
+These say where the file lives now, not which decision it is, so a
+decision that moves to another folder or project keeps its address
+and its approvals.
+
+A file the catalog cannot identify, for example because it has no
+valid UUID, is not a decision in the catalog.
+It is listed on the **Not indexed** page (:doc:`not-indexed`).
 
 Published and candidate
 -----------------------
@@ -68,8 +77,8 @@ Changed since acceptance
    so the new text needs its own decision.
 
 Blocked
-   The file has a problem, such as a missing identifier, so it
-   cannot be decided until the author fixes it.
+   The file has a problem, such as text that is not valid UTF-8, so
+   it cannot be decided until the author fixes it.
 
 Approval not required
    Your administrators turned approval off for this catalog.
@@ -84,7 +93,7 @@ Approval not required
       state "Blocked" as Blocked
 
       [*] --> Pending: record appears in the catalog
-      [*] --> Blocked: record has an error
+      [*] --> Blocked: file is not valid text
       Blocked --> Pending: author fixes the file
       Pending --> Accepted: reviewer accepts
       Pending --> Rejected: reviewer rejects

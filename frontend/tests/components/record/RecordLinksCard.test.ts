@@ -21,7 +21,7 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: "/", component: { template: "<div />" } },
-    { path: "/records/:id", component: { template: "<div />" } },
+    { path: "/records/:uuid", component: { template: "<div />" } },
   ],
 });
 
@@ -52,11 +52,8 @@ describe("RecordLinksCard", () => {
       {
         link_type: "updates",
         target_uuid: TARGET_UUID,
-        target_id: "44444444-4444-4444-4444-444444444444",
+        resolved: true,
         target_title: "Adopt gRPC for internal APIs",
-        resolution: "same_registration",
-        ambiguous: false,
-        candidate_ids: [],
       },
     ]);
 
@@ -64,16 +61,49 @@ describe("RecordLinksCard", () => {
     expect(wrapper.text()).not.toContain(TARGET_UUID);
   });
 
+  it("links a resolved outbound link to the target's ADR page by UUID", () => {
+    const wrapper = mountCard([
+      {
+        link_type: "updates",
+        target_uuid: TARGET_UUID,
+        resolved: true,
+        target_title: "Adopt gRPC for internal APIs",
+      },
+    ]);
+
+    expect(wrapper.find(`a[href='/records/${TARGET_UUID}']`).exists()).toBe(true);
+  });
+
+  it("shows no link for an unresolved target", () => {
+    const wrapper = mountCard([
+      {
+        link_type: "updates",
+        target_uuid: TARGET_UUID,
+        resolved: false,
+        target_title: null,
+      },
+    ]);
+
+    expect(wrapper.find("a").exists()).toBe(false);
+  });
+
+  it("links an inbound link to the source's ADR page by UUID", () => {
+    const sourceId = "55555555-5555-5555-5555-555555555555";
+    const wrapper = mountCard(
+      [],
+      [{ link_type: "updated_by", source_uuid: sourceId, source_title: "v2" }],
+    );
+
+    expect(wrapper.find(`a[href='/records/${sourceId}']`).exists()).toBe(true);
+  });
+
   it("shows a short UUID with copy for a resolved-but-untitled target", () => {
     const wrapper = mountCard([
       {
         link_type: "updates",
         target_uuid: TARGET_UUID,
-        target_id: "44444444-4444-4444-4444-444444444444",
+        resolved: true,
         target_title: null,
-        resolution: "same_registration",
-        ambiguous: false,
-        candidate_ids: [],
       },
     ]);
 
@@ -85,36 +115,13 @@ describe("RecordLinksCard", () => {
     expect(wrapper.find("button").exists()).toBe(true);
   });
 
-  it("shows a short UUID with copy for an ambiguous target", () => {
-    const wrapper = mountCard([
-      {
-        link_type: "obsoletes",
-        target_uuid: TARGET_UUID,
-        target_id: null,
-        target_title: null,
-        resolution: null,
-        ambiguous: true,
-        candidate_ids: ["a", "b"],
-      },
-    ]);
-
-    expect(wrapper.text()).toContain("Ambiguous");
-    expect(wrapper.text()).not.toContain(TARGET_UUID);
-    const code = wrapper.find("code");
-    expect(code.text()).toBe("33333333");
-    expect(code.attributes("title")).toBe(TARGET_UUID);
-  });
-
   it("shows a short UUID with copy for a missing target", () => {
     const wrapper = mountCard([
       {
         link_type: "obsoletes",
         target_uuid: TARGET_UUID,
-        target_id: null,
+        resolved: false,
         target_title: null,
-        resolution: null,
-        ambiguous: false,
-        candidate_ids: [],
       },
     ]);
 
@@ -130,11 +137,8 @@ describe("RecordLinksCard", () => {
       {
         link_type: "obsoletes",
         target_uuid: TARGET_UUID,
-        target_id: null,
+        resolved: false,
         target_title: null,
-        resolution: null,
-        ambiguous: false,
-        candidate_ids: [],
       },
     ]);
 
@@ -150,7 +154,7 @@ describe("RecordLinksCard", () => {
       [
         {
           link_type: "updated_by",
-          source_id: sourceId,
+          source_uuid: sourceId,
           source_title: "Use PostgreSQL v2",
         },
       ],
@@ -170,11 +174,8 @@ describe("RecordLinksCard", () => {
       {
         link_type: "updates",
         target_uuid: TARGET_UUID,
-        target_id: "44444444-4444-4444-4444-444444444444",
+        resolved: true,
         target_title: "Adopt gRPC for internal APIs",
-        resolution: "same_registration",
-        ambiguous: false,
-        candidate_ids: [],
       },
     ]);
 
@@ -198,7 +199,7 @@ describe("RecordLinksCard", () => {
       [
         {
           link_type: "updated_by",
-          source_id: sourceId,
+          source_uuid: sourceId,
           source_title: "Use PostgreSQL v2",
         },
       ],

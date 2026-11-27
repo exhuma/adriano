@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict
 from app.domain.approval import ApprovalStateCode, DecisionAction, PolicyStatus
 from app.domain.errata import ErratumType
 from app.domain.issues import IssueCode, Severity
-from app.domain.relationships import DisplayStatus, InboundType, Resolution
+from app.domain.relationships import DisplayStatus, InboundType
 from app.domain.values import LinkType, RecordKind, TitleSource
 from app.services.approval_view import DivergenceKind
 from app.storage.port import IntakeKind, PollStatus, RecordState
@@ -47,7 +47,7 @@ class SearchItemOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     title: str
     source_id: str
     project: str
@@ -77,8 +77,7 @@ class MetadataOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
-    adr_uuid: uuid.UUID | None
+    adr_uuid: uuid.UUID
     decision_date: datetime.date | None
     decision_date_inferred: bool
     kind: RecordState
@@ -121,11 +120,8 @@ class OutboundLinkOut(BaseModel):
 
     link_type: LinkType
     target_uuid: uuid.UUID
-    target_id: uuid.UUID | None
+    resolved: bool
     target_title: str | None
-    resolution: Resolution | None
-    ambiguous: bool
-    candidate_ids: list[uuid.UUID]
 
 
 class InboundLinkOut(BaseModel):
@@ -134,7 +130,7 @@ class InboundLinkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     link_type: InboundType
-    source_id: uuid.UUID
+    source_uuid: uuid.UUID
     source_title: str
 
 
@@ -151,7 +147,7 @@ class ErratumOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     ref: str
     source_id: str
@@ -211,17 +207,16 @@ class ErratumForOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: uuid.UUID
-    id: uuid.UUID | None
     title: str | None
     resolved: bool
 
 
 class SiblingOut(BaseModel):
-    """One published or candidate row sharing a record's identity."""
+    """One published or candidate row of the same ADR (same UUID)."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     kind: RecordState
     source_id: str
     project: str
@@ -252,7 +247,6 @@ class DecisionProvenanceOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    record_id: str | None
     kind: str | None
     source_id: str | None
     project: str | None
@@ -262,7 +256,7 @@ class DecisionProvenanceOut(BaseModel):
 
 
 class DecisionSummaryOut(BaseModel):
-    """One append-only decision event of the record's identity."""
+    """One append-only decision event of the record's ADR."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -280,24 +274,33 @@ class DecisionSummaryOut(BaseModel):
     created_at: datetime.datetime
 
 
+class RecordRefOut(BaseModel):
+    """One row of an ADR: its UUID and the ref it was read from."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    adr_uuid: uuid.UUID
+    ref: str
+
+
 class DivergenceOut(BaseModel):
-    """Content divergence within the record's identity."""
+    """Content divergence between the rows of the record's ADR."""
 
     model_config = ConfigDict(from_attributes=True)
 
     kind: DivergenceKind
     other_digest: str
-    other_record_ids: list[uuid.UUID]
+    other_rows: list[RecordRefOut]
     other_accepted: bool
     message: str
 
 
 class CompetingCandidateOut(BaseModel):
-    """Another candidate of the identity with different content."""
+    """Another candidate of the ADR with different content."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     ref: str
     path: str
     digest: str

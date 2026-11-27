@@ -61,9 +61,14 @@ export function issueCodeLabel(code: IssueCode): string {
     missing_date: "The record has no decision date",
     unknown_field: "The front matter has a field the catalog does not use",
     bad_field_type: "A front-matter field has an unexpected value",
-    duplicate_uuid: "Another record already uses this UUID",
+    duplicate_uuid: "Another file already holds this UUID",
+    fetch_failed: "The file could not be read from its repository",
+    uuid_mismatch:
+      "The UUID in the file is not the UUID that was submitted for it",
+    published_ref_not_allowed:
+      "Candidates cannot be submitted for the published branch",
+    content_too_large: "The file is larger than the catalog accepts",
     missing_target: "A linked record could not be found",
-    ambiguous_target: "A link matches more than one record",
     legacy_alias: "This field is a legacy alias of a newer one",
     legacy_signoff: "This uses the old, unverified sign-off field",
     corrects_on_non_erratum:

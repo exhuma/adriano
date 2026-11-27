@@ -7,7 +7,7 @@ from app.storage.postgres.store import PostgresStoreProvider
 from tests.storage.conftest import put_record
 
 
-def test_list_facets_counts_rows_per_source_and_project(
+def test_list_facets_counts_adrs_per_source_and_project(
     provider: PostgresStoreProvider,
 ) -> None:
     """Ensure counts are grouped by source then project, both states."""
@@ -35,6 +35,28 @@ def test_list_facets_counts_rows_per_source_and_project(
         ("central", "platform"): 3,
         ("other", "payments"): 1,
     }
+
+
+def test_list_facets_counts_an_adr_with_candidates_once(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure an ADR counts once, not once per row (published + refs)."""
+    with provider.unit_of_work() as store:
+        published = put_record(store, path="doc/decisions/a.md")
+        store.upsert_published(published)
+        for ref in ("feature", "other"):
+            store.upsert_candidate(
+                dataclasses.replace(
+                    put_record(store, ref=ref, body=f"Draft on {ref}."),
+                    adr_uuid=published.adr_uuid,
+                )
+            )
+
+        entries = store.list_facets()
+
+    assert [(e.source_id, e.project, e.count) for e in entries] == [
+        ("central", "platform", 1)
+    ]
 
 
 def test_list_facets_is_empty_for_an_empty_catalog(

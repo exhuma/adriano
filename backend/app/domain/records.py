@@ -8,9 +8,10 @@ storable and browseable.
 
 Field handling (see ``docs/developer/domain/schema.rst``):
 
-- ``uuid`` -- required; canonical hyphenated UUID. Without a valid UUID
-  the record is keyed by its source location (:func:`record_key`), its
-  outbound relationships are disabled and it cannot be approved.
+- ``uuid`` -- required; canonical hyphenated UUID. It is the identity
+  of the ADR, unique across all sources and projects. A document
+  without a valid UUID is not a record: intake lists it as not indexed
+  with :attr:`ParsedRecord.not_indexed_reasons`.
 - ``title`` -- optional; fallback to the first Markdown H1, then to the
   humanised filename slug (:attr:`ParsedRecord.title_source`).
 - ``decision-date`` -- optional ``YYYY-MM-DD``. The filename date is
@@ -40,10 +41,10 @@ Public API:
 
 - :data:`ADR_FILENAME_RE`, :data:`KNOWN_FIELDS`
 - :class:`RecordKind`, :class:`TitleSource`, :class:`LinkType`,
-  :class:`Links`, :class:`Identity`, :class:`ParsedRecord`
+  :class:`Links`, :class:`ParsedRecord`
 - :class:`ErratumContent`, :class:`ErratumType`
 - :func:`is_adr_filename`, :func:`filename_date`, :func:`derive_title`,
-  :func:`record_key`, :func:`parse_record`
+  :func:`parse_record`
 """
 
 import datetime
@@ -58,7 +59,7 @@ from app.domain.frontmatter import (
     split_frontmatter,
 )
 from app.domain.hashing import canonicalize, canonicalize_text
-from app.domain.issues import Issue, IssueCode, error, has_errors
+from app.domain.issues import Issue, IssueCode, Severity, error, has_errors
 from app.domain.titles import (
     ADR_FILENAME_RE,
     derive_title,
@@ -67,21 +68,13 @@ from app.domain.titles import (
     is_adr_filename,
 )
 from app.domain.validation import KNOWN_FIELDS, FieldValues, parse_fields
-from app.domain.values import (
-    Identity,
-    Links,
-    LinkType,
-    RecordKind,
-    TitleSource,
-    record_key,
-)
+from app.domain.values import Links, LinkType, RecordKind, TitleSource
 
 __all__ = [
     "ADR_FILENAME_RE",
     "KNOWN_FIELDS",
     "ErratumContent",
     "ErratumType",
-    "Identity",
     "LinkType",
     "Links",
     "ParsedRecord",
@@ -91,7 +84,6 @@ __all__ = [
     "filename_date",
     "is_adr_filename",
     "parse_record",
-    "record_key",
 ]
 
 
@@ -171,26 +163,23 @@ class ParsedRecord:
         return has_errors(self.issues)
 
     @property
-    def approval_blocker(self) -> str | None:
+    def not_indexed_reasons(self) -> tuple[Issue, ...]:
         """
-        Explain why this content cannot be approved, if it cannot.
+        Explain why this document cannot be indexed, if it cannot.
 
-        :returns: A reader-facing reason, or ``None`` if approvable.
-        """
-        if not self.encoding_ok:
-            return "the file is not valid UTF-8"
-        if self.adr_uuid is None:
-            return "the record has no valid `uuid`"
-        return None
+        A document is indexed under its UUID; without a valid one it has
+        no identity and goes to the not-indexed list instead.
 
-    @property
-    def approvable(self) -> bool:
+        :returns: The error issues (they explain the missing UUID, e.g.
+            ``missing_frontmatter``, ``bad_yaml``, ``missing_uuid``,
+            ``bad_uuid``), or ``()`` when the document has a valid UUID.
         """
-        Tell whether a reviewer may accept or reject this content.
-
-        :returns: ``True`` if there is no identity or encoding error.
-        """
-        return self.approval_blocker is None
+        if self.adr_uuid is not None:
+            return ()
+        reasons = tuple(i for i in self.issues if i.severity is Severity.ERROR)
+        return reasons or (
+            error(IssueCode.MISSING_UUID, "the document has no valid `uuid`"),
+        )
 
     def issue_dicts(self) -> list[dict[str, str]]:
         """

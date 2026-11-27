@@ -257,6 +257,8 @@ describe("App", () => {
     expect(brandIndex).toBeGreaterThanOrEqual(0);
     expect(catalogIndex).toBeGreaterThan(brandIndex);
     expect(sourcesIndex).toBeGreaterThan(catalogIndex);
+    // Visible to every signed-in user, not only operators.
+    expect(text.indexOf("Not indexed")).toBeGreaterThan(sourcesIndex);
   });
 
   it("shows a blocking dialog instead of looping when the re-auth guard fails", async () => {

@@ -13,10 +13,12 @@ from app.errors import CandidateExistsError
 from app.services.ingest import (
     IncomingDocument,
     ingest_document,
+    not_indexed_entry,
     prepare_document,
+    queue_document,
     render_markdown,
 )
-from app.storage.port import RecordState
+from app.storage.port import IntakeKind, NotIndexedKey, RecordState
 from app.storage.postgres.store import PostgresStoreProvider
 
 ADR_UUID = uuid.UUID("0b0c2f4e-1a2b-4c3d-8e9f-001122334455")
@@ -75,8 +77,8 @@ def test_prepare_document_parses_hashes_and_renders() -> None:
 
     assert prepared.digest == str(content_digest(adr("Some *text*.")))
     record = prepared.record
+    assert record is not None
     assert record.adr_uuid == ADR_UUID
-    assert record.record_key == str(ADR_UUID)
     assert record.title == "Use PostgreSQL"
     assert record.decision_date is not None
     assert not record.decision_date_inferred
@@ -95,19 +97,69 @@ def test_prepare_document_is_line_ending_independent() -> None:
     assert "\r" not in crlf.text
 
 
-def test_prepare_document_keeps_bad_records() -> None:
-    """Ensure broken documents are prepared with issues, never raised."""
+def test_prepare_document_without_uuid_has_no_record() -> None:
+    """Ensure a document without a UUID is prepared as not indexable."""
     no_uuid = prepare_document(incoming(b"# Just a heading\n"))
+
+    assert no_uuid.record is None
+    assert [i.code for i in no_uuid.reasons] == [IssueCode.MISSING_FRONTMATTER]
+    assert no_uuid.document.key == NotIndexedKey(
+        "central", "platform", PATH, "main"
+    )
+
+
+def test_prepare_document_keeps_bad_bytes_with_a_uuid() -> None:
+    """Ensure bad encoding with a valid UUID still yields a record."""
     bad_bytes = prepare_document(incoming(adr() + b"\xff"))
 
-    assert no_uuid.record.adr_uuid is None
-    assert no_uuid.record.record_key.startswith("src:central/platform/")
-    assert {i.code for i in no_uuid.record.issues} == {
-        IssueCode.MISSING_FRONTMATTER
-    }
+    assert bad_bytes.record is not None
+    assert bad_bytes.reasons == ()
     assert bad_bytes.digest.startswith("sha256-raw-v1:")
     assert "�" in bad_bytes.text
     assert IssueCode.BAD_ENCODING in {i.code for i in bad_bytes.record.issues}
+
+
+def test_ingest_refuses_a_document_without_uuid(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure ingest never stores a record without an identity."""
+    prepared = prepare_document(incoming(b"---\ntitle: x\n---\n"))
+
+    with provider.lock_registration("central") as store:
+        with pytest.raises(ValueError):
+            ingest_document(store, prepared, RecordState.PUBLISHED)
+        assert store.list_change_tokens("central") == []
+
+
+def test_queue_document_stores_the_snapshot_and_entry(
+    provider: PostgresStoreProvider,
+) -> None:
+    """Ensure a not-indexed document keeps its content and reasons."""
+    prepared = prepare_document(incoming(b"---\ntitle: x\n---\n"))
+    entry = not_indexed_entry(prepared, IntakeKind.POLL)
+
+    with provider.lock_registration("central") as store:
+        queue_document(store, prepared, entry)
+        [stored] = store.list_not_indexed()
+        revision = store.get_revision(prepared.digest)
+
+    assert stored.key == prepared.document.key
+    assert [r.code for r in stored.reasons] == [IssueCode.MISSING_UUID]
+    assert stored.change_token == "1:1"
+    assert stored.digest == prepared.digest
+    assert revision is not None and revision.content == prepared.text
+
+
+def test_losing_duplicate_entry_has_no_change_token() -> None:
+    """Ensure a duplicate is re-read every poll (its holder may leave)."""
+    prepared = prepare_document(incoming(adr()))
+
+    entry = not_indexed_entry(
+        prepared, IntakeKind.POLL, reasons=(), holder_uuid=ADR_UUID
+    )
+
+    assert entry.holder_uuid == ADR_UUID
+    assert entry.change_token is None
 
 
 def test_ingest_published_upserts_and_stores_the_snapshot(
@@ -122,7 +174,7 @@ def test_ingest_published_upserts_and_stores_the_snapshot(
         same = ingest_document(store, first, RecordState.PUBLISHED)
         changed = ingest_document(store, second, RecordState.PUBLISHED)
         revision = store.get_revision(first.digest)
-        row = store.get_record(created.record_id)
+        row = store.get_published(created.adr_uuid)
 
     assert created.created and not same.created and not same.digest_changed
     assert changed.digest_changed
@@ -153,7 +205,8 @@ def test_ingest_candidate_create_only_conflicts(
             )
 
     assert first.created and first.kind is RecordState.CANDIDATE
-    assert again.record_id == first.record_id
+    assert (again.adr_uuid, again.ref) == (ADR_UUID, "feature")
+    assert not again.created
 
 
 ERRATUM_UUID = uuid.UUID("7c1e0000-1a2b-4c3d-8e9f-001122334455")
@@ -180,6 +233,7 @@ def test_prepare_document_renders_sanitized_erratum_sections() -> None:
         incoming(erratum("Use **PostgreSQL**.\n\n<script>alert(1)</script>"))
     )
 
+    assert prepared.record is not None
     content = prepared.record.erratum
     assert content is not None
     assert content.type is ErratumType.EDITORIAL
@@ -195,7 +249,8 @@ def test_prepare_document_renders_sanitized_erratum_sections() -> None:
 
 def test_prepare_document_has_no_erratum_for_decisions() -> None:
     """Ensure decisions carry no erratum content."""
-    assert prepare_document(incoming(adr())).record.erratum is None
+    record = prepare_document(incoming(adr())).record
+    assert record is not None and record.erratum is None
 
 
 def test_ingest_stores_erratum_content(
@@ -208,5 +263,8 @@ def test_ingest_stores_erratum_content(
         result = ingest_document(store, prepared, RecordState.CANDIDATE)
         rows = store.list_errata_for(ADR_UUID)
 
-    assert [row.id for row in rows] == [result.record_id]
+    assert [(row.adr_uuid, row.ref) for row in rows] == [
+        (result.adr_uuid, result.ref)
+    ]
+    assert prepared.record is not None
     assert rows[0].erratum == prepared.record.erratum

@@ -11,7 +11,6 @@ from hypothesis import strategies as st
 from app.domain.errata import ErratumContent, ErratumType, parse_erratum_body
 from app.domain.issues import Issue, IssueCode, Severity
 from app.domain.records import (
-    Identity,
     LinkType,
     ParsedRecord,
     RecordKind,
@@ -19,6 +18,7 @@ from app.domain.records import (
     parse_record,
 )
 from app.domain.relationships import RecordSummary, resolve_relationships
+from app.services.decisions import approval_blocker
 
 ERRATUM_UUID = "7c1e0000-1a2b-4c3d-8e9f-001122334455"
 TARGET_UUID = "0b0c2f4e-1a2b-4c3d-8e9f-001122334455"
@@ -226,7 +226,7 @@ def test_valid_erratum_parses_without_issues(kind: ErratumType) -> None:
         corrected="Use port 8443.",
         notes="TLS is mandatory.",
     )
-    assert record.approvable
+    assert approval_blocker(record) is None
 
 
 def test_missing_type_is_an_error() -> None:
@@ -285,14 +285,14 @@ def test_missing_or_bad_target_is_an_error(
     assert "`erratum-for`" in message
 
 
-def test_erratum_without_uuid_is_not_approvable() -> None:
-    """Ensure an erratum still needs its own ``uuid``."""
+def test_erratum_without_uuid_is_not_indexed() -> None:
+    """Ensure an erratum still needs its own ``uuid`` to be indexed."""
     raw = f"---\nerratum-for: {TARGET_UUID}\ntype: technical\n---\n{BODY}"
 
     record = parse(raw.encode())
 
     assert IssueCode.MISSING_UUID in codes(record.issues)
-    assert not record.approvable
+    assert record.not_indexed_reasons
     assert record.links.corrects is None
 
 
@@ -449,17 +449,15 @@ def test_from_dict_rejects_malformed_data(data: dict[str, object]) -> None:
 # -- relationships --------------------------------------------------------
 
 
-def _summary(key: str, record: ParsedRecord) -> RecordSummary:
+def _summary(record: ParsedRecord) -> RecordSummary:
     """
     Build a relationship summary from a parsed record.
 
-    :param key: Row key.
-    :param record: The parsed record.
+    :param record: The parsed record (with a UUID).
     :returns: The summary.
     """
+    assert record.adr_uuid is not None
     return RecordSummary(
-        key=key,
-        identity=Identity("central", "platform", str(record.adr_uuid)),
         adr_uuid=record.adr_uuid,
         links=record.links,
         record_kind=record.record_kind,
@@ -472,15 +470,18 @@ def test_erratum_is_listed_on_its_target() -> None:
         f"---\nuuid: {TARGET_UUID}\n---\n# Target\n".encode(),
         "doc/decisions/2024-01-01-target.md",
     )
-    summaries = [
-        _summary("target", target),
-        _summary("fix", parse(erratum_doc())),
-    ]
+    summaries = [_summary(target), _summary(parse(erratum_doc()))]
+    target_uuid = uuid.UUID(TARGET_UUID)
+    erratum_uuid = uuid.UUID(ERRATUM_UUID)
 
-    view = resolve_relationships(summaries, "target")
-    own = resolve_relationships(summaries, "fix")
+    view = resolve_relationships(summaries, target_uuid)
+    own = resolve_relationships(summaries, erratum_uuid)
 
-    assert view.errata == ("fix",)
+    assert view.errata == (erratum_uuid,)
     assert view.inbound == ()
     [link] = own.outbound
-    assert (link.link_type, link.target_key) == (LinkType.CORRECTS, "target")
+    assert (link.link_type, link.target_uuid, link.resolved) == (
+        LinkType.CORRECTS,
+        target_uuid,
+        True,
+    )

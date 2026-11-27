@@ -31,12 +31,13 @@
  * `--v-list-item-subtitle-opacity` CSS variable (read by that same
  * rule, see `plugins/vuetify.ts`'s P11-R-03 comment) is the ladder's
  * hook for overriding it per-instance, set inline to `1` only on the
- * subtitle rows that actually hold this link -- the ambiguous/
+ * subtitle rows that actually hold this link -- the
  * missing-target rows keep the default fade, unchanged.
  */
 import ShortIdCopy from "@/components/record/ShortIdCopy.vue";
 import type { InboundLinkOut, OutboundLinkOut } from "@/types/records";
 import { linkTypeLabel } from "@/utils/labels";
+import { recordPath } from "@/utils/recordPaths";
 
 defineProps<{
   /** Outbound `updates`/`obsoletes` links. An erratum's own
@@ -62,13 +63,13 @@ defineProps<{
         </v-list-item-title>
         <v-list-item-subtitle
           :style="
-            link.target_id ? '--v-list-item-subtitle-opacity: 1' : undefined
+            link.resolved ? '--v-list-item-subtitle-opacity: 1' : undefined
           "
         >
-          <template v-if="link.target_id">
+          <template v-if="link.resolved">
             <span class="d-inline-flex align-center flex-wrap ga-1">
               <router-link
-                :to="`/records/${link.target_id}`"
+                :to="recordPath(link.target_uuid)"
                 class="d-inline-block py-1 text-primary"
               >
                 {{ link.target_title ?? "Untitled" }}
@@ -80,14 +81,6 @@ defineProps<{
               />
             </span>
           </template>
-          <span
-            v-else-if="link.ambiguous"
-            class="text-warning d-inline-flex align-center flex-wrap ga-1"
-          >
-            <v-icon icon="mdi-alert" size="small" aria-hidden="true" />
-            Ambiguous: matches {{ link.candidate_ids.length }} records
-            <ShortIdCopy :value="link.target_uuid" label="target UUID" />
-          </span>
           <span
             v-else
             class="text-medium-emphasis d-inline-flex align-center
@@ -111,14 +104,14 @@ defineProps<{
     <v-list tabindex="-1">
       <v-list-item
         v-for="link in inboundLinks"
-        :key="`${link.link_type}-${link.source_id}`"
+        :key="`${link.link_type}-${link.source_uuid}`"
       >
         <v-list-item-title>
           {{ linkTypeLabel(link.link_type) }}
         </v-list-item-title>
         <v-list-item-subtitle style="--v-list-item-subtitle-opacity: 1">
           <router-link
-            :to="`/records/${link.source_id}`"
+            :to="`/records/${link.source_uuid}`"
             class="d-inline-block py-1 text-primary"
           >
             {{ link.source_title }}

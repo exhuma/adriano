@@ -1,7 +1,10 @@
 0013: Keep records without a valid UUID, never invent one
 =========================================================
 
-:Status: Accepted
+:Status: Superseded by :doc:`0023-uuid-is-the-only-identity` and
+   :doc:`0024-not-indexed-list`.
+   A file without a valid UUID is no longer a record with a fallback
+   key; it is listed as not indexed.
 :Date: 2026-10-19
 
 Context

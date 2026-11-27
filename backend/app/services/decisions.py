@@ -1,9 +1,11 @@
 """
 Formal accept/reject decisions (``POST /api/v1/records/{id}/decisions``).
 
-A decision binds to the record's logical identity and the digest of its
-**current** content at request time; the server sets the event id and
-timestamp. Checks, in this order (the same rules give the detail
+A decision binds to the ADR's UUID and the digest of the addressed
+row's **current** content at request time (the row is the published
+one, or a candidate picked by its ref; see
+:func:`app.services.record_lookup.find_record`); the server sets the
+event id and timestamp. Checks, in this order (the same rules give the detail
 page's ``can_decide`` through :func:`decision_blocker`):
 
 1. the record exists -> else 404 ``record_not_found``;
@@ -11,7 +13,7 @@ page's ``can_decide`` through :func:`decision_blocker`):
 3. the policy requires approval -> else 409 ``approval_not_required``;
 4. the caller is a policy reviewer (``issuer|subject`` or a role) ->
    else 403 ``not_eligible``;
-5. the content is approvable (valid UUID, valid UTF-8) -> else 409
+5. the content is approvable (valid UTF-8) -> else 409
    ``not_approvable``;
 6. not a self-approval (when the policy disallows it) -> else 403
    ``self_approval``. Self-approval means the reviewer's verified
@@ -21,19 +23,20 @@ page's ``can_decide`` through :func:`decision_blocker`):
 7. ``expected_digest``, when sent, equals the current digest -> else
    409 ``digest_changed`` (the reviewer never decides content they did
    not see);
-8. no decision exists for (identity, digest) -> else 409
+8. no decision exists for (UUID, digest) -> else 409
    ``already_decided`` (also on a concurrent race, through the unique
    constraint).
 
 Events are append-only (database trigger); nothing here updates or
-deletes one.
+deletes one. Their ``provenance`` is a historical snapshot of the
+decided row (kind, source, project, ref, path, source URL), not a
+reference to it.
 
 Public API: :class:`Reviewer`, :class:`DecisionBlocker`,
 :class:`Approvable`, :func:`approval_blocker`, :func:`decision_blocker`,
 :func:`record_decision`.
 """
 
-import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -54,6 +57,7 @@ from app.errors import (
     ForbiddenError,
     NotFoundError,
 )
+from app.services.record_lookup import RecordAddress, find_record
 from app.storage.port import (
     CatalogStoreProvider,
     DecisionEvent,
@@ -125,25 +129,18 @@ class Approvable(Protocol):
         """Stored validation issues."""
         ...
 
-    @property
-    def adr_uuid(self) -> uuid.UUID | None:
-        """Authored UUID, if valid."""
-        ...
-
 
 def approval_blocker(record: Approvable) -> str | None:
     """
     Explain why a stored row's content cannot be decided at all.
 
-    Mirrors :attr:`app.domain.records.ParsedRecord.approval_blocker`.
+    A stored row always has a valid UUID, so only the encoding blocks.
 
     :param record: The row.
     :returns: A reader-facing reason, or ``None`` if approvable.
     """
     if any(i.code is IssueCode.BAD_ENCODING for i in record.issues):
         return "the file is not valid UTF-8"
-    if record.adr_uuid is None:
-        return "the record has no valid `uuid`"
     return None
 
 
@@ -251,7 +248,7 @@ def decision_blocker(
     Tell why *reviewer* cannot decide *record* now, if they cannot.
 
     :param record: The record row.
-    :param events: Every decision event of the record's identity.
+    :param events: Every decision event of the record's ADR UUID.
     :param policy_config: The approval policy status, or ``None``.
     :param reviewer: The caller.
     :param expected_digest: Digest the caller saw, if sent.
@@ -267,9 +264,8 @@ def decision_blocker(
 
 
 def _provenance(record: StoredRecord) -> dict[str, str | None]:
-    """Describe the decided row at decision time."""
+    """Snapshot the decided row at decision time (historical data)."""
     return {
-        "record_id": str(record.id),
         "kind": record.kind.value,
         "source_id": record.source_id,
         "project": record.project,
@@ -281,7 +277,7 @@ def _provenance(record: StoredRecord) -> dict[str, str | None]:
 
 def record_decision(
     provider: CatalogStoreProvider,
-    record_id: uuid.UUID,
+    address: RecordAddress,
     *,
     action: DecisionAction,
     comment: str | None,
@@ -293,7 +289,7 @@ def record_decision(
     Append an accept/reject decision for a record's current content.
 
     :param provider: Storage provider.
-    :param record_id: Record id.
+    :param address: The record row: ADR UUID and optional candidate ref.
     :param action: Accepted or rejected.
     :param comment: Optional reviewer comment (blank means none).
     :param expected_digest: Digest the reviewer saw, if sent.
@@ -306,12 +302,12 @@ def record_decision(
         ``not_approvable``, ``digest_changed``, ``already_decided``.
     """
     with provider.unit_of_work() as store:
-        record = store.get_record(record_id)
+        record = find_record(store, address)
         if record is None:
             raise NotFoundError(
-                f"record {record_id} not found", code="record_not_found"
+                f"record {address.adr_uuid} not found", code="record_not_found"
             )
-        events = store.list_decisions(record.identity)
+        events = store.list_decisions(record.adr_uuid)
         blocker = decision_blocker(
             record,
             events,
@@ -322,10 +318,9 @@ def record_decision(
         if blocker is not None:
             raise blocker.to_error()
         policy = policy_config.policy if policy_config else None
-        if policy is None or record.adr_uuid is None:  # pragma: no cover
+        if policy is None:  # pragma: no cover
             raise ConflictError("decision refused", code="policy_missing")
         decision = NewDecision(
-            identity=record.identity,
             adr_uuid=record.adr_uuid,
             digest=record.digest,
             action=action,

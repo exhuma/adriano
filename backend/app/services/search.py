@@ -23,20 +23,26 @@ when a non-blank query is set, otherwise ``title``; an explicit
 ``relevance`` without a query falls back to ``title`` (there is no
 rank to order by). ``recent`` orders by ``record.updated_at``, which
 moves only when the content digest changes (``last_seen_at`` is the
-poll heartbeat), newest first. Every order ends with title and id, so
-pages are stable.
+poll heartbeat), newest first. Every order ends with title and the
+row key (UUID, state, ref), so pages are stable.
+
+**One hit per ADR.** A hit is the row the catalog shows for the ADR:
+its published row, else its most recently updated candidate (see
+:mod:`app.storage.postgres.search`). ``adr_uuid`` addresses the ADR
+(``/records/{uuid}``); ``kind`` and ``ref`` say which row the hit
+is. The ``state`` filter selects the row kind instead (``candidate``:
+the newest candidate of every ADR). The query and the other filters
+apply to that one row.
 
 **Erratum target titles.** An erratum hit carries the title of the
 decision it corrects (``erratum_for_title``). The targets of all
 erratum hits of the page are read with **one** query
-(:meth:`~app.storage.port.CatalogStore.list_published_by_uuid`) and
-resolved with the same rules as the detail page's ``erratum_for``
-(:class:`~app.domain.relationships.RelationshipIndex`: published rows,
-same project first, ambiguous -> no title). The lookup is total: the
-``corrects`` link is selected by type, an unresolved or self-targeting
-link simply yields no title. Targets are not restricted to decisions,
-so an erratum of an erratum shows the corrected erratum's title, as
-its detail page does (where ``erratum_target_is_erratum`` flags it).
+(:meth:`~app.storage.port.CatalogStore.published_titles`) and resolve
+like the detail page's ``erratum_for``: the published ADR with that
+UUID; a missing or self-targeting link simply yields no title.
+Targets are not restricted to decisions, so an erratum of an erratum
+shows the corrected erratum's title, as its detail page does (where
+``erratum_target_is_erratum`` flags it).
 
 Public API: :class:`RecordTypeFilter`, :class:`IssueCounts`,
 :class:`CatalogSearchItem`, :class:`CatalogSearchPage`,
@@ -50,8 +56,7 @@ from enum import StrEnum
 
 from app.domain.approval import ApprovalStateCode, Policy
 from app.domain.issues import Issue, Severity
-from app.domain.relationships import RecordSummary, RelationshipIndex
-from app.domain.values import Identity, Links, LinkType, RecordKind
+from app.domain.values import RecordKind
 from app.services.approval_view import is_approvable
 from app.storage.port import (
     CatalogStore,
@@ -104,7 +109,8 @@ class CatalogSearchItem:
     """
     One search result row.
 
-    :param id: Record id.
+    :param adr_uuid: The ADR's UUID (with :attr:`kind` and :attr:`ref`,
+        the row key).
     :param title: Display title.
     :param source_id: Registration id.
     :param project: Project path.
@@ -121,7 +127,7 @@ class CatalogSearchItem:
         decision it corrects, when that resolves.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
     title: str
     source_id: str
     project: str
@@ -174,51 +180,32 @@ def _target_titles(
 
     :param store: Store of the caller's unit of work.
     :param items: Hits of one page.
-    :returns: Title by erratum hit id, for targets that resolve.
+    :returns: Title by target UUID, for targets that resolve.
     """
-    errata = [
-        item
+    targets = {
+        item.corrects
         for item in items
         if item.record_kind is RecordKind.ERRATUM and item.corrects
-    ]
-    targets = store.list_published_by_uuid(
-        {item.corrects for item in errata if item.corrects}
-    )
-    if not targets:
-        return {}
-    titles = {target.summary.key: target.title for target in targets}
-    summaries = {target.summary.key: target.summary for target in targets}
-    for item in errata:
-        # The hit's own summary carries only its ``corrects`` link, even
-        # when the hit is also a target row (an erratum of an erratum,
-        # or one whose ``erratum-for`` is its own UUID).
-        summaries[str(item.id)] = _hit_summary(item)
-    index = RelationshipIndex(summaries.values())
-    result: dict[uuid.UUID, str] = {}
-    for item in errata:
-        link = index.view(str(item.id)).first_link(LinkType.CORRECTS)
-        key = None if link is None else link.target_key
-        if key is not None and key in titles:
-            result[item.id] = titles[key]
-    return result
+    }
+    return store.published_titles(targets)
 
 
-def _hit_summary(item: SearchItem) -> RecordSummary:
+def _erratum_title(
+    item: SearchItem, titles: dict[uuid.UUID, str]
+) -> str | None:
     """
-    Build the relationship summary of an erratum hit (``corrects`` only).
+    Pick the corrected record's title of an erratum hit.
 
-    :param item: The erratum hit.
-    :returns: Its summary, keyed by ``str(item.id)``.
+    :param item: The hit.
+    :param titles: Titles by target UUID (:func:`_target_titles`).
+    :returns: The title, or ``None`` for a decision, a missing target or
+        an erratum targeting itself.
     """
-    return RecordSummary(
-        key=str(item.id),
-        identity=Identity(item.source_id, item.project, item.record_key),
-        adr_uuid=item.adr_uuid,
-        links=Links(corrects=item.corrects),
-        record_kind=RecordKind.ERRATUM,
-        path=item.path,
-        published=item.kind is RecordState.PUBLISHED,
-    )
+    if item.record_kind is not RecordKind.ERRATUM or item.corrects is None:
+        return None
+    if item.corrects == item.adr_uuid:
+        return None
+    return titles.get(item.corrects)
 
 
 def _search_item(
@@ -232,7 +219,7 @@ def _search_item(
     :returns: The search result row.
     """
     return CatalogSearchItem(
-        id=item.id,
+        adr_uuid=item.adr_uuid,
         title=item.title,
         source_id=item.source_id,
         project=item.project,
@@ -317,7 +304,7 @@ def search_records(
     titles = _target_titles(store, page_result.items)
     return CatalogSearchPage(
         items=tuple(
-            _search_item(item, titles.get(item.id))
+            _search_item(item, _erratum_title(item, titles))
             for item in page_result.items
         ),
         total=page_result.total,

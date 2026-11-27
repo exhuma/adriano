@@ -55,7 +55,7 @@ Scenarios
    ``free_text``: ``GET /api/v1/records?q=<random term>``.
    ``filtered``: source, project and ``state=published``.
    ``needs_approval``: ``needs_approval=true``.
-   ``detail``: ``GET /api/v1/records/{id}`` for a random record.
+   ``detail``: ``GET /api/v1/records/{uuid}`` for a random record.
    ``sources``: ``GET /api/v1/sources``.
 
 Method
@@ -127,7 +127,7 @@ Needs approval: set-based joins
    compilation per statement (P95 1.85 s at concurrency 1,
    4.16 s at concurrency 8).
    :py:obj:`app.storage.postgres.search.approval_join` now uses one
-   ``LEFT JOIN`` on identity and digest
+   ``LEFT JOIN`` on UUID and digest
    (the unique constraint guarantees at most one match)
    and one ``EXISTS`` for "accepted elsewhere".
    With the filter, the join runs before ``LIMIT``;

@@ -1,6 +1,19 @@
 """
 HTTP routes for searching and viewing catalog records.
 
+**Addressing.** An ADR is its authored UUID, globally unique:
+
+- ``GET /records/{uuid}``: the ADR's published row, or, without one,
+  its most recently updated candidate;
+- ``GET /records/{uuid}/candidates/{ref}``: the candidate read from
+  *ref* (also the published row when it was read from that ref). A
+  ref is a git ref and may contain slashes (``feature/x``), so it is
+  matched with a ``path`` converter, which must be the last segment of
+  the URL; clients percent-encode nothing but ``%`` and ``?``/``#``;
+- ``GET /records/{uuid}/diff`` and ``POST /records/{uuid}/decisions``
+  cannot end in a ref, so they take it as the optional ``ref`` query
+  parameter instead (omitted: the same row as the first route).
+
 Thin: query-parameter validation and status codes only; all assembly
 logic lives in :mod:`app.services.search` and
 :mod:`app.services.record_detail`. These routes only use the
@@ -30,6 +43,7 @@ from app.routers.decisions import reviewer_from
 from app.schemas.records import RecordDetailOut, RecordDiffOut, SearchPageOut
 from app.services import record_detail, search
 from app.services.diff import diff_record
+from app.services.record_lookup import RecordAddress
 from app.storage.port import (
     MAX_PAGE_SIZE,
     CatalogStoreProvider,
@@ -44,6 +58,10 @@ router = APIRouter(
 )
 
 _DEFAULT_PAGE_SIZE = 20
+_REF = (
+    "Ref of a candidate; omitted: the published row (or, without one, "
+    "the newest candidate)."
+)
 _read = require_permission(Permission.READ)
 
 
@@ -91,7 +109,7 @@ def list_records(
             "(A-Z) or `recent` (content last changed, newest first). "
             "Default: `relevance` when `q` is set, else `title`; "
             "`relevance` without `q` falls back to `title`. Ties are "
-            "broken by title, then id."
+            "broken by title, then UUID, state and ref."
         ),
     ),
     page: int = Query(default=1, ge=1),
@@ -134,33 +152,29 @@ def list_records(
     return SearchPageOut.model_validate(page_result)
 
 
-@router.get("/records/{record_id}", response_model=RecordDetailOut)
-def get_record(
-    record_id: uuid.UUID,
-    provider: CatalogStoreProvider = Depends(get_store_provider),
-    runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
-    settings: Settings = Depends(get_settings),
-    principal: Principal = Depends(_read),
+def _detail(
+    address: RecordAddress,
+    provider: CatalogStoreProvider,
+    runtime: CatalogRuntime | None,
+    settings: Settings,
+    principal: Principal,
 ) -> RecordDetailOut:
     """
-    Fetch one record's detail page.
+    Assemble the detail of one row of an ADR.
 
-    ``approval.can_decide`` (and the blocked reason) is evaluated for
-    the caller.
-
-    :param record_id: Record id.
-    :param provider: Storage provider (overridden by tests).
+    :param address: The ADR's UUID and the candidate's ref, if any.
+    :param provider: Storage provider.
     :param runtime: Startup configuration state.
-    :param settings: Application settings (for the stale threshold).
+    :param settings: Application settings.
     :param principal: The authenticated caller.
     :returns: The detail.
-    :raises app.errors.NotFoundError: If the record does not exist.
+    :raises app.errors.NotFoundError: If the row does not exist.
     """
     policy, policy_status = _policy(runtime)
     with provider.unit_of_work() as store:
         detail = record_detail.get_record_detail(
             store,
-            record_id,
+            address,
             policy=policy,
             policy_status=policy_status,
             now=datetime.datetime.now(datetime.UTC),
@@ -169,15 +183,76 @@ def get_record(
             config_sources=runtime.config.sources if runtime else (),
         )
     if detail is None:
+        where = f" at ref {address.ref!r}" if address.ref is not None else ""
         raise NotFoundError(
-            f"record {record_id} not found", code="record_not_found"
+            f"record {address.adr_uuid}{where} not found",
+            code="record_not_found",
         )
     return RecordDetailOut.model_validate(detail)
 
 
-@router.get("/records/{record_id}/diff", response_model=RecordDiffOut)
+@router.get("/records/{adr_uuid}", response_model=RecordDetailOut)
+def get_record(
+    adr_uuid: uuid.UUID,
+    provider: CatalogStoreProvider = Depends(get_store_provider),
+    runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(_read),
+) -> RecordDetailOut:
+    """
+    Fetch an ADR's detail page.
+
+    Shows the published row, else the newest candidate.
+
+    ``approval.can_decide`` (and the blocked reason) is evaluated for
+    the caller.
+
+    :param adr_uuid: The ADR UUID.
+    :param provider: Storage provider (overridden by tests).
+    :param runtime: Startup configuration state.
+    :param settings: Application settings (for the stale threshold).
+    :param principal: The authenticated caller.
+    :returns: The detail.
+    :raises app.errors.NotFoundError: If the record does not exist.
+    """
+    return _detail(
+        RecordAddress(adr_uuid), provider, runtime, settings, principal
+    )
+
+
+@router.get(
+    "/records/{adr_uuid}/candidates/{ref:path}",
+    response_model=RecordDetailOut,
+)
+def get_candidate(
+    adr_uuid: uuid.UUID,
+    ref: str,
+    provider: CatalogStoreProvider = Depends(get_store_provider),
+    runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(_read),
+) -> RecordDetailOut:
+    """
+    Fetch the detail page of the candidate of an ADR read from *ref*.
+
+    :param adr_uuid: The ADR UUID.
+    :param ref: The candidate's git ref; may contain slashes.
+    :param provider: Storage provider (overridden by tests).
+    :param runtime: Startup configuration state.
+    :param settings: Application settings (for the stale threshold).
+    :param principal: The authenticated caller.
+    :returns: The detail.
+    :raises app.errors.NotFoundError: If there is no row at *ref*.
+    """
+    return _detail(
+        RecordAddress(adr_uuid, ref), provider, runtime, settings, principal
+    )
+
+
+@router.get("/records/{adr_uuid}/diff", response_model=RecordDiffOut)
 def get_record_diff(
-    record_id: uuid.UUID,
+    adr_uuid: uuid.UUID,
+    ref: str | None = Query(default=None, max_length=255, description=_REF),
     from_digest: str | None = Query(
         default=None,
         alias="from",
@@ -194,12 +269,13 @@ def get_record_diff(
     provider: CatalogStoreProvider = Depends(get_store_provider),
 ) -> RecordDiffOut:
     """
-    Diff two stored snapshots of the record's identity.
+    Diff two stored snapshots of the record's ADR.
 
     Only digests related to the record are accepted (404
     ``unknown_revision`` otherwise); see :mod:`app.services.diff`.
 
-    :param record_id: Record id.
+    :param adr_uuid: The ADR UUID.
+    :param ref: A candidate's ref; omitted for the published row.
     :param from_digest: Base digest (query ``from``).
     :param to_digest: Target digest (query ``to``).
     :param provider: Storage provider (overridden by tests).
@@ -208,6 +284,9 @@ def get_record_diff(
     """
     with provider.unit_of_work() as store:
         diff = diff_record(
-            store, record_id, from_digest=from_digest, to_digest=to_digest
+            store,
+            RecordAddress(adr_uuid, ref),
+            from_digest=from_digest,
+            to_digest=to_digest,
         )
     return RecordDiffOut.model_validate(diff)

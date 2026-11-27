@@ -17,6 +17,12 @@ const props = defineProps<{
   errata: ErratumOut[];
 }>();
 
+/** One row per (UUID, ref): an erratum ADR may list a published row
+ *  and candidates. */
+function erratumKey(erratum: ErratumOut): string {
+  return `${erratum.adr_uuid}@${erratum.ref}`;
+}
+
 const published = computed(() => props.errata.filter((e) => e.kind === "published"));
 const proposed = computed(() => props.errata.filter((e) => e.kind === "candidate"));
 
@@ -34,13 +40,13 @@ const heading = computed(() =>
     <h2 class="text-title-large mb-2">{{ heading }}</h2>
 
     <ul v-if="published.length > 0" class="erratum-list ma-0 pa-0 d-flex flex-column ga-3">
-      <ErratumEntry v-for="erratum in published" :key="erratum.id" :erratum="erratum" />
+      <ErratumEntry v-for="erratum in published" :key="erratumKey(erratum)" :erratum="erratum" />
     </ul>
 
     <template v-if="proposed.length > 0">
       <h3 class="text-title-small mt-3 mb-2">Proposed errata</h3>
       <ul class="erratum-list ma-0 pa-0 d-flex flex-column ga-3">
-        <ErratumEntry v-for="erratum in proposed" :key="erratum.id" :erratum="erratum" />
+        <ErratumEntry v-for="erratum in proposed" :key="erratumKey(erratum)" :erratum="erratum" />
       </ul>
     </template>
   </section>

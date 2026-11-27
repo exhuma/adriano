@@ -199,13 +199,15 @@ and keeps the published rows in step with it.
      A-->>P: exact bytes, source URL
      P->>P: prepare_document(): parse, validate, hash, render
      P->>S: lock_registration(source_id)
-     P->>S: upsert published rows, refresh tokens
+     P->>S: apply the UUID holder rule: insert, update or move rows
+     P->>S: write or clear not-indexed entries
      P->>S: delete rows missing from a complete listing
      P->>S: finish intake_run, set last_status (own unit of work)
 
-Registrations are polled one after another in configuration order,
-because the first registration that yields a ``(project, path)`` owns
-it; later ones skip it with an ``ownership_conflict`` warning.
+Registrations are polled one after another in configuration order.
+When several new files claim one UUID in a run, configuration order,
+then project, then path decide which one gets it
+(:doc:`domain/records`).
 Each registration runs in three phases:
 
 1. **Run log.** An ``intake_run`` row is started in its own unit of
@@ -214,7 +216,8 @@ Each registration runs in three phases:
    lists and fetches, with bounded concurrency.
    Documents whose change token is unchanged are not fetched at all.
 3. **Apply.** Under the registration's advisory lock, in one
-   transaction: ingest the fetched documents, rewrite moved change
+   transaction: ingest the fetched documents under the UUID holder
+   rule, list the documents that cannot be indexed, rewrite changed
    tokens and reconcile deletions.
 
 Nothing is deleted unless the project listing was complete,
@@ -243,10 +246,12 @@ CI submits candidates from branches other than the published ref.
      I->>G: prepare_document(): parse, validate, hash, render
      I->>I: document UUID must equal adr_uuid
      I->>S: lock_registration(source_id)
+     I->>I: UUID unheld or held in the same project, else 409
      I->>G: ingest_document() as CANDIDATE
      G->>S: put revision, upsert candidate row
      I->>S: record intake_run
      R-->>CI: 200 or 201 with server digest and issues
+     Note over I,S: a refused document is listed as not indexed
 
 Push intake and polling share :mod:`app.services.ingest`:
 ``prepare_document`` parses, validates, hashes and renders,
@@ -273,7 +278,7 @@ Read path
      S-->>Q: rows
      Q-->>R: page of items
      R-->>B: JSON
-     B->>R: GET /api/v1/records/{id}
+     B->>R: GET /api/v1/records/{uuid}
      R->>Q: get_record_detail()
      Q->>S: record, siblings, related rows, errata, decisions
      S-->>Q: rows
@@ -300,12 +305,12 @@ Decision path
      participant D as decisions service
      participant S as CatalogStore (PostgreSQL)
 
-     B->>R: POST /api/v1/records/{id}/decisions
+     B->>R: POST /api/v1/records/{uuid}/decisions
      R->>D: record_decision(action, comment, expected_digest)
-     D->>S: load record and identity events
+     D->>S: load record and the events of its UUID
      D->>D: policy, eligibility, approvable, self-approval, digest
      D->>S: append_decision() with ON CONFLICT DO NOTHING
-     alt no earlier decision for identity and digest
+     alt no earlier decision for UUID and digest
        S-->>D: event stored
        D-->>R: decision
        R-->>B: 201 with the event
@@ -314,8 +319,8 @@ Decision path
        R-->>B: 409 already_decided
      end
 
-The decision binds to the record's logical identity and the digest of
-its current content.
+The decision binds to the ADR's UUID and the digest of its current
+content.
 The server sets the event id and timestamp.
 See :doc:`domain/approval` for the rules.
 
@@ -344,14 +349,15 @@ Per-registration advisory lock
    serialize instead of interleaving.
 
 ``ON CONFLICT`` upserts
-   Record rows are upserted against partial unique indexes
-   (published by location, candidates by identity and ref).
+   Record rows are upserted against the primary key
+   ``(adr_uuid, kind, ref)`` and the partial unique index of published
+   rows (one per UUID, whichever registration or project holds it).
    Revisions are inserted with ``ON CONFLICT DO NOTHING``,
    since a digest names the same content forever.
 
 Unique constraints as the arbiter
-   ``uq_decision_event_identity_digest`` allows one decision per
-   identity and digest.
+   ``uq_decision_event_uuid_digest`` allows one decision per
+   UUID and digest.
    A losing concurrent decision gets HTTP 409, never a silent
    overwrite.
    ``POST /api/v1/candidates`` and ``delivery_id`` deduplication use
@@ -405,8 +411,10 @@ using Vuetify 4 for components and theming
 (see :doc:`decisions/0017-vuetify-first`).
 
 Routes
-   ``/`` (search landing page), ``/records/:id`` (record or erratum
-   page), ``/sources`` (registration status),
+   ``/`` (search landing page), ``/records/:uuid`` (record or erratum
+   page), ``/records/:uuid/candidates/:ref`` (a candidate of it),
+   ``/sources`` (registration status), ``/not-indexed`` and
+   ``/not-indexed/entry`` (documents that cannot be indexed),
    ``/auth/callback`` (OIDC redirect target) and a not-found route.
 
 State

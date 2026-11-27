@@ -29,14 +29,14 @@ export type {
 /** The decided row as it was at decision time. */
 export type DecisionProvenanceOut =
   components["schemas"]["DecisionProvenanceOut"];
-/** Kinds of published/accepted divergence within one identity. */
+/** Kinds of published/accepted divergence within one ADR. */
 export type DivergenceKind = components["schemas"]["DivergenceKind"];
-/** Content divergence within the record's identity. */
+/** Content divergence between the rows of the record's ADR. */
 export type DivergenceOut = components["schemas"]["DivergenceOut"];
-/** Another candidate of the identity with different content. */
+/** Another candidate of the ADR with different content. */
 export type CompetingCandidateOut =
   components["schemas"]["CompetingCandidateOut"];
-/** Body of `POST /api/v1/records/{id}/decisions`. */
+/** Body of `POST /api/v1/records/{uuid}/decisions`. */
 export type DecisionIn = components["schemas"]["DecisionIn"];
 /** Outcome of `PUT`/`POST /api/v1/candidates`. */
 export type CandidateResultOut = components["schemas"]["CandidateResultOut"];
@@ -58,7 +58,7 @@ export type DecideBlockedCode =
   | "already_decided"
   | "anonymous";
 
-/** Error codes `POST /records/{id}/decisions` may return. */
+/** Error codes `POST /records/{uuid}/decisions` may return. */
 export type DecisionErrorCode =
   | "digest_changed"
   | "already_decided"

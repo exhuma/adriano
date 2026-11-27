@@ -225,7 +225,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/records/{record_id}": {
+    "/api/v1/records/{adr_uuid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -234,12 +234,14 @@ export interface paths {
         };
         /**
          * Get Record
-         * @description Fetch one record's detail page.
+         * @description Fetch an ADR's detail page.
+         *
+         *     Shows the published row, else the newest candidate.
          *
          *     ``approval.can_decide`` (and the blocked reason) is evaluated for
          *     the caller.
          *
-         *     :param record_id: Record id.
+         *     :param adr_uuid: The ADR UUID.
          *     :param provider: Storage provider (overridden by tests).
          *     :param runtime: Startup configuration state.
          *     :param settings: Application settings (for the stale threshold).
@@ -247,7 +249,7 @@ export interface paths {
          *     :returns: The detail.
          *     :raises app.errors.NotFoundError: If the record does not exist.
          */
-        get: operations["get_record_api_v1_records__record_id__get"];
+        get: operations["get_record_api_v1_records__adr_uuid__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -256,7 +258,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/records/{record_id}/diff": {
+    "/api/v1/records/{adr_uuid}/candidates/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Candidate
+         * @description Fetch the detail page of the candidate of an ADR read from *ref*.
+         *
+         *     :param adr_uuid: The ADR UUID.
+         *     :param ref: The candidate's git ref; may contain slashes.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :param runtime: Startup configuration state.
+         *     :param settings: Application settings (for the stale threshold).
+         *     :param principal: The authenticated caller.
+         *     :returns: The detail.
+         *     :raises app.errors.NotFoundError: If there is no row at *ref*.
+         */
+        get: operations["get_candidate_api_v1_records__adr_uuid__candidates__ref__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/records/{adr_uuid}/diff": {
         parameters: {
             query?: never;
             header?: never;
@@ -265,19 +296,20 @@ export interface paths {
         };
         /**
          * Get Record Diff
-         * @description Diff two stored snapshots of the record's identity.
+         * @description Diff two stored snapshots of the record's ADR.
          *
          *     Only digests related to the record are accepted (404
          *     ``unknown_revision`` otherwise); see :mod:`app.services.diff`.
          *
-         *     :param record_id: Record id.
+         *     :param adr_uuid: The ADR UUID.
+         *     :param ref: A candidate's ref; omitted for the published row.
          *     :param from_digest: Base digest (query ``from``).
          *     :param to_digest: Target digest (query ``to``).
          *     :param provider: Storage provider (overridden by tests).
          *     :returns: The diff, or ``base: null`` with ``reason:
          *         "no_prior_revision"``.
          */
-        get: operations["get_record_diff_api_v1_records__record_id__diff_get"];
+        get: operations["get_record_diff_api_v1_records__adr_uuid__diff_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -390,7 +422,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/records/{record_id}/decisions": {
+    "/api/v1/not-indexed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Not Indexed
+         * @description List the documents intake could not index, newest first.
+         *
+         *     :param source_id: Restrict to one registration.
+         *     :param project: Restrict to one project path.
+         *     :param reason: Restrict to entries carrying this reason code.
+         *     :param origin: Restrict to one intake.
+         *     :param page: 1-based page number.
+         *     :param page_size: Page size, 1 to :data:`~app.storage.port.
+         *         MAX_PAGE_SIZE`.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :returns: The page.
+         */
+        get: operations["list_not_indexed_api_v1_not_indexed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/not-indexed/entry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Not Indexed Entry
+         * @description Fetch one entry with the content intake rejected.
+         *
+         *     :param source_id: Registration id of the location.
+         *     :param project: Project path of the location.
+         *     :param path: File path of the location.
+         *     :param ref: Ref of the location.
+         *     :param provider: Storage provider (overridden by tests).
+         *     :returns: The entry; ``content`` is ``null`` when it could not be
+         *         read.
+         *     :raises app.errors.NotFoundError: If the location has no entry (it
+         *         may have been cleared since the list was read).
+         */
+        get: operations["get_not_indexed_entry_api_v1_not_indexed_entry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/records/{adr_uuid}/decisions": {
         parameters: {
             query?: never;
             header?: never;
@@ -403,14 +495,15 @@ export interface paths {
          * Post Decision
          * @description Record an accept/reject decision for the record's current digest.
          *
-         *     :param record_id: Record id.
+         *     :param adr_uuid: The ADR UUID.
          *     :param body: Action, optional comment and expected digest.
+         *     :param ref: A candidate's ref; omitted for the published row.
          *     :param principal: The authenticated caller (``read`` required).
          *     :param provider: Storage provider (overridden by tests).
          *     :param runtime: Startup configuration state (approval policy).
          *     :returns: The stored event.
          */
-        post: operations["post_decision_api_v1_records__record_id__decisions_post"];
+        post: operations["post_decision_api_v1_records__adr_uuid__decisions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -427,14 +520,14 @@ export interface paths {
         get?: never;
         /**
          * Put Candidate
-         * @description Create or replace the candidate for (source, project, ADR, ref).
+         * @description Create or replace the candidate for (ADR UUID, ref).
          *
          *     :param request: The request.
          *     :param response: The response.
          *     :param credentials: Push-token bearer credentials.
          *     :param provider: Storage provider (overridden by tests).
          *     :param runtime: Startup configuration state.
-         *     :returns: Record id, server digest, issues and catalog path.
+         *     :returns: ADR UUID, server digest, issues and catalog path.
          */
         put: operations["put_candidate_api_v1_candidates_put"];
         /**
@@ -446,7 +539,7 @@ export interface paths {
          *     :param credentials: Push-token bearer credentials.
          *     :param provider: Storage provider (overridden by tests).
          *     :param runtime: Startup configuration state.
-         *     :returns: Record id, server digest, issues and catalog path.
+         *     :returns: ADR UUID, server digest, issues and catalog path.
          */
         post: operations["post_candidate_api_v1_candidates_post"];
         delete?: never;
@@ -554,10 +647,12 @@ export interface components {
          */
         CandidateResultOut: {
             /**
-             * Record Id
+             * Adr Uuid
              * Format: uuid
              */
-            record_id: string;
+            adr_uuid: string;
+            /** Ref */
+            ref: string;
             /** Digest */
             digest: string;
             /** Created */
@@ -573,14 +668,14 @@ export interface components {
         };
         /**
          * CompetingCandidateOut
-         * @description Another candidate of the identity with different content.
+         * @description Another candidate of the ADR with different content.
          */
         CompetingCandidateOut: {
             /**
-             * Id
+             * Adr Uuid
              * Format: uuid
              */
-            id: string;
+            adr_uuid: string;
             /** Ref */
             ref: string;
             /** Path */
@@ -622,7 +717,7 @@ export interface components {
         DecisionAction: "accepted" | "rejected";
         /**
          * DecisionIn
-         * @description Body of ``POST /api/v1/records/{id}/decisions``.
+         * @description Body of ``POST /api/v1/records/{uuid}/decisions``.
          */
         DecisionIn: {
             action: components["schemas"]["DecisionAction"];
@@ -639,8 +734,6 @@ export interface components {
          * @description The decided row as it was at decision time.
          */
         DecisionProvenanceOut: {
-            /** Record Id */
-            record_id: string | null;
             /** Kind */
             kind: string | null;
             /** Source Id */
@@ -656,7 +749,7 @@ export interface components {
         };
         /**
          * DecisionSummaryOut
-         * @description One append-only decision event of the record's identity.
+         * @description One append-only decision event of the record's ADR.
          */
         DecisionSummaryOut: {
             /**
@@ -748,14 +841,14 @@ export interface components {
         DivergenceKind: "published_not_accepted" | "published_differs";
         /**
          * DivergenceOut
-         * @description Content divergence within the record's identity.
+         * @description Content divergence between the rows of the record's ADR.
          */
         DivergenceOut: {
             kind: components["schemas"]["DivergenceKind"];
             /** Other Digest */
             other_digest: string;
-            /** Other Record Ids */
-            other_record_ids: string[];
+            /** Other Rows */
+            other_rows: components["schemas"]["RecordRefOut"][];
             /** Other Accepted */
             other_accepted: boolean;
             /** Message */
@@ -812,8 +905,6 @@ export interface components {
              * Format: uuid
              */
             uuid: string;
-            /** Id */
-            id: string | null;
             /** Title */
             title: string | null;
             /** Resolved */
@@ -831,10 +922,10 @@ export interface components {
          */
         ErratumOut: {
             /**
-             * Id
+             * Adr Uuid
              * Format: uuid
              */
-            id: string;
+            adr_uuid: string;
             kind: components["schemas"]["RecordState"];
             /** Ref */
             ref: string;
@@ -935,10 +1026,10 @@ export interface components {
         InboundLinkOut: {
             link_type: components["schemas"]["InboundType"];
             /**
-             * Source Id
+             * Source Uuid
              * Format: uuid
              */
-            source_id: string;
+            source_uuid: string;
             /** Source Title */
             source_title: string;
         };
@@ -959,7 +1050,7 @@ export interface components {
          * @description Stable machine-readable validation issue codes.
          * @enum {string}
          */
-        IssueCode: "bad_yaml" | "missing_frontmatter" | "missing_uuid" | "bad_uuid" | "bad_date" | "missing_date" | "unknown_field" | "bad_field_type" | "duplicate_uuid" | "missing_target" | "ambiguous_target" | "legacy_alias" | "legacy_signoff" | "corrects_on_non_erratum" | "erratum_without_target" | "bad_encoding" | "bad_erratum_type" | "erratum_missing_corrected_text" | "erratum_unknown_section_heading" | "erratum_duplicate_section" | "erratum_targets_itself" | "erratum_relationship_ignored" | "erratum_target_is_erratum" | "legacy_erratum_format" | "obsolete_kind_field";
+        IssueCode: "bad_yaml" | "missing_frontmatter" | "missing_uuid" | "bad_uuid" | "bad_date" | "missing_date" | "unknown_field" | "bad_field_type" | "duplicate_uuid" | "fetch_failed" | "uuid_mismatch" | "published_ref_not_allowed" | "content_too_large" | "missing_target" | "legacy_alias" | "legacy_signoff" | "corrects_on_non_erratum" | "erratum_without_target" | "bad_encoding" | "bad_erratum_type" | "erratum_missing_corrected_text" | "erratum_unknown_section_heading" | "erratum_duplicate_section" | "erratum_targets_itself" | "erratum_relationship_ignored" | "erratum_target_is_erratum" | "legacy_erratum_format" | "obsolete_kind_field";
         /**
          * IssueCountsOut
          * @description Stored-issue counts of one record, by severity.
@@ -1020,12 +1111,10 @@ export interface components {
          */
         MetadataOut: {
             /**
-             * Id
+             * Adr Uuid
              * Format: uuid
              */
-            id: string;
-            /** Adr Uuid */
-            adr_uuid: string | null;
+            adr_uuid: string;
             /** Decision Date */
             decision_date: string | null;
             /** Decision Date Inferred */
@@ -1041,6 +1130,91 @@ export interface components {
             previous_digest: string | null;
         };
         /**
+         * NotIndexedDetailOut
+         * @description A not-indexed entry with the content intake rejected.
+         */
+        NotIndexedDetailOut: {
+            /** Source Id */
+            source_id: string;
+            /** Project */
+            project: string;
+            /** Path */
+            path: string;
+            /** Ref */
+            ref: string;
+            origin: components["schemas"]["IntakeKind"];
+            /** Reasons */
+            reasons: components["schemas"]["IssueOut"][];
+            /** Holder Uuid */
+            holder_uuid: string | null;
+            /** Source Url */
+            source_url: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Has Content */
+            has_content: boolean;
+            /** Content */
+            content: string | null;
+        };
+        /**
+         * NotIndexedItemOut
+         * @description One document intake could not index, addressed by its location.
+         *
+         *     ``holder_uuid`` is set for a duplicate UUID: the ADR that holds it
+         *     (``/records/{holder_uuid}``).
+         */
+        NotIndexedItemOut: {
+            /** Source Id */
+            source_id: string;
+            /** Project */
+            project: string;
+            /** Path */
+            path: string;
+            /** Ref */
+            ref: string;
+            origin: components["schemas"]["IntakeKind"];
+            /** Reasons */
+            reasons: components["schemas"]["IssueOut"][];
+            /** Holder Uuid */
+            holder_uuid: string | null;
+            /** Source Url */
+            source_url: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Has Content */
+            has_content: boolean;
+        };
+        /**
+         * NotIndexedPageOut
+         * @description One page of the not-indexed list.
+         */
+        NotIndexedPageOut: {
+            /** Items */
+            items: components["schemas"]["NotIndexedItemOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /**
          * OutboundLinkOut
          * @description One outbound link and how it resolved.
          */
@@ -1051,15 +1225,10 @@ export interface components {
              * Format: uuid
              */
             target_uuid: string;
-            /** Target Id */
-            target_id: string | null;
+            /** Resolved */
+            resolved: boolean;
             /** Target Title */
             target_title: string | null;
-            resolution: components["schemas"]["Resolution"] | null;
-            /** Ambiguous */
-            ambiguous: boolean;
-            /** Candidate Ids */
-            candidate_ids: string[];
         };
         /**
          * Permission
@@ -1178,6 +1347,19 @@ export interface components {
          */
         RecordKind: "decision" | "erratum";
         /**
+         * RecordRefOut
+         * @description One row of an ADR: its UUID and the ref it was read from.
+         */
+        RecordRefOut: {
+            /**
+             * Adr Uuid
+             * Format: uuid
+             */
+            adr_uuid: string;
+            /** Ref */
+            ref: string;
+        };
+        /**
          * RecordState
          * @description Lifecycle state of a stored record row.
          * @enum {string}
@@ -1189,12 +1371,6 @@ export interface components {
          * @enum {string}
          */
         RecordTypeFilter: "decision" | "erratum" | "all";
-        /**
-         * Resolution
-         * @description Tier at which an outbound link was resolved.
-         * @enum {string}
-         */
-        Resolution: "same_project" | "same_registration" | "global";
         /**
          * ReviewerOut
          * @description Whether the caller may record approval decisions, and why.
@@ -1211,10 +1387,10 @@ export interface components {
          */
         SearchItemOut: {
             /**
-             * Id
+             * Adr Uuid
              * Format: uuid
              */
-            id: string;
+            adr_uuid: string;
             /** Title */
             title: string;
             /** Source Id */
@@ -1252,8 +1428,9 @@ export interface components {
          * SearchSort
          * @description Result order of :meth:`app.storage.port.CatalogStore.search`.
          *
-         *     Every order ends with the lower-cased title and the record id, so
-         *     pages are stable even when the leading key ties.
+         *     Every order ends with the lower-cased title and the row key (ADR
+         *     UUID, state, ref), so pages are stable even when the leading key
+         *     ties.
          *
          *     - ``relevance``: text rank, best first; without a text query it
          *       is the same as ``title``.
@@ -1284,14 +1461,14 @@ export interface components {
         Severity: "error" | "warning";
         /**
          * SiblingOut
-         * @description One published or candidate row sharing a record's identity.
+         * @description One published or candidate row of the same ADR (same UUID).
          */
         SiblingOut: {
             /**
-             * Id
+             * Adr Uuid
              * Format: uuid
              */
-            id: string;
+            adr_uuid: string;
             kind: components["schemas"]["RecordState"];
             /** Source Id */
             source_id: string;
@@ -1339,6 +1516,8 @@ export interface components {
             last_error: components["schemas"]["JsonValue"];
             /** Stale */
             stale: boolean;
+            /** Not Indexed Count */
+            not_indexed_count: number;
         };
         /**
          * TitleSource
@@ -1565,7 +1744,7 @@ export interface operations {
                 needs_approval?: boolean;
                 /** @description Which records to return: `decision` (default), `erratum`, or `all`. Combines with every other filter. */
                 record_type?: components["schemas"]["RecordTypeFilter"];
-                /** @description Result order: `relevance` (text rank, best first), `title` (A-Z) or `recent` (content last changed, newest first). Default: `relevance` when `q` is set, else `title`; `relevance` without `q` falls back to `title`. Ties are broken by title, then id. */
+                /** @description Result order: `relevance` (text rank, best first), `title` (A-Z) or `recent` (content last changed, newest first). Default: `relevance` when `q` is set, else `title`; `relevance` without `q` falls back to `title`. Ties are broken by title, then UUID, state and ref. */
                 sort?: components["schemas"]["SearchSort"] | null;
                 page?: number;
                 page_size?: number;
@@ -1596,12 +1775,12 @@ export interface operations {
             };
         };
     };
-    get_record_api_v1_records__record_id__get: {
+    get_record_api_v1_records__adr_uuid__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                record_id: string;
+                adr_uuid: string;
             };
             cookie?: never;
         };
@@ -1627,9 +1806,43 @@ export interface operations {
             };
         };
     };
-    get_record_diff_api_v1_records__record_id__diff_get: {
+    get_candidate_api_v1_records__adr_uuid__candidates__ref__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                adr_uuid: string;
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_record_diff_api_v1_records__adr_uuid__diff_get: {
         parameters: {
             query?: {
+                /** @description Ref of a candidate; omitted: the published row (or, without one, the newest candidate). */
+                ref?: string | null;
                 /** @description Base digest; default: last decided snapshot, else the previous revision. */
                 from?: string | null;
                 /** @description Target digest; default: the current digest. */
@@ -1637,7 +1850,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                record_id: string;
+                adr_uuid: string;
             };
             cookie?: never;
         };
@@ -1754,12 +1967,93 @@ export interface operations {
             };
         };
     };
-    post_decision_api_v1_records__record_id__decisions_post: {
+    list_not_indexed_api_v1_not_indexed_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Registration. */
+                source_id?: string | null;
+                /** @description Project path. */
+                project?: string | null;
+                /** @description Only entries carrying this reason code. */
+                reason?: components["schemas"]["IssueCode"] | null;
+                /** @description Only entries found by `poll` or `push`. */
+                origin?: components["schemas"]["IntakeKind"] | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotIndexedPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_not_indexed_entry_api_v1_not_indexed_entry_get: {
+        parameters: {
+            query: {
+                /** @description Registration id of the location. */
+                source_id: string;
+                /** @description Project path of the location. */
+                project: string;
+                /** @description File path of the location. */
+                path: string;
+                /** @description Ref of the location. */
+                ref: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotIndexedDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_decision_api_v1_records__adr_uuid__decisions_post: {
+        parameters: {
+            query?: {
+                /** @description Ref of the candidate to decide; omitted: the published row (or, without one, the newest candidate). */
+                ref?: string | null;
+            };
             header?: never;
             path: {
-                record_id: string;
+                adr_uuid: string;
             };
             cookie?: never;
         };

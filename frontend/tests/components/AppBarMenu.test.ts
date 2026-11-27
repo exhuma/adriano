@@ -52,6 +52,7 @@ describe("AppBarMenu", () => {
     const text = document.body.textContent ?? "";
     expect(text.indexOf("Catalog")).toBeGreaterThanOrEqual(0);
     expect(text.indexOf("Sources")).toBeGreaterThan(text.indexOf("Catalog"));
+    expect(text.indexOf("Not indexed")).toBeGreaterThan(text.indexOf("Sources"));
   });
 
   it("omits the backend-status row when health is null (healthy)", async () => {

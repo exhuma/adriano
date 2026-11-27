@@ -49,7 +49,8 @@ async function mountDialog(
   const wrapper = mount(DecisionDialog, {
     props: {
       modelValue: true,
-      recordId: "11111111-1111-1111-1111-111111111111",
+      adrUuid: "11111111-1111-1111-1111-111111111111",
+      candidateRef: null,
       action,
       recordKind,
       recordTitle,
@@ -170,6 +171,7 @@ describe("DecisionDialog", () => {
 
     expect(decide).toHaveBeenCalledWith(
       "11111111-1111-1111-1111-111111111111",
+      null,
       "accepted",
       DIGEST,
       "",

@@ -23,8 +23,6 @@ export type DisplayStatus = components["schemas"]["DisplayStatus"];
 export type InboundType = components["schemas"]["InboundType"];
 /** Outbound relationship types, named as written in frontmatter. */
 export type LinkType = components["schemas"]["LinkType"];
-/** Tier at which an outbound link was resolved. */
-export type Resolution = components["schemas"]["Resolution"];
 /** Severity of a validation issue. */
 export type Severity = components["schemas"]["Severity"];
 /** Stable machine-readable validation issue code. */
@@ -60,7 +58,7 @@ export type ErratumContentOut = components["schemas"]["ErratumContentOut"];
 export type ErratumForOut = components["schemas"]["ErratumForOut"];
 /** Kind of correction an erratum reports. */
 export type ErratumType = components["schemas"]["ErratumType"];
-/** One published or candidate row sharing a record's identity. */
+/** One published or candidate row of the same ADR. */
 export type SiblingOut = components["schemas"]["SiblingOut"];
 /** The applicable approval policy, or why there is none. */
 export type PolicySummaryOut = components["schemas"]["PolicySummaryOut"];

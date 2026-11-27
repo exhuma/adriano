@@ -4,9 +4,8 @@ import dataclasses
 import datetime
 import uuid
 
-from sqlalchemy import Connection, Engine, text
+from sqlalchemy import Engine, text
 
-from alembic import command
 from app.domain.approval import DecisionAction
 from app.domain.errata import ErratumType
 from app.domain.values import Links, RecordKind
@@ -18,7 +17,7 @@ from app.storage.port import (
     StoredErratum,
 )
 from app.storage.postgres.store import PostgresStoreProvider
-from tests.storage.conftest import alembic_config, put_record
+from tests.storage.conftest import put_record
 
 TARGET = uuid.UUID("0b0c2f4e-1234-4abc-8def-0123456789ab")
 OTHER = uuid.UUID("1b0c2f4e-1234-4abc-8def-0123456789ab")
@@ -87,12 +86,12 @@ def test_erratum_round_trips_for_published_and_candidate(
         notes_html=None,
     )
     with provider.unit_of_work() as store:
-        published = store.upsert_published(erratum_write(store, E1, TARGET))
-        candidate = store.upsert_candidate(
+        store.upsert_published(erratum_write(store, E1, TARGET))
+        store.upsert_candidate(
             erratum_write(store, E2, TARGET, ref="fix", content=sparse)
         )
-        published_row = store.get_record(published.id)
-        candidate_row = store.get_record(candidate.id)
+        published_row = store.get_published(E1)
+        candidate_row = store.get_candidate(E2, "fix")
     assert published_row is not None and candidate_row is not None
     assert published_row.erratum == CONTENT
     assert candidate_row.erratum == sparse
@@ -104,13 +103,13 @@ def test_decision_rows_store_sql_null(
 ) -> None:
     """Ensure decisions have no erratum content, as SQL NULL not JSON."""
     with provider.unit_of_work() as store:
-        result = store.upsert_published(put_record(store, adr_uuid=TARGET))
-        row = store.get_record(result.id)
+        store.upsert_published(put_record(store, adr_uuid=TARGET))
+        row = store.get_published(TARGET)
     assert row is not None and row.erratum is None
     with engine.connect() as connection:
         is_null = connection.execute(
-            text("SELECT erratum IS NULL FROM record WHERE id = :id"),
-            {"id": result.id},
+            text("SELECT erratum IS NULL FROM record WHERE adr_uuid = :id"),
+            {"id": TARGET},
         ).scalar_one()
     assert is_null is True
 
@@ -124,7 +123,7 @@ def test_list_errata_for_returns_published_and_candidates(
         store.upsert_candidate(
             erratum_write(store, E2, TARGET, ref="fix", project="apps")
         )
-        published = store.upsert_published(erratum_write(store, E1, TARGET))
+        store.upsert_published(erratum_write(store, E1, TARGET))
         store.upsert_published(erratum_write(store, E3, OTHER))
         rows = store.list_errata_for(TARGET)
         other = store.list_errata_for(OTHER)
@@ -134,10 +133,8 @@ def test_list_errata_for_returns_published_and_candidates(
         (E2, RecordState.CANDIDATE),
     ]
     first = rows[0]
-    assert first.id == published.id
     assert first.erratum == CONTENT
     assert first.title == f"Erratum {E1}"
-    assert first.identity.record_key == str(E1)
     assert rows[1].ref == "fix" and rows[1].project == "apps"
     assert [r.adr_uuid for r in other] == [E3]
     assert none == []
@@ -156,51 +153,6 @@ def test_list_errata_for_ignores_decisions(
     assert rows == []
 
 
-def test_migration_0003_round_trip(
-    provider: PostgresStoreProvider, engine: Engine
-) -> None:
-    """Ensure 0003 downgrades and upgrades, re-polling stale errata."""
-    with provider.unit_of_work() as store:
-        erratum = store.upsert_published(
-            erratum_write(store, E1, TARGET, content=None)
-        )
-        decision = store.upsert_published(put_record(store, adr_uuid=TARGET))
-    config = alembic_config()
-    command.downgrade(config, "0002_no_truncate_decisions")
-    try:
-        with engine.connect() as connection:
-            assert _schema(connection) == (False, False)
-    finally:
-        command.upgrade(config, "head")
-    with engine.connect() as connection:
-        assert _schema(connection) == (True, True)
-        rows = connection.execute(text("SELECT id, change_token FROM record"))
-        tokens = {row.id: row.change_token for row in rows}
-    assert tokens == {erratum.id: None, decision.id: "1:1"}
-
-
-def _schema(connection: Connection) -> tuple[bool, bool]:
-    """
-    Tell whether ``record.erratum`` and its link index exist.
-
-    :param connection: An open SQLAlchemy connection.
-    :returns: ``(column exists, index exists)``.
-    """
-    column = connection.execute(
-        text(
-            "SELECT count(*) FROM information_schema.columns "
-            "WHERE table_name = 'record' AND column_name = 'erratum'"
-        )
-    ).scalar_one()
-    index = connection.execute(
-        text(
-            "SELECT count(*) FROM pg_indexes "
-            "WHERE indexname = 'ix_record_links_corrects'"
-        )
-    ).scalar_one()
-    return column == 1, index == 1
-
-
 def _decision(write: RecordWrite) -> NewDecision:
     """
     Build an acceptance of a record write's digest.
@@ -208,9 +160,7 @@ def _decision(write: RecordWrite) -> NewDecision:
     :param write: The record write.
     :returns: The decision.
     """
-    assert write.adr_uuid is not None
     return NewDecision(
-        identity=write.identity,
         adr_uuid=write.adr_uuid,
         digest=write.digest,
         action=DecisionAction.ACCEPTED,
@@ -224,10 +174,10 @@ def _decision(write: RecordWrite) -> NewDecision:
     )
 
 
-def test_list_decisions_for_reads_several_identities_at_once(
+def test_list_decisions_for_reads_several_uuids_at_once(
     provider: PostgresStoreProvider,
 ) -> None:
-    """Ensure batched decisions return exactly the given identities."""
+    """Ensure batched decisions return exactly the given UUIDs."""
     with provider.unit_of_work() as store:
         writes = [
             put_record(store, adr_uuid=adr_uuid, path=f"{adr_uuid}.md")
@@ -237,33 +187,8 @@ def test_list_decisions_for_reads_several_identities_at_once(
             store.upsert_published(write)
             store.append_decision(_decision(write))
 
-        events = store.list_decisions_for([w.identity for w in writes[:2]])
+        events = store.list_decisions_for([w.adr_uuid for w in writes[:2]])
         empty = store.list_decisions_for([])
 
-    assert {event.identity for event in events} == {
-        writes[0].identity,
-        writes[1].identity,
-    }
-    assert empty == []
-
-
-def test_list_published_by_uuid_returns_titles_of_published_rows(
-    provider: PostgresStoreProvider,
-) -> None:
-    """Ensure the title lookup skips candidates and unknown UUIDs."""
-    with provider.unit_of_work() as store:
-        store.upsert_published(
-            put_record(store, adr_uuid=TARGET, title="The target")
-        )
-        store.upsert_candidate(
-            put_record(store, adr_uuid=OTHER, ref="feature", title="Draft")
-        )
-
-        targets = store.list_published_by_uuid({TARGET, OTHER, E1})
-        empty = store.list_published_by_uuid(set())
-
-    [target] = targets
-    assert target.title == "The target"
-    assert target.summary.adr_uuid == TARGET
-    assert target.summary.published is True
+    assert {event.adr_uuid for event in events} == {E1, E2}
     assert empty == []

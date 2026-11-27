@@ -15,7 +15,7 @@ function candidate(
   overrides: Partial<CompetingCandidateOut> = {},
 ): CompetingCandidateOut {
   return {
-    id: "11111111-1111-1111-1111-111111111111",
+    adr_uuid: "11111111-1111-1111-1111-111111111111",
     ref: "feature-x",
     path: "doc/decisions/2025-05-01-fix.md",
     digest: "sha256-v1:abc",
@@ -33,7 +33,11 @@ async function mountBanner(
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
   await router.push("/");
@@ -80,4 +84,45 @@ describe("DivergenceBanner", () => {
       expect(wrapper.text()).not.toContain("Reported");
     },
   );
+
+  it("links each other row of the ADR to its candidate page by UUID and ref", async () => {
+    const router: Router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/", component: { template: "<div />" } },
+        {
+          path: "/records/:uuid/candidates/:ref(.*)",
+          component: { template: "<div />" },
+        },
+      ],
+    });
+    await router.push("/");
+    const wrapper = mount(DivergenceBanner, {
+      props: {
+        divergence: {
+          kind: "published_differs",
+          other_digest: "sha256-v1:abc",
+          other_rows: [
+            { adr_uuid: "11111111-1111-1111-1111-111111111111", ref: "feature/x" },
+          ],
+          other_accepted: false,
+          message: "The published row differs.",
+        },
+        competingCandidates: [candidate({ ref: "feature/y" })],
+        recordKind: "decision",
+      },
+      global: { plugins: [router, vuetify] },
+    });
+
+    expect(
+      wrapper
+        .find("a[href='/records/11111111-1111-1111-1111-111111111111/candidates/feature/x']")
+        .exists(),
+    ).toBe(true);
+    expect(
+      wrapper
+        .find("a[href='/records/11111111-1111-1111-1111-111111111111/candidates/feature/y']")
+        .exists(),
+    ).toBe(true);
+  });
 });

@@ -21,14 +21,16 @@ B = "doc/decisions/sub/2024-01-02-b.md"
 C = "doc/decisions/2024-02-02-c.md"
 
 
-def adr(title: str) -> str:
+def adr(title: str, adr_uuid: uuid.UUID | None = None) -> str:
     """
-    Build a valid ADR document with a fresh UUID.
+    Build a valid ADR document.
 
     :param title: Title.
+    :param adr_uuid: Its UUID; default: a fresh one (a new ADR).
     :returns: The text.
     """
-    return f"---\nuuid: {uuid.uuid4()}\ntitle: {title}\n---\nBody.\n"
+    adr_uuid = adr_uuid or uuid.uuid4()
+    return f"---\nuuid: {adr_uuid}\ntitle: {title}\n---\nBody.\n"
 
 
 def write(path: Path, text: str) -> None:
@@ -165,7 +167,7 @@ async def test_changed_file_is_refetched_and_updated(
     before = tokens(provider)[("platform", A)]
     target = tree / "platform" / A
     new_mtime = target.stat().st_mtime + 10
-    write(target, adr("A2"))
+    write(target, adr("A2", before.adr_uuid))
     os.utime(target, (new_mtime, new_mtime))
 
     outcome = await polling.poll_source("fs")

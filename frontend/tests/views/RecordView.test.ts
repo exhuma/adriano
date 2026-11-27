@@ -45,7 +45,6 @@ const noPriorDiff: RecordDiffOut = {
 function baseDetail(): RecordDetail {
   return {
     metadata: {
-      id: "11111111-1111-1111-1111-111111111111",
       adr_uuid: "22222222-2222-2222-2222-222222222222",
       decision_date: "2024-12-24",
       decision_date_inferred: false,
@@ -117,7 +116,7 @@ function makeRouter(): Promise<Router> {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: "/records/:id", name: "record", component: RecordView, props: true },
+      { path: "/records/:uuid", name: "record", component: RecordView, props: true },
     ],
   });
   return router.push("/records/11111111-1111-1111-1111-111111111111").then(() =>
@@ -128,7 +127,7 @@ function makeRouter(): Promise<Router> {
 async function mountRecordView() {
   const router = await makeRouter();
   const wrapper = mount(RecordView, {
-    props: { id: "11111111-1111-1111-1111-111111111111" },
+    props: { uuid: "22222222-2222-2222-2222-222222222222" },
     global: { plugins: [router, vuetify] },
   });
   await flushPromises();
@@ -153,6 +152,25 @@ describe("RecordView approval controls", () => {
     expect(buttons).toContain("Accept");
     expect(buttons).toContain("Reject");
     expect(wrapper.text()).not.toContain("sign in as a reviewer");
+  });
+
+  it("loads the ADR page by UUID, and a candidate by UUID and slashed ref", async () => {
+    getRecord.mockResolvedValue(baseDetail());
+    const router = await makeRouter();
+    const uuid = "22222222-2222-2222-2222-222222222222";
+
+    mount(RecordView, {
+      props: { uuid },
+      global: { plugins: [router, vuetify] },
+    });
+    mount(RecordView, {
+      props: { uuid, candidateRef: "feature/x" },
+      global: { plugins: [router, vuetify] },
+    });
+    await flushPromises();
+
+    expect(getRecord).toHaveBeenNthCalledWith(1, uuid, undefined);
+    expect(getRecord).toHaveBeenNthCalledWith(2, uuid, "feature/x");
   });
 
   it("shows the blocked reason as visible text, never a disabled control, when the caller cannot decide", async () => {
@@ -328,7 +346,7 @@ describe("RecordView status banners and layout", () => {
     const detail = baseDetail();
     detail.status = "obsoleted";
     detail.inbound_links = [
-      { link_type: "obsoleted_by", source_id: "33333333-3333-3333-3333-333333333333", source_title: "Use gRPC" },
+      { link_type: "obsoleted_by", source_uuid: "33333333-3333-3333-3333-333333333333", source_title: "Use gRPC" },
     ];
     getRecord.mockResolvedValue(detail);
 
@@ -345,12 +363,12 @@ describe("RecordView status banners and layout", () => {
     detail.inbound_links = [
       {
         link_type: "obsoleted_by",
-        source_id: "33333333-3333-3333-3333-333333333333",
+        source_uuid: "33333333-3333-3333-3333-333333333333",
         source_title: "Use gRPC",
       },
       {
         link_type: "updated_by",
-        source_id: "44444444-4444-4444-4444-444444444444",
+        source_uuid: "44444444-4444-4444-4444-444444444444",
         source_title: "Use PostgreSQL v2",
       },
     ];
@@ -374,7 +392,7 @@ describe("RecordView status banners and layout", () => {
     const detail = baseDetail();
     detail.status = "updated";
     detail.inbound_links = [
-      { link_type: "updated_by", source_id: "33333333-3333-3333-3333-333333333333", source_title: "Use PostgreSQL v2" },
+      { link_type: "updated_by", source_uuid: "33333333-3333-3333-3333-333333333333", source_title: "Use PostgreSQL v2" },
     ];
     getRecord.mockResolvedValue(detail);
 
@@ -396,7 +414,7 @@ describe("RecordView status banners and layout", () => {
     };
     detail.errata = [
       {
-        id: "44444444-4444-4444-4444-444444444444",
+        adr_uuid: "44444444-4444-4444-4444-444444444444",
         kind: "published",
         ref: "main",
         source_id: "central",
@@ -438,7 +456,6 @@ describe("RecordView status banners and layout", () => {
     detail.approval.state = "accepted";
     detail.erratum_for = {
       uuid: "55555555-5555-5555-5555-555555555555",
-      id: "66666666-6666-6666-6666-666666666666",
       title: "Use PostgreSQL",
       resolved: true,
     };
@@ -460,7 +477,6 @@ describe("RecordView status banners and layout", () => {
     detail.metadata.title = "Erratum: Consequences";
     detail.erratum_for = {
       uuid: "55555555-5555-5555-5555-555555555555",
-      id: "66666666-6666-6666-6666-666666666666",
       title: "Use PostgreSQL",
       resolved: true,
     };
@@ -477,7 +493,6 @@ describe("RecordView status banners and layout", () => {
     detail.metadata.title = "Erratum: orphaned";
     detail.erratum_for = {
       uuid: "55555555-5555-5555-5555-555555555555",
-      id: null,
       title: null,
       resolved: false,
     };
@@ -583,7 +598,6 @@ describe("RecordView post-decision refresh (P11-R-16)", () => {
       policy_id: "global",
       policy_version: 1,
       provenance: {
-        record_id: "11111111-1111-1111-1111-111111111111",
         kind: "published",
         source_id: null,
         project: null,
@@ -617,7 +631,7 @@ describe("RecordView post-decision refresh (P11-R-16)", () => {
   async function mountAttached() {
     const router = await makeRouter();
     const wrapper = mount(RecordView, {
-      props: { id: "11111111-1111-1111-1111-111111111111" },
+      props: { uuid: "22222222-2222-2222-2222-222222222222" },
       global: { plugins: [router, vuetify] },
       attachTo: document.body,
     });
@@ -648,6 +662,14 @@ describe("RecordView post-decision refresh (P11-R-16)", () => {
     await flushPromises();
 
     expect(getRecord).toHaveBeenCalledTimes(2);
+    // The decision addresses the ADR by UUID and the candidate's ref.
+    expect(decide).toHaveBeenCalledWith(
+      "22222222-2222-2222-2222-222222222222",
+      "feature/x",
+      "accepted",
+      "sha256-v1:abc",
+      "",
+    );
     // The page content stayed mounted throughout -- it never fell
     // back to the loading state and lost the already-rendered record.
     expect(wrapper.text()).not.toContain("Loading record");

@@ -15,8 +15,8 @@ import type { RecordKind } from "@/types/records";
 import { formatDate } from "@/utils/dates";
 
 const props = defineProps<{
-  /** Canonical ADR UUID, or `null`/absent when the file has none. */
-  adrUuid: string | null;
+  /** The ADR's UUID. */
+  adrUuid: string;
   /** Authored decision date, `YYYY-MM-DD`. */
   decisionDate: string | null;
   /** Whether `decisionDate` was inferred from the filename. */
@@ -35,8 +35,7 @@ const decisionDateText = computed(() => formatDate(props.decisionDate));
       <v-list-item>
         <v-list-item-title>UUID</v-list-item-title>
         <v-list-item-subtitle>
-          <ShortIdCopy v-if="adrUuid" :value="adrUuid" label="UUID" />
-          <span v-else>Not available (no valid UUID in this file)</span>
+          <ShortIdCopy :value="adrUuid" label="UUID" />
         </v-list-item-subtitle>
       </v-list-item>
       <v-list-item>

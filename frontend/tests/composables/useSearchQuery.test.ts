@@ -20,7 +20,11 @@ function makeRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div />" } },
-      { path: "/records/:id", component: { template: "<div />" } },
+      { path: "/records/:uuid", component: { template: "<div />" } },
+      {
+        path: "/records/:uuid/candidates/:ref(.*)",
+        component: { template: "<div />" },
+      },
     ],
   });
 }

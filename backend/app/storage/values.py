@@ -3,6 +3,9 @@ Value types crossing the storage port.
 
 Plain frozen dataclasses and enums, independent of any ORM. Import them
 through :mod:`app.storage.port`, which re-exports everything here.
+The search, approval and intake-run values live in
+:mod:`app.storage.search_values`, :mod:`app.storage.approval_values` and
+:mod:`app.storage.intake_values`.
 
 Public API:
 
@@ -10,27 +13,20 @@ Public API:
   :class:`IntakeStatus`, :class:`SearchSort`; constant
   :data:`MAX_PAGE_SIZE`; alias :data:`JsonObject`
 - values :class:`RegistrationConfig`, :class:`Registration`,
-  :class:`Revision`, :class:`RecordWrite`, :class:`StoredRecord`,
-  :class:`ErratumRow`, :class:`UpsertResult`, :class:`ChangeTokenEntry`,
-  :class:`SearchFilters`, :class:`SearchItem`, :class:`SearchPage`,
-  :class:`FacetEntry`, :class:`NewDecision`, :class:`DecisionEvent`,
-  :class:`IntakeRun`
+  :class:`Revision`, :class:`Location`, :class:`RecordWrite`,
+  :class:`StoredRecord`, :class:`ErratumRow`, :class:`UpsertResult`,
+  :class:`ChangeTokenEntry`
 """
 
 import datetime
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
-from app.domain.approval import (
-    ApprovalStateCode,
-    DecisionAction,
-    DecisionEventView,
-)
 from app.domain.frontmatter import JsonValue
 from app.domain.issues import Issue
-from app.domain.values import Identity, Links, RecordKind, TitleSource
+from app.domain.values import Links, RecordKind, TitleSource
 from app.storage.errata_values import StoredErratum
 
 #: Upper bound for ``page_size`` in
@@ -77,8 +73,9 @@ class SearchSort(StrEnum):
     """
     Result order of :meth:`app.storage.port.CatalogStore.search`.
 
-    Every order ends with the lower-cased title and the record id, so
-    pages are stable even when the leading key ties.
+    Every order ends with the lower-cased title and the row key (ADR
+    UUID, state, ref), so pages are stable even when the leading key
+    ties.
 
     - ``relevance``: text rank, best first; without a text query it
       is the same as ``title``.
@@ -153,6 +150,31 @@ class Revision:
     created_at: datetime.datetime
 
 
+@dataclass(frozen=True, slots=True, order=True)
+class Location:
+    """
+    Where a file lives: registration, project and path.
+
+    An attribute of an ADR, never its identity (that is the UUID).
+
+    :param source_id: Registration id.
+    :param project: Project path.
+    :param path: File path inside the project.
+    """
+
+    source_id: str
+    project: str
+    path: str
+
+    def __str__(self) -> str:
+        """
+        Render the location for messages and logs.
+
+        :returns: ``<source_id>/<project>/<path>``.
+        """
+        return f"{self.source_id}/{self.project}/{self.path}"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RecordWrite:
     """
@@ -161,12 +183,11 @@ class RecordWrite:
     The revision for :attr:`digest` must have been stored first
     (:meth:`app.storage.port.CatalogStore.put_revision`).
 
-    :param source_id: Owning registration id.
-    :param project: Owning project path.
+    :param source_id: Registration the content comes from.
+    :param project: Project path.
     :param path: File path inside the project.
     :param ref: Branch/ref the content came from.
-    :param adr_uuid: Authored UUID, ``None`` if missing or invalid.
-    :param record_key: Identity key (:func:`app.domain.values.record_key`).
+    :param adr_uuid: Authored UUID: the identity of the ADR.
     :param digest: Digest string of the current content.
     :param change_token: Source change token (``None`` for pushes).
     :param metadata: Parsed frontmatter.
@@ -188,8 +209,7 @@ class RecordWrite:
     project: str
     path: str
     ref: str
-    adr_uuid: uuid.UUID | None
-    record_key: str
+    adr_uuid: uuid.UUID
     digest: str
     change_token: str | None
     metadata: JsonObject
@@ -206,13 +226,13 @@ class RecordWrite:
     erratum: StoredErratum | None = None
 
     @property
-    def identity(self) -> Identity:
+    def location(self) -> Location:
         """
-        Logical identity of the record.
+        Where the content of this row lives.
 
-        :returns: ``(source_id, project, record_key)``.
+        :returns: ``(source_id, project, path)``.
         """
-        return Identity(self.source_id, self.project, self.record_key)
+        return Location(self.source_id, self.project, self.path)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -220,20 +240,34 @@ class StoredRecord(RecordWrite):
     """
     A stored record row.
 
-    :param id: Surrogate id used in URLs.
+    Keyed by ``adr_uuid`` (published) or ``(adr_uuid, ref)``
+    (candidate).
+
     :param kind: Published or candidate.
     :param previous_digest: Digest before the latest content change.
-    :param first_seen_at: When the row was created.
+    :param first_seen_at: When the row was created (kept by moves).
     :param updated_at: When the content digest last changed.
     :param last_seen_at: When ingest last wrote the row.
     """
 
-    id: uuid.UUID
     kind: RecordState
     previous_digest: str | None
     first_seen_at: datetime.datetime
     updated_at: datetime.datetime
     last_seen_at: datetime.datetime
+
+    def is_row(self, other: StoredRecord) -> bool:
+        """
+        Tell whether *other* is this very row (same UUID, state, ref).
+
+        :param other: Another stored row.
+        :returns: ``True`` for the same key.
+        """
+        return (self.adr_uuid, self.kind, self.ref) == (
+            other.adr_uuid,
+            other.kind,
+            other.ref,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -241,44 +275,31 @@ class ErratumRow:
     """
     One erratum row (published or candidate) correcting a decision.
 
-    :param id: Record id.
     :param kind: Published or candidate.
     :param source_id: Registration id.
     :param project: Project path.
     :param path: File path inside the project.
     :param ref: Branch/ref of the content.
-    :param adr_uuid: The erratum's own UUID, if valid.
-    :param record_key: Identity key of the erratum.
+    :param adr_uuid: The erratum's own UUID.
     :param digest: Current digest.
     :param title: Display title.
-    :param erratum: Stored content; ``None`` only for a row ingested
-        before content was stored (the next ingest fills it).
+    :param erratum: Stored content; ``None`` only for a row whose
+        content could not be parsed as an erratum.
     :param updated_at: When the content digest last changed.
     :param issues: Validation issues.
     """
 
-    id: uuid.UUID
     kind: RecordState
     source_id: str
     project: str
     path: str
     ref: str
-    adr_uuid: uuid.UUID | None
-    record_key: str
+    adr_uuid: uuid.UUID
     digest: str
     title: str
     erratum: StoredErratum | None
     updated_at: datetime.datetime
     issues: tuple[Issue, ...]
-
-    @property
-    def identity(self) -> Identity:
-        """
-        Logical identity of the erratum (approval is keyed by it).
-
-        :returns: ``(source_id, project, record_key)``.
-        """
-        return Identity(self.source_id, self.project, self.record_key)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -286,220 +307,44 @@ class UpsertResult:
     """
     Outcome of a record upsert.
 
-    :param id: Record id.
     :param created: ``True`` if a new row was inserted.
     :param digest_changed: ``True`` if an existing row got new content.
     :param previous_digest: The row's previous digest, if any.
+    :param moved: ``True`` if an existing published row got a new
+        location (registration, project or path).
     """
 
-    id: uuid.UUID
     created: bool
     digest_changed: bool
     previous_digest: str | None
+    moved: bool = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ChangeTokenEntry:
     """
-    Stored change state of one published file.
+    Location and change state of one published ADR.
 
-    :param id: Record id.
-    :param project: Owning project path.
+    :param adr_uuid: UUID of the ADR.
+    :param source_id: Registration the file comes from.
+    :param project: Project path.
     :param path: File path inside the project.
     :param change_token: Source change token, if known.
     :param digest: Current digest.
     """
 
-    id: uuid.UUID
+    adr_uuid: uuid.UUID
+    source_id: str
     project: str
     path: str
     change_token: str | None
     digest: str
 
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SearchFilters:
-    """
-    Search filters; ``None`` / ``False`` means "no filter".
-
-    :param source_id: Registration id.
-    :param project: Project path.
-    :param kind: Published or candidate.
-    :param needs_approval: Only records whose approval state needs
-        approval (:func:`app.domain.approval.evaluate`).
-    :param record_kind: Only decisions or only errata.
-    """
-
-    source_id: str | None = None
-    project: str | None = None
-    kind: RecordState | None = None
-    needs_approval: bool = False
-    record_kind: RecordKind | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SearchItem:
-    """
-    One search hit.
-
-    :param id: Record id.
-    :param kind: Published or candidate.
-    :param source_id: Registration id.
-    :param project: Project path.
-    :param path: File path inside the project.
-    :param ref: Branch/ref of the content.
-    :param adr_uuid: Authored UUID, if valid.
-    :param record_key: Identity key.
-    :param digest: Current digest.
-    :param title: Display title.
-    :param record_kind: Decision or erratum.
-    :param decision_date: Displayed decision date.
-    :param decision_date_inferred: Whether the date is inferred.
-    :param issues: Validation issues.
-    :param approval_state: Approval state of the current digest, computed
-        by the store with the same rules as
-        :func:`app.domain.approval.evaluate`.
-    :param corrects: UUID an erratum corrects (``None`` for decisions).
-    """
-
-    id: uuid.UUID
-    kind: RecordState
-    source_id: str
-    project: str
-    path: str
-    ref: str
-    adr_uuid: uuid.UUID | None
-    record_key: str
-    digest: str
-    title: str
-    record_kind: RecordKind
-    decision_date: datetime.date | None
-    decision_date_inferred: bool
-    issues: tuple[Issue, ...]
-    approval_state: ApprovalStateCode
-    corrects: uuid.UUID | None = None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SearchPage:
-    """
-    One page of search results.
-
-    :param items: Hits on this page.
-    :param total: Number of hits over all pages.
-    :param page: 1-based page number.
-    :param page_size: Requested page size.
-    """
-
-    items: tuple[SearchItem, ...]
-    total: int
-    page: int
-    page_size: int
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FacetEntry:
-    """
-    Row count for one ``(source_id, project)`` pair.
-
-    Used to populate the source/project filter select in the UI
-    (:meth:`app.storage.port.CatalogStore.list_facets`); counts include
-    both published and candidate decision rows, never errata.
-
-    :param source_id: Registration id.
-    :param project: Project path.
-    :param count: Number of rows for this source and project.
-    """
-
-    source_id: str
-    project: str
-    count: int
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class NewDecision:
-    """
-    A decision to append.
-
-    :param identity: Logical identity decided on.
-    :param adr_uuid: The record UUID.
-    :param digest: Digest of the decided content.
-    :param action: Accepted or rejected.
-    :param actor_issuer: Reviewer token issuer.
-    :param actor_subject: Reviewer token subject.
-    :param actor_display: Reviewer display name, if known.
-    :param actor_email: Reviewer verified email, if known.
-    :param comment: Optional reviewer comment.
-    :param policy_id: Applied policy id.
-    :param policy_version: Applied policy version.
-    :param provenance: Record id, kind, ref, path and source URL at
-        decision time.
-    """
-
-    identity: Identity
-    adr_uuid: uuid.UUID
-    digest: str
-    action: DecisionAction
-    actor_issuer: str
-    actor_subject: str
-    actor_display: str | None
-    actor_email: str | None
-    comment: str | None
-    policy_id: str
-    policy_version: int
-    provenance: JsonObject = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DecisionEvent(NewDecision):
-    """
-    A stored, append-only decision event.
-
-    :param id: Stable event id.
-    :param created_at: Server timestamp.
-    """
-
-    id: uuid.UUID
-    created_at: datetime.datetime
-
-    def as_view(self) -> DecisionEventView:
+    @property
+    def location(self) -> Location:
         """
-        Convert to the domain view used by approval evaluation.
+        Where the ADR's file lives.
 
-        :returns: The event view.
+        :returns: ``(source_id, project, path)``.
         """
-        return DecisionEventView(
-            id=str(self.id),
-            digest=self.digest,
-            action=self.action,
-            created_at=self.created_at,
-        )
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class IntakeRun:
-    """
-    One poll or push intake run.
-
-    :param id: Run id.
-    :param source_id: Registration id as requested.
-    :param kind: Poll or push.
-    :param identity: Who triggered the run (no secrets).
-    :param delivery_id: Client-supplied push delivery id, if any.
-    :param started_at: Start time.
-    :param finished_at: End time, ``None`` while running.
-    :param status: Run status.
-    :param counts: Outcome counters.
-    :param errors: Error details.
-    """
-
-    id: uuid.UUID
-    source_id: str
-    kind: IntakeKind
-    identity: JsonValue
-    delivery_id: str | None
-    started_at: datetime.datetime
-    finished_at: datetime.datetime | None
-    status: IntakeStatus
-    counts: JsonValue
-    errors: JsonValue
+        return Location(self.source_id, self.project, self.path)

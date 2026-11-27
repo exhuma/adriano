@@ -116,7 +116,10 @@ def test_pagination_is_bounded(
     assert page_1.status_code == 200
     assert page_1.json()["total"] == 3
     assert len(page_1.json()["items"]) == 1
-    assert page_1.json()["items"][0]["id"] != page_2.json()["items"][0]["id"]
+    assert (
+        page_1.json()["items"][0]["adr_uuid"]
+        != page_2.json()["items"][0]["adr_uuid"]
+    )
     assert too_big.status_code == 422
     assert zero_page.status_code == 422
 

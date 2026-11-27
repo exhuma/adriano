@@ -1,9 +1,9 @@
 """
 Parity between the SQL approval state and ``domain.approval.evaluate``.
 
-Every scenario gets its own identity. For each policy variant the state
+Every scenario gets its own ADR UUID. For each policy variant the state
 computed by the store (search items and the ``needs_approval`` filter)
-must equal the domain evaluation over the identity's stored events. The
+must equal the domain evaluation over the UUID's stored events. The
 browse path (state joined after paging) and the filtered path (state
 joined before paging) are both checked, with and without a text query
 and across page boundaries. Erratum rows (:data:`ERRATA`) check that
@@ -16,16 +16,16 @@ import uuid
 import pytest
 
 from app.domain.approval import (
-    ApprovalStateCode,
     DecisionAction,
     Policy,
     evaluate,
 )
-from app.domain.values import Identity, Links, RecordKind
+from app.domain.values import Links, RecordKind
 from app.storage.port import (
     MAX_PAGE_SIZE,
     CatalogStore,
     NewDecision,
+    RecordState,
     SearchFilters,
     SearchItem,
 )
@@ -37,7 +37,7 @@ R = DecisionAction.REJECTED
 
 #: name -> (events as (digest label, action), expected required state).
 #: Digest labels: "cur" is the published content, "old"/"old2" other
-#: revisions of the same identity. Events are appended in list order.
+#: revisions of the same ADR. Events are appended in list order.
 SCENARIOS: dict[str, tuple[list[tuple[str, DecisionAction]], str]] = {
     "none": ([], "pending"),
     "accepted": ([("cur", A)], "accepted"),
@@ -65,7 +65,7 @@ SCENARIOS: dict[str, tuple[list[tuple[str, DecisionAction]], str]] = {
     ),
 }
 
-#: Identities with several rows. name -> (rows as ref -> content label,
+#: ADRs with several rows. name -> (rows as ref -> content label,
 #: events as (content label, action), expected required state per ref).
 #: Ref "main" is the published row, any other ref a candidate.
 MULTI_ROW: dict[
@@ -112,11 +112,7 @@ MULTI_ROW: dict[
     ),
 }
 
-#: Rows outside the scenario identities: an accepted copy of the "none"
-#: UUID in another project and in another registration.
-ELSEWHERE = (("central", "elsewhere"), ("other", "platform"))
-
-#: Published erratum identities. name -> (events on the current
+#: Published errata. name -> (events on the current
 #: content, expected required state).
 ERRATA: dict[str, tuple[list[DecisionAction], str]] = {
     "erratum_reported": ([], "pending"),
@@ -124,12 +120,23 @@ ERRATA: dict[str, tuple[list[DecisionAction], str]] = {
     "erratum_rejected": ([R], "rejected"),
 }
 
-ROW_COUNT = (
+#: Search hits per ``state`` filter: one row per ADR (the published row,
+#: else the newest candidate; with ``state=candidate`` the newest
+#: candidate of every ADR that has one).
+ADR_COUNT = len(SCENARIOS) + len(MULTI_ROW) + len(ERRATA)
+PUBLISHED_COUNT = (
     len(SCENARIOS)
-    + sum(len(rows) for rows, _, _ in MULTI_ROW.values())
-    + len(ELSEWHERE)
     + len(ERRATA)
+    + sum("main" in rows for rows, _, _ in MULTI_ROW.values())
 )
+CANDIDATE_COUNT = sum(
+    any(ref != "main" for ref in rows) for rows, _, _ in MULTI_ROW.values()
+)
+EXPECTED_TOTAL = {
+    None: ADR_COUNT,
+    RecordState.PUBLISHED: PUBLISHED_COUNT,
+    RecordState.CANDIDATE: CANDIDATE_COUNT,
+}
 
 POLICIES = {
     "missing": None,
@@ -140,7 +147,7 @@ POLICIES = {
 
 def scenario_uuid(name: str) -> uuid.UUID:
     """
-    Derive the stable UUID of a scenario identity.
+    Derive the stable UUID of a scenario's ADR.
 
     :param name: Scenario name.
     :returns: The UUID.
@@ -149,20 +156,19 @@ def scenario_uuid(name: str) -> uuid.UUID:
 
 
 def _decide(
-    store: CatalogStore, identity: Identity, digest: str, action: str
+    store: CatalogStore, adr_uuid: uuid.UUID, digest: str, action: str
 ) -> None:
     """
     Append one decision.
 
     :param store: Store.
-    :param identity: Identity.
+    :param adr_uuid: Decided ADR.
     :param digest: Digest.
     :param action: Action value.
     """
     store.append_decision(
         NewDecision(
-            identity=identity,
-            adr_uuid=uuid.UUID(identity.record_key),
+            adr_uuid=adr_uuid,
             digest=digest,
             action=DecisionAction(action),
             actor_issuer="iss",
@@ -196,12 +202,12 @@ def _store_single(store: CatalogStore) -> None:
         store.upsert_published(cur)
         digests["cur"] = cur.digest
         for label, action in events:
-            _decide(store, cur.identity, digests[label], action)
+            _decide(store, adr_uuid, digests[label], action)
 
 
 def _store_multi(store: CatalogStore) -> None:
     """
-    Store the rows and events of every :data:`MULTI_ROW` identity.
+    Store the rows and events of every :data:`MULTI_ROW` ADR.
 
     Rows carry the title ``<name>/<content label>`` and the body word
     ``divergent``, so rows with one label have identical content.
@@ -210,7 +216,6 @@ def _store_multi(store: CatalogStore) -> None:
     """
     for name, (rows, events, _) in MULTI_ROW.items():
         digests: dict[str, str] = {}
-        identity = None
         for ref, label in rows.items():
             write = put_record(
                 store,
@@ -225,10 +230,8 @@ def _store_multi(store: CatalogStore) -> None:
             else:
                 store.upsert_candidate(write)
             digests[label] = write.digest
-            identity = write.identity
-        assert identity is not None
         for label, action in events:
-            _decide(store, identity, digests[label], action)
+            _decide(store, scenario_uuid(name), digests[label], action)
 
 
 def _store_errata(store: CatalogStore) -> None:
@@ -254,17 +257,13 @@ def _store_errata(store: CatalogStore) -> None:
         )
         store.upsert_published(write)
         for action in actions:
-            _decide(store, write.identity, write.digest, action)
+            _decide(store, write.adr_uuid, write.digest, action)
 
 
 @pytest.fixture
 def scenarios(provider: PostgresStoreProvider) -> PostgresStoreProvider:
     """
     Store every single-row and multi-row scenario.
-
-    Also stores accepted copies of the "none" record in another project
-    and another registration (different identities, which must not leak
-    into "none").
 
     :param provider: Clean provider.
     :returns: The provider.
@@ -273,18 +272,17 @@ def scenarios(provider: PostgresStoreProvider) -> PostgresStoreProvider:
         _store_single(store)
         _store_multi(store)
         _store_errata(store)
-        for source_id, project in ELSEWHERE:
-            elsewhere = put_record(
-                store,
-                source_id=source_id,
-                adr_uuid=scenario_uuid("none"),
-                project=project,
-                path="none.md",
-                title="none",
-            )
-            store.upsert_published(elsewhere)
-            _decide(store, elsewhere.identity, elsewhere.digest, A)
     return provider
+
+
+def _key(item: SearchItem) -> tuple[uuid.UUID, str, str]:
+    """
+    Build the row key of a search hit.
+
+    :param item: The hit.
+    :returns: ``(adr_uuid, kind, ref)``.
+    """
+    return (item.adr_uuid, item.kind.value, item.ref)
 
 
 def _all_pages(
@@ -315,47 +313,50 @@ def _all_pages(
         page += 1
 
 
+@pytest.mark.parametrize("kind", list(EXPECTED_TOTAL))
 @pytest.mark.parametrize("query", [None, "divergent", "body"])
 @pytest.mark.parametrize("policy_name", list(POLICIES))
 def test_sql_state_matches_domain(
-    scenarios: PostgresStoreProvider, policy_name: str, query: str | None
+    scenarios: PostgresStoreProvider,
+    policy_name: str,
+    query: str | None,
+    kind: RecordState | None,
 ) -> None:
     """Ensure every row's SQL state equals the domain evaluation."""
     policy = POLICIES[policy_name]
     with scenarios.unit_of_work() as store:
         page = store.search(
-            query, SearchFilters(), 1, MAX_PAGE_SIZE, policy=policy
+            query, SearchFilters(kind=kind), 1, MAX_PAGE_SIZE, policy=policy
         )
         needs = store.search(
             query,
-            SearchFilters(needs_approval=True),
+            SearchFilters(needs_approval=True, kind=kind),
             1,
             MAX_PAGE_SIZE,
             policy=policy,
         )
         expected = {}
         for item in page.items:
-            events = store.list_decisions(
-                Identity(item.source_id, item.project, item.record_key)
-            )
-            expected[item.id] = evaluate(
+            events = store.list_decisions(item.adr_uuid)
+            expected[_key(item)] = evaluate(
                 policy,
                 [event.as_view() for event in events],
                 item.digest,
                 approvable=True,
             )
-    assert page.items
+    # Candidate bodies never contain the word "body".
+    assert page.items or (query == "body" and kind is RecordState.CANDIDATE)
     if query is None:
-        assert page.total == ROW_COUNT
+        assert page.total == EXPECTED_TOTAL[kind]
     for item in page.items:
-        assert item.approval_state is expected[item.id].state, item.title
-    assert [item.id for item in needs.items] == [
-        item.id for item in page.items if expected[item.id].needs_approval
+        assert item.approval_state is expected[_key(item)].state, item.title
+    assert [_key(item) for item in needs.items] == [
+        _key(item) for item in page.items if expected[_key(item)].needs_approval
     ]
-    assert {item.id: item.approval_state for item in needs.items} == {
-        item.id: item.approval_state
+    assert {_key(item): item.approval_state for item in needs.items} == {
+        _key(item): item.approval_state
         for item in page.items
-        if expected[item.id].needs_approval
+        if expected[_key(item)].needs_approval
     }
     assert needs.total == len(needs.items)
 
@@ -379,29 +380,31 @@ def test_fixture_covers_every_required_state(
 ) -> None:
     """Ensure the fixture exercises the expected state per scenario."""
     with scenarios.unit_of_work() as store:
-        page = store.search(
-            None,
-            SearchFilters(),
-            1,
-            MAX_PAGE_SIZE,
-            policy=POLICIES["required"],
-        )
+        items = [
+            item
+            for kind in (RecordState.PUBLISHED, RecordState.CANDIDATE)
+            for item in store.search(
+                None,
+                SearchFilters(kind=kind),
+                1,
+                MAX_PAGE_SIZE,
+                policy=POLICIES["required"],
+            ).items
+        ]
     by_location = {
         (item.source_id, item.project, item.title): item.approval_state
-        for item in page.items
+        for item in items
     }
     for name, (_, state) in SCENARIOS.items():
         assert by_location["central", "platform", name] == state, name
-    by_ref = {
-        (item.record_key, item.ref): item.approval_state for item in page.items
-    }
+    by_ref = {(item.adr_uuid, item.ref): item.approval_state for item in items}
     for name, (_, _, states) in MULTI_ROW.items():
         for ref, state in states.items():
-            key = (str(scenario_uuid(name)), ref)
-            assert by_ref[key] == state, (name, ref)
-    for source_id, project in ELSEWHERE:
-        state = by_location[source_id, project, "none"]
-        assert state is ApprovalStateCode.ACCEPTED
+            key = (scenario_uuid(name), ref)
+            if key in by_ref:  # a search hit is one row per ADR
+                assert by_ref[key] == state, (name, ref)
+    # Of competing candidates only the newest is a hit.
+    assert (scenario_uuid("competing_candidates"), "feature-b") in by_ref
 
 
 @pytest.mark.parametrize("query", [None, "divergent"])

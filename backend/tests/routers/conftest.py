@@ -153,7 +153,7 @@ def seed(
     :param ref: Branch/ref.
     :param content: Raw file bytes.
     :param kind: Published or candidate.
-    :returns: The stored record id.
+    :returns: The stored ADR UUID (with *ref*, a candidate's key).
     """
     document = IncomingDocument(
         source_id=source_id,
@@ -165,7 +165,7 @@ def seed(
     )
     prepared = prepare_document(document)
     result = ingest_document(store, prepared, kind)
-    return result.record_id
+    return result.adr_uuid
 
 
 def adr(
@@ -179,7 +179,7 @@ def adr(
     Render a small ADR document.
 
     :param adr_uuid: UUID written to the frontmatter, or ``None`` to
-        omit it (an invalid record).
+        omit it (a document that cannot be indexed).
     :param title: Title.
     :param body: Markdown body.
     :param extra: Extra raw frontmatter lines (e.g. ``updates: [...]``).

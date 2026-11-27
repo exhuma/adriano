@@ -206,19 +206,20 @@ def test_seed_catalog_ingests_through_the_shared_path(
     assert messages  # progress was reported
 
     with provider.unit_of_work() as store:
-        page = store.search(
+        published_rows = store.search(
             None,
-            SearchFilters(source_id="central"),
+            SearchFilters(source_id="central", kind=RecordState.PUBLISHED),
             1,
             50,
             policy=config.policy.policy,
-        )
-        published_rows = [
-            item for item in page.items if item.kind is RecordState.PUBLISHED
-        ]
-        candidate_rows = [
-            item for item in page.items if item.kind is RecordState.CANDIDATE
-        ]
+        ).items
+        candidate_rows = store.search(
+            None,
+            SearchFilters(source_id="central", kind=RecordState.CANDIDATE),
+            1,
+            50,
+            policy=config.policy.policy,
+        ).items
     assert len(published_rows) == 12
     assert len(candidate_rows) == summary.candidates
 

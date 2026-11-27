@@ -50,7 +50,7 @@ number of ADR files in that listing and ``path_tag`` the first 12 hex
 digits of SHA-256 of the configured ``path``. The tree listing is
 skipped only if every stored token of the project carries the current
 head and path tag and the number of stored tokens equals ``count``; a
-file that failed to fetch, was owned elsewhere or a changed ``path``
+file that failed to fetch, lost a duplicate UUID or a changed ``path``
 therefore forces a full listing on the next poll.
 
 Settings parsing lives in :mod:`app.sources.gitlab_settings`; HTTP

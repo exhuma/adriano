@@ -28,6 +28,7 @@ import { computed } from "vue";
 
 import ShortIdCopy from "@/components/record/ShortIdCopy.vue";
 import type { DisplayStatus, ErratumForOut, InboundLinkOut } from "@/types/records";
+import { recordPath } from "@/utils/recordPaths";
 
 const props = defineProps<{
   /** The record's derived lifecycle status, from inbound links;
@@ -74,8 +75,8 @@ const lifecycleNotice = computed(() => {
     class="mb-3"
   >
     This decision {{ lifecycleNotice.verb }}, see
-    <template v-for="(link, index) in lifecycleNotice.links" :key="link.source_id">
-      <router-link :to="`/records/${link.source_id}`" class="text-primary">
+    <template v-for="(link, index) in lifecycleNotice.links" :key="link.source_uuid">
+      <router-link :to="recordPath(link.source_uuid)" class="text-primary">
         {{ link.source_title }}
       </router-link><span v-if="index < lifecycleNotice.links.length - 1">, </span>
     </template>.
@@ -88,9 +89,9 @@ const lifecycleNotice = computed(() => {
     icon="mdi-file-alert-outline"
     class="mb-3"
   >
-    <template v-if="erratumFor.resolved && erratumFor.id">
+    <template v-if="erratumFor.resolved">
       This is an erratum for
-      <router-link :to="`/records/${erratumFor.id}`" class="text-primary">
+      <router-link :to="recordPath(erratumFor.uuid)" class="text-primary">
         {{ erratumFor.title }}
       </router-link>.
     </template>

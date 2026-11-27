@@ -1,37 +1,43 @@
 """
 Poll orchestration: list, skip unchanged, fetch, ingest, reconcile, log.
 
-:class:`PollingService` polls registrations one after another in
-configuration order (ownership depends on that order). Each registration
-runs in three phases:
+:class:`PollingService` polls registrations in configuration order.
+One poll run (all pollable registrations for :meth:`~PollingService.
+poll_all`, one for :meth:`~PollingService.poll_source`) has three
+phases:
 
-1. **Run log** -- an ``intake_run`` row is started in its own unit of
-   work, so it survives a rollback of the ingest transaction.
-2. **Collect** (no transaction held, no lock) -- open the adapter
+1. **Run log** -- per registration, an ``intake_run`` row is started in
+   its own unit of work, so it survives a rollback of the ingest
+   transaction.
+2. **Collect** (no transaction held, no lock), registration by
+   registration, with :class:`~app.services.poll_collect.PollCollector`
+   -- open the adapter
    (:attr:`~app.sources.registry.SourceBinding.open_adapter`), list
    projects, list each project's documents with the stored change
-   tokens (bounded concurrency), drop documents owned by an earlier
-   registration (``ownership_conflict`` warning), fetch only changed
-   documents (bounded concurrency) and prepare them with the shared
-   ingest path (:func:`app.services.ingest.prepare_document`).
-3. **Apply** -- under
-   :meth:`~app.storage.port.CatalogStoreProvider.lock_registration` (one
-   transaction): ingest the fetched documents, rewrite change tokens of
-   unchanged documents whose token moved, and delete published rows that
-   a *complete* listing no longer contains.
+   tokens (bounded concurrency), fetch only changed documents (bounded
+   concurrency) and prepare them with the shared ingest path
+   (:func:`app.services.ingest.prepare_document`).
+3. **Apply** -- registration by registration, in configuration order,
+   under :meth:`~app.storage.port.CatalogStoreProvider.
+   lock_registration` (one transaction each):
+   :func:`app.services.poll_apply.apply_plan` applies the UUID holder
+   rule (moves included), rewrites change tokens of unchanged
+   documents whose token moved, deletes published rows whose file is
+   gone and maintains the not-indexed list. Every registration's
+   findings are known to every apply of the run
+   (:class:`~app.services.poll_apply.PollRun`), so a file that moved
+   between registrations keeps its identity.
 
-Finally, in a separate unit of work, the run is finished and the
-registration's ``last_attempt_at / last_success_at / last_status /
-last_error`` are set.
+Finally, in a separate unit of work per registration, the run is
+finished and the registration's ``last_attempt_at / last_success_at /
+last_status / last_error`` are set.
 
 Reconciliation rules: nothing is deleted unless the project listing was
 complete; within a project, nothing is deleted unless its document
 listing was complete. A vanished project (complete project listing)
 loses its published rows. Candidates are never deleted by polling.
-
-Ownership: the first enabled registration in configuration order whose
-stored published rows contain a ``(project, path)`` owns it; later
-registrations skip that file (and drop their own stale copy).
+:meth:`~PollingService.poll_all` also clears the not-indexed poll
+entries of registrations no longer configured.
 
 Statuses: ``failed`` when no project listing could be produced, the
 adapter could not be opened or the write failed (prior content is kept);
@@ -47,42 +53,31 @@ import datetime
 import logging
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import fields
+from dataclasses import dataclass, field
 
 from app.catalog_config import SourceRegistration
 from app.domain.frontmatter import JsonValue
 from app.errors import NotFoundError
-from app.services.ingest import (
-    IncomingDocument,
-    PreparedDocument,
-    ingest_document,
-    prepare_document,
+from app.services.poll_apply import (
+    PollRun,
+    apply_plan,
+    clear_removed_sources,
 )
+from app.services.poll_collect import PollCollector
 from app.services.poll_plan import (
     PollCounts,
     PollOutcome,
     PollPlan,
     PollProblem,
-    StoredState,
-    bounded,
-    plan_project,
 )
 from app.sources.port import (
-    DocumentListing,
-    SourceAdapter,
-    SourceDocument,
     SourceError,
-    SourceProject,
 )
 from app.storage.port import (
-    CatalogStore,
     CatalogStoreProvider,
-    ChangeTokenEntry,
     IntakeKind,
     IntakeStatus,
     PollStatus,
-    RecordState,
-    RecordWrite,
 )
 
 __all__ = [
@@ -119,17 +114,34 @@ def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
 
 
-def _as_write(record: RecordWrite, change_token: str | None) -> RecordWrite:
+@dataclass(slots=True)
+class _Job:
     """
-    Copy the writable fields of a stored row with a new change token.
+    One registration's part of a poll run.
 
-    :param record: Stored row.
-    :param change_token: New token.
-    :returns: The row write.
+    :param source: The registration.
+    :param run_id: Its intake run id.
+    :param attempted_at: When its poll started.
+    :param plan: What it collected.
+    :param status: ``FAILED`` once something failed, else ``None``.
     """
-    values = {f.name: getattr(record, f.name) for f in fields(RecordWrite)}
-    values["change_token"] = change_token
-    return RecordWrite(**values)
+
+    source: SourceRegistration
+    run_id: uuid.UUID
+    attempted_at: datetime.datetime
+    plan: PollPlan = field(default_factory=PollPlan)
+    status: PollStatus | None = None
+
+    @property
+    def final_status(self) -> PollStatus:
+        """
+        The poll status of the registration.
+
+        :returns: ``FAILED``, else ``PARTIAL`` or ``OK``.
+        """
+        if self.status is not None:
+            return self.status
+        return PollStatus.OK if self.plan.complete else PollStatus.PARTIAL
 
 
 class PollingService:
@@ -159,8 +171,8 @@ class PollingService:
         :param clock: Time source.
         """
         self._provider = provider
+        self._collector = PollCollector(provider, max(1, concurrency))
         self._sources = tuple(sorted(sources, key=lambda s: s.position))
-        self._concurrency = max(1, concurrency)
         self._clock = clock
 
     async def poll_all(self, *, trigger: JsonValue = None) -> list[PollOutcome]:
@@ -170,11 +182,11 @@ class PollingService:
         :param trigger: Who triggered the poll (stored, no secrets).
         :returns: One outcome per pollable registration.
         """
-        return [
-            await self._poll(source, trigger)
-            for source in self._sources
-            if source.pollable
-        ]
+        if self._sources:
+            with self._provider.unit_of_work() as store:
+                clear_removed_sources(store, (s.id for s in self._sources))
+        sources = [source for source in self._sources if source.pollable]
+        return await self._poll(sources, trigger)
 
     async def poll_source(
         self, source_id: str, *, trigger: JsonValue = None
@@ -201,298 +213,106 @@ class PollingService:
                 counts=PollCounts(),
                 problems=(problem,),
             )
-        return await self._poll(source, trigger)
+        return (await self._poll([source], trigger))[0]
 
     async def _poll(
-        self, source: SourceRegistration, trigger: JsonValue
-    ) -> PollOutcome:
+        self, sources: Sequence[SourceRegistration], trigger: JsonValue
+    ) -> list[PollOutcome]:
         """
-        Poll one pollable registration and record the outcome.
+        Collect every registration, then apply them in order.
 
-        :param source: The registration.
+        :param sources: Pollable registrations, in configuration order.
         :param trigger: Who triggered the poll.
-        :returns: The outcome.
+        :returns: One outcome per registration.
         """
-        attempted_at = self._clock()
-        with self._provider.unit_of_work() as store:
-            run = store.start_intake_run(
-                source.id, IntakeKind.POLL, identity=trigger
-            )
-        plan = PollPlan()
-        status = await self._run(source, plan)
-        self._finish(source.id, run.id, status, plan, attempted_at)
-        logger.info("poll %s finished: %s %s", source.id, status, plan.counts)
-        return PollOutcome(
-            source_id=source.id,
-            status=status,
-            run_id=run.id,
-            counts=plan.counts,
-            problems=tuple(plan.problems),
-        )
+        jobs: list[_Job] = []
+        for source in sources:
+            attempted_at = self._clock()
+            with self._provider.unit_of_work() as store:
+                run = store.start_intake_run(
+                    source.id, IntakeKind.POLL, identity=trigger
+                )
+            job = _Job(source, run.id, attempted_at)
+            await self._guarded(job, self._collector.collect(source, job.plan))
+            jobs.append(job)
+        run_state = PollRun(frozenset(s.id for s in self._sources))
+        for job in jobs:
+            if job.status is None:
+                run_state.add(job.source.position, job.plan)
+        outcomes = []
+        for job in jobs:
+            if job.status is None:
+                await self._guarded(job, self._apply(job, run_state))
+            outcomes.append(self._finish(job))
+        return outcomes
 
-    async def _run(
-        self, source: SourceRegistration, plan: PollPlan
-    ) -> PollStatus:
+    async def _guarded(self, job: _Job, step: Awaitable[None]) -> None:
         """
-        Collect and apply, turning failures into a ``failed`` status.
+        Run one step of a registration, turning failures into ``failed``.
 
-        :param source: The registration.
-        :param plan: Plan to fill.
-        :returns: The poll status.
+        :param job: The registration's job.
+        :param step: The collect or apply coroutine.
         """
+        source_id, plan = job.source.id, job.plan
         try:
-            await self._collect(source, plan)
-            with self._provider.lock_registration(source.id) as store:
-                self._apply(store, plan)
+            await step
         except SourceError as exc:
-            logger.warning("poll %s failed: %s", source.id, exc.message)
+            logger.warning("poll %s failed: %s", source_id, exc.message)
             plan.problems.append(
                 PollProblem(code="source_error", message=exc.message)
             )
-            return PollStatus.FAILED
+            job.status = PollStatus.FAILED
         except Exception:
-            logger.exception("poll %s failed unexpectedly", source.id)
+            logger.exception("poll %s failed unexpectedly", source_id)
             plan.problems.append(
                 PollProblem(
                     code="internal_error",
                     message="unexpected error; see the server log",
                 )
             )
-            return PollStatus.FAILED
-        return PollStatus.OK if plan.complete else PollStatus.PARTIAL
+            job.status = PollStatus.FAILED
 
-    def _finish(
-        self,
-        source_id: str,
-        run_id: uuid.UUID,
-        status: PollStatus,
-        plan: PollPlan,
-        attempted_at: datetime.datetime,
-    ) -> None:
+    async def _apply(self, job: _Job, run_state: PollRun) -> None:
+        """
+        Apply one registration's plan under its lock.
+
+        :param job: The registration's job.
+        :param run_state: Knowledge of the whole run.
+        """
+        with self._provider.lock_registration(job.source.id) as store:
+            apply_plan(store, job.plan, run_state, job.source.position)
+
+    def _finish(self, job: _Job) -> PollOutcome:
         """
         Finish the run and update the registration poll status.
 
-        :param source_id: Registration id.
-        :param run_id: Intake run id.
-        :param status: Poll status.
-        :param plan: Collected counters and problems.
-        :param attempted_at: When the poll started.
+        :param job: The registration's job.
+        :returns: The outcome.
         """
+        status, plan = job.final_status, job.plan
         problems: list[JsonValue] = [
             p.to_json() for p in plan.problems[:_MAX_STORED_PROBLEMS]
         ]
         with self._provider.unit_of_work() as store:
             store.finish_intake_run(
-                run_id,
+                job.run_id,
                 _INTAKE_STATUS[status],
                 counts=plan.counts.to_json(),
                 errors=problems or None,
             )
             store.update_poll_status(
-                source_id,
+                job.source.id,
                 status,
-                attempted_at,
+                job.attempted_at,
                 None if status is PollStatus.OK else {"problems": problems},
             )
-
-    def _read_stored(self, source: SourceRegistration) -> StoredState:
-        """
-        Read stored tokens and the locations owned by earlier sources.
-
-        :param source: The registration being polled.
-        :returns: The stored state.
-        """
-        earlier = [
-            s.id
-            for s in self._sources
-            if s.position < source.position and s.pollable
-        ]
-        own: dict[str, dict[str, ChangeTokenEntry]] = {}
-        with self._provider.unit_of_work() as store:
-            for entry in store.list_change_tokens(source.id):
-                own.setdefault(entry.project, {})[entry.path] = entry
-            elsewhere = frozenset(
-                (entry.project, entry.path)
-                for other in earlier
-                for entry in store.list_change_tokens(other)
-            )
-        return StoredState(own=own, owned_elsewhere=elsewhere)
-
-    async def _collect(
-        self, source: SourceRegistration, plan: PollPlan
-    ) -> None:
-        """
-        List, filter, fetch and prepare (no transaction held).
-
-        :param source: The registration.
-        :param plan: Plan to fill.
-        :raises SourceError: If no project listing can be produced.
-        """
-        assert source.binding is not None
-        stored = self._read_stored(source)
-        async with source.binding.open_adapter() as adapter:
-            listing = await adapter.list_projects()
-            plan.counts.projects = len(listing.projects)
-            for message in listing.problems:
-                plan.fail(
-                    PollProblem(code="projects_incomplete", message=message)
-                )
-            plan.complete = plan.complete and listing.complete
-            to_fetch = await self._list_all(
-                adapter, listing.projects, stored, plan
-            )
-            await self._fetch_all(source, adapter, to_fetch, plan)
-        if not listing.complete:
-            plan.delete.clear()
-            return
-        listed = {project.path for project in listing.projects}
-        for project, entries in stored.own.items():
-            if project not in listed:
-                plan.delete.extend(e.id for e in entries.values())
-
-    async def _list_all(
-        self,
-        adapter: SourceAdapter,
-        projects: Sequence[SourceProject],
-        stored: StoredState,
-        plan: PollPlan,
-    ) -> list[SourceDocument]:
-        """
-        List every project's documents and decide what to fetch.
-
-        :param adapter: Open adapter.
-        :param projects: Listed projects.
-        :param stored: Stored state.
-        :param plan: Plan to fill.
-        :returns: Documents to fetch.
-        """
-
-        def job(
-            project: SourceProject,
-        ) -> Callable[[], Awaitable[DocumentListing | PollProblem]]:
-            tokens = {
-                path: entry.change_token
-                for path, entry in stored.own.get(project.path, {}).items()
-            }
-            return lambda: self._list_one(adapter, project, tokens)
-
-        listings = await bounded(
-            self._concurrency, [job(project) for project in projects]
+        logger.info(
+            "poll %s finished: %s %s", job.source.id, status, plan.counts
         )
-        to_fetch: list[SourceDocument] = []
-        for project, listing in zip(projects, listings, strict=True):
-            if isinstance(listing, PollProblem):
-                plan.fail(listing)
-                continue
-            to_fetch += plan_project(project, listing, stored, plan)
-        return to_fetch
-
-    @staticmethod
-    async def _list_one(
-        adapter: SourceAdapter,
-        project: SourceProject,
-        tokens: dict[str, str | None],
-    ) -> DocumentListing | PollProblem:
-        """
-        List one project, turning source errors into a problem.
-
-        :param adapter: Open adapter.
-        :param project: The project.
-        :param tokens: Stored tokens by path.
-        :returns: The listing, or the problem.
-        """
-        try:
-            return await adapter.list_documents(project, tokens)
-        except SourceError as exc:
-            return PollProblem(
-                code="listing_failed", message=exc.message, project=project.path
-            )
-
-    async def _fetch_all(
-        self,
-        source: SourceRegistration,
-        adapter: SourceAdapter,
-        documents: Sequence[SourceDocument],
-        plan: PollPlan,
-    ) -> None:
-        """
-        Fetch and prepare changed documents with bounded concurrency.
-
-        :param source: The registration.
-        :param adapter: Open adapter.
-        :param documents: Documents to fetch.
-        :param plan: Plan to fill.
-        """
-
-        def job(
-            document: SourceDocument,
-        ) -> Callable[[], Awaitable[PreparedDocument | PollProblem]]:
-            return lambda: self._fetch_one(source.id, adapter, document)
-
-        results = await bounded(
-            self._concurrency, [job(document) for document in documents]
+        return PollOutcome(
+            source_id=job.source.id,
+            status=status,
+            run_id=job.run_id,
+            counts=plan.counts,
+            problems=tuple(plan.problems),
         )
-        for result in results:
-            if isinstance(result, PollProblem):
-                plan.fail(result)
-            else:
-                plan.counts.fetched += 1
-                plan.prepared.append(result)
-
-    @staticmethod
-    async def _fetch_one(
-        source_id: str, adapter: SourceAdapter, document: SourceDocument
-    ) -> PreparedDocument | PollProblem:
-        """
-        Fetch and prepare one document.
-
-        :param source_id: Registration id.
-        :param adapter: Open adapter.
-        :param document: The document.
-        :returns: The prepared document, or the problem.
-        """
-        try:
-            fetched = await adapter.fetch(document)
-        except SourceError as exc:
-            return PollProblem(
-                code="fetch_failed",
-                message=exc.message,
-                project=document.project.path,
-                path=document.path,
-            )
-        return prepare_document(
-            IncomingDocument(
-                source_id=source_id,
-                project=document.project.path,
-                path=document.path,
-                ref=document.project.ref,
-                content=fetched.content,
-                change_token=document.change_token,
-                source_url=fetched.source_url,
-                author=fetched.author,
-            )
-        )
-
-    @staticmethod
-    def _apply(store: CatalogStore, plan: PollPlan) -> None:
-        """
-        Write the plan inside the locked unit of work.
-
-        :param store: Locked store.
-        :param plan: The plan.
-        """
-        for prepared in plan.prepared:
-            result = ingest_document(store, prepared, RecordState.PUBLISHED)
-            if result.created:
-                plan.counts.created += 1
-            elif result.digest_changed:
-                plan.counts.updated += 1
-            else:
-                plan.counts.same_content += 1
-        for record_id, token in plan.refresh:
-            stored = store.get_record(record_id)
-            if stored is not None:
-                store.upsert_published(_as_write(stored, token))
-                plan.counts.tokens_refreshed += 1
-        if plan.delete:
-            plan.counts.deleted = store.delete_published(plan.delete)
