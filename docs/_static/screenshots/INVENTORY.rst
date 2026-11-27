@@ -108,18 +108,6 @@ record-legacy-warnings.png
    Alt: A decision record with a Validation issues card listing two
    warnings about legacy fields above the decision text.
 
-record-blocked-invalid-yaml.png
-   Shows a record that cannot be decided because its header is not
-   valid.
-   "1 error" chip, a validation issue with the parser message, status
-   "Blocked" and the text "This content can't be decided until its
-   problems are fixed."
-   Reader (Carol), light theme, 1280x900.
-   Suits: user guide (understanding errors); operator guide
-   (diagnosing bad content).
-   Alt: A record page with a red error chip, a validation issue about
-   invalid YAML and a Blocked approval status.
-
 record-reader-no-decision.png
    Shows a pending candidate as a reader: no Accept or Reject
    buttons, the muted note "Only reviewers can approve this."

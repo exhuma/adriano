@@ -177,12 +177,6 @@ Ask the author to fix the file; the page updates the next time the
 catalog reads it.
 :doc:`writing-adrs` lists the fields that are expected.
 
-.. figure:: /_static/screenshots/record-blocked-invalid-yaml.png
-   :alt: A record page with a red error chip, a validation issue
-      about invalid YAML and a Blocked approval status.
-
-   A blocked decision, with the problem explained.
-
 Legacy sign-off
 ---------------
 
