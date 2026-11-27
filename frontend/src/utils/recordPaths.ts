@@ -7,6 +7,11 @@
  */
 import type { RecordState } from "@/types/records";
 
+/** Encode a ref for a URL path: segments encoded, slashes kept. */
+export function encodeRefPath(ref: string): string {
+  return ref.split("/").map(encodeURIComponent).join("/");
+}
+
 /**
  * Path of the page of one ADR's candidate row.
  *
@@ -15,8 +20,7 @@ import type { RecordState } from "@/types/records";
  * :returns: The router path.
  */
 export function candidatePath(adrUuid: string, ref: string): string {
-  const encodedRef = ref.split("/").map(encodeURIComponent).join("/");
-  return `/records/${encodeURIComponent(adrUuid)}/candidates/${encodedRef}`;
+  return `/records/${encodeURIComponent(adrUuid)}/candidates/${encodeRefPath(ref)}`;
 }
 
 /**

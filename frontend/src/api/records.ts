@@ -5,6 +5,7 @@
  * paths and query strings.
  */
 import { api } from "@/api";
+import { toQueryString } from "@/api/query";
 import type { RecordDiffOut } from "@/types/approval";
 import type {
   RecordDetail,
@@ -13,22 +14,9 @@ import type {
   SearchParams,
 } from "@/types/records";
 import type { FacetsOut } from "@/types/sources";
+import { encodeRefPath } from "@/utils/recordPaths";
 
 export type { RecordDetail, SearchItem, SearchPage, SearchParams };
-
-/** Build a query string from a params object, dropping empty/false
- *  values so the URL stays minimal. */
-function toQueryString<T extends object>(params: T): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
-    if (value === undefined || value === null || value === "" || value === false) {
-      continue;
-    }
-    search.set(key, String(value));
-  }
-  const text = search.toString();
-  return text.length > 0 ? `?${text}` : "";
-}
 
 /**
  * Search the catalog with the phase 1 filters.
@@ -60,11 +48,6 @@ export function getRecord(adrUuid: string, ref?: string): Promise<RecordDetail> 
   return api.get<RecordDetail>(
     ref === undefined ? base : `${base}/candidates/${encodeRefPath(ref)}`,
   );
-}
-
-/** Encode a ref for a URL path: segments encoded, slashes kept. */
-function encodeRefPath(ref: string): string {
-  return ref.split("/").map(encodeURIComponent).join("/");
 }
 
 /**

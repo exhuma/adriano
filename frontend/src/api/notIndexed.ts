@@ -6,25 +6,13 @@
  * or removed, so there is no write call.
  */
 import { api } from "@/api";
+import { toQueryString } from "@/api/query";
 import type {
   NotIndexedDetail,
   NotIndexedLocation,
   NotIndexedPage,
   NotIndexedParams,
 } from "@/types/notIndexed";
-
-/** Build a query string, dropping empty values. */
-function toQueryString(params: object): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === "") {
-      continue;
-    }
-    search.set(key, String(value));
-  }
-  const text = search.toString();
-  return text.length > 0 ? `?${text}` : "";
-}
 
 /**
  * List the documents intake could not index, newest first.
