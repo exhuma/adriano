@@ -109,12 +109,14 @@ Provenance
    Where the decision came from: source, project, file path and ref
    (shown as **Path & ref**), a link to the **Source location** where
    available, and when the catalog last refreshed it (**Freshness**).
+   If the file moves to another folder or project, the page keeps its
+   address and history and shows the new location.
 
 Related decisions
    Links to decisions this one updates or obsoletes.
    Select a title to open it.
-   A link reading "Ambiguous" means more than one decision matches
-   and the catalog did not guess.
+   A link to an identifier the catalog does not know shows the
+   identifier itself, with a warning under **Validation issues**.
 
 Referenced by
    Links in the other direction: later decisions that update or
@@ -150,8 +152,10 @@ version is accepted too, and keeps the same decision history.
 Problems in the file
 --------------------
 
-The catalog shows every decision it finds, even if the file has
-problems, and a problem in one file never affects another.
+The catalog shows every decision it can identify, even if the file
+has problems, and a problem in one file never affects another.
+A file without a usable identifier is not a decision here; it is
+listed on the **Not indexed** page (:doc:`not-indexed`).
 Problems are listed in a **Validation issues** card next to a chip
 in the title:
 
@@ -163,10 +167,11 @@ Warning
 Error
    Something that stops the catalog from working with the file
    properly.
-   For example, the header is not valid or the identifier is
-   missing.
+   For example, a date that is not written ``YYYY-MM-DD`` or a file
+   that is not valid UTF-8 text.
 
-A decision with an error shows the status **Blocked**, with the text
+A decision whose file is not valid UTF-8 text shows the status
+**Blocked**, with the text
 "This content can't be decided until its problems are fixed."
 Ask the author to fix the file; the page updates the next time the
 catalog reads it.

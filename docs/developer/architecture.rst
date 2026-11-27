@@ -411,8 +411,10 @@ using Vuetify 4 for components and theming
 (see :doc:`decisions/0017-vuetify-first`).
 
 Routes
-   ``/`` (search landing page), ``/records/:id`` (record or erratum
-   page), ``/sources`` (registration status),
+   ``/`` (search landing page), ``/records/:uuid`` (record or erratum
+   page), ``/records/:uuid/candidates/:ref`` (a candidate of it),
+   ``/sources`` (registration status), ``/not-indexed`` and
+   ``/not-indexed/entry`` (documents that cannot be indexed),
    ``/auth/callback`` (OIDC redirect target) and a not-found route.
 
 State

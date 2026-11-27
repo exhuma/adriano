@@ -37,6 +37,12 @@ Last attempt, Last success
    When the catalog last tried to read the source, and when it last
    succeeded.
 
+Not indexed
+   How many files of this source the catalog could not index, for
+   example "2 not indexed".
+   The link opens the :doc:`not-indexed` list for this source.
+   A source with no such files shows "None".
+
 .. figure:: /_static/screenshots/sources-operator-ok.png
    :alt: The Sources table with one filesystem source marked OK, with
       Poll now and Poll all buttons.

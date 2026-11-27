@@ -26,6 +26,10 @@ Accept or reject a decision
 Write a decision
    :doc:`writing-adrs` describes the file format.
 
+Find out why a file is missing
+   :doc:`not-indexed` lists the files the catalog could not index and
+   says why.
+
 Check that decisions are being collected
    :doc:`sources-page` is for operators and shows whether each
    source was read successfully.
@@ -43,4 +47,5 @@ Sign in or change the theme
    errata
    reviewing
    writing-adrs
+   not-indexed
    sources-page

@@ -24,6 +24,7 @@ How people use Adriano is described in the :doc:`user guide
    :caption: Running
 
    polling
+   not-indexed
    health-and-logging
    backup-restore
    upgrades

@@ -25,7 +25,7 @@ Adriano serves everything from its own index; only a
    Returned HTML, or JSON when asked for with an ``Accept`` header or
    ``?json=true``.
    Replaced by ``GET /api/v1/records`` (search and list) and
-   ``GET /api/v1/records/{id}`` (detail).
+   ``GET /api/v1/records/{uuid}`` (detail).
    Both return JSON only; the web interface renders the HTML.
 
 ``GET /healthz``

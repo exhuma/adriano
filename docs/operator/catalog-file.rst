@@ -131,10 +131,14 @@ The common fields are below; the type-specific fields are in
 Order matters
 ~~~~~~~~~~~~~
 
-If two registrations contain the same file
-(same project and path), the one listed **first** owns it;
-the later one skips it and reports an ``ownership_conflict`` warning
-in its poll result.
+An ADR is identified by its ``uuid`` alone, across all registrations
+and projects, so the order of registrations never hides a file.
+If two files carry the same UUID, the one already indexed keeps it
+and the other appears in the :doc:`not-indexed list <not-indexed>`.
+When both are new in one poll, the registration listed **first**
+wins, then the project, then the path.
+A file that moves to another folder, project or registration keeps its
+record and its approvals.
 
 Removing a registration
 ~~~~~~~~~~~~~~~~~~~~~~~
