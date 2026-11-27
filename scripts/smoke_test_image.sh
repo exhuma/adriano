@@ -30,6 +30,10 @@ host_port="${base_url##*:}"
 host_port="${host_port%%/*}"
 idp="https://idp.example.test"
 client_id="adriano-smoke"
+client_secret="adriano-smoke-secret"
+# A Fernet key is 32 random bytes, URL-safe base64-encoded.
+session_key="$(python3 -c \
+  'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
 suffix="$$"
 network="adriano-smoke-net-$suffix"
 db_name="adriano-smoke-db-$suffix"
@@ -104,6 +108,8 @@ start_app() {
     -e ADRIANO_CONFIG_FILE=/app/catalog.yaml \
     -e "ADRIANO_OIDC_AUTHORITY=$idp/realms/x" \
     -e "ADRIANO_OIDC_CLIENT_ID=$client_id" \
+    -e "ADRIANO_OIDC_CLIENT_SECRET=$client_secret" \
+    -e "ADRIANO_SESSION_KEY=$session_key" \
     "$image" >/dev/null
 }
 
@@ -155,8 +161,11 @@ check_endpoints() {
 
   http_get /config.js
   [ "$status" = 200 ] || fail "/config.js returned $status, want 200"
-  grep -q "$client_id" "$body_file" ||
-    fail "/config.js does not carry the OIDC client id"
+  grep -q '"oidcEnabled": true' "$body_file" ||
+    fail "/config.js does not enable OIDC login"
+  if grep -q "$client_id" "$body_file"; then
+    fail "/config.js leaks the OIDC client id (the backend runs the flow)"
+  fi
   if grep -qi 'dev' "$body_file"; then
     fail "/config.js mentions a dev key: $(grep -i dev "$body_file")"
   fi
@@ -167,9 +176,11 @@ check_endpoints() {
     text/html*) ;;
     *) fail "/ content-type is '$(header content-type)', want text/html" ;;
   esac
+  # The backend runs the OIDC flow: the browser only talks to us.
   case "$(header content-security-policy)" in
-    *"$idp"*) ;;
-    *) fail "CSP lacks $idp: '$(header content-security-policy)'" ;;
+    *"$idp"*) fail "CSP admits the IdP: '$(header content-security-policy)'" ;;
+    *"connect-src 'self';"*) ;;
+    *) fail "CSP lacks connect-src 'self': '$(header content-security-policy)'" ;;
   esac
   asset="$(grep -oE '/assets/[^"]+' "$body_file" | head -n 1 || true)"
   [ -n "$asset" ] || fail "index.html references no /assets/ file"
@@ -183,7 +194,7 @@ check_endpoints() {
 
   http_get /api/v1/me
   [ "$status" = 401 ] ||
-    fail "/api/v1/me without a token returned $status, want 401"
+    fail "/api/v1/me without a session returned $status, want 401"
 
   http_get /api/nope
   [ "$status" = 404 ] || fail "/api/nope returned $status, want 404"
