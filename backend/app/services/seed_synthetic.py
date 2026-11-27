@@ -40,12 +40,13 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from app.catalog_config import CatalogConfig, PolicyConfig, SourceRegistration
-from app.domain.values import Identity
 from app.errors import DecisionExistsError
 from app.services.ingest import (
     IncomingDocument,
     ingest_document,
+    not_indexed_entry,
     prepare_document,
+    queue_document,
 )
 from app.services.registrations import sync_registrations
 from app.services.seed_synthetic_gen import (
@@ -56,7 +57,12 @@ from app.services.seed_synthetic_gen import (
     generate_decisions,
     generate_published,
 )
-from app.storage.port import CatalogStoreProvider, NewDecision, RecordState
+from app.storage.port import (
+    CatalogStoreProvider,
+    IntakeKind,
+    NewDecision,
+    RecordState,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +136,8 @@ class SeedSummary:
     """
     Outcome of one seeding run.
 
-    :param published: Published rows ingested.
+    :param published: Published rows indexed (documents without a valid
+        UUID go to the not-indexed list and are not counted).
     :param candidates: Candidate rows ingested.
     :param decisions: Decision events appended.
     """
@@ -212,12 +219,15 @@ def _ingest_published(
     """
     Ingest published documents in batches, each its own unit of work.
 
+    A deliberately broken document without a valid UUID goes to the
+    not-indexed list, like a polled one.
+
     :param provider: Storage provider.
     :param source: Target registration.
     :param docs: Generated documents.
     :param batch_size: Documents per transaction.
     :param report: Progress callback.
-    :returns: Number of documents ingested.
+    :returns: Number of documents indexed.
     """
     count = 0
     for batch in _batches(docs, batch_size):
@@ -232,6 +242,10 @@ def _ingest_published(
                         content=doc.content,
                     )
                 )
+                if prepared.record is None:
+                    entry = not_indexed_entry(prepared, IntakeKind.POLL)
+                    queue_document(store, prepared, entry)
+                    continue
                 ingest_document(store, prepared, RecordState.PUBLISHED)
                 count += 1
         report(f"published {count}/{len(docs)}")
@@ -287,7 +301,7 @@ def _append_decisions(
     Append decision events in batches, each its own unit of work.
 
     Re-running with the same seed is safe: a decision that already
-    exists for its (identity, digest) is skipped rather than failing
+    exists for its (UUID, digest) is skipped rather than failing
     the batch.
 
     :param provider: Storage provider.
@@ -304,9 +318,6 @@ def _append_decisions(
         with provider.unit_of_work() as store:
             for item in batch:
                 decision = NewDecision(
-                    identity=Identity(
-                        source.id, item.project, str(item.adr_uuid)
-                    ),
                     adr_uuid=item.adr_uuid,
                     digest=item.digest,
                     action=item.action,
@@ -324,7 +335,7 @@ def _append_decisions(
                 except DecisionExistsError:
                     logger.debug(
                         "decision for %s already exists; skipping",
-                        decision.identity,
+                        decision.adr_uuid,
                     )
         report(f"decisions {count}/{len(decisions)}")
     return count

@@ -10,7 +10,7 @@ append-only event (201) with server-set id and timestamp.
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.auth.deps import Principal, require_permission
 from app.auth.rbac import Permission
@@ -30,6 +30,10 @@ router = APIRouter(prefix="/api/v1", tags=["decisions"])
 _read = require_permission(Permission.READ)
 
 _ERROR = {"description": "Error body `{detail, code, hint}`."}
+_REF = (
+    "Ref of the candidate to decide; omitted: the published row (or, "
+    "without one, the newest candidate)."
+)
 _RESPONSES: dict[int | str, dict[str, Any]] = {
     403: _ERROR,
     404: _ERROR,
@@ -62,6 +66,7 @@ def reviewer_from(principal: Principal) -> Reviewer:
 def post_decision(
     record_id: uuid.UUID,
     body: DecisionIn,
+    ref: str | None = Query(default=None, max_length=255, description=_REF),
     principal: Principal = Depends(_read),
     provider: CatalogStoreProvider = Depends(get_store_provider),
     runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
@@ -69,8 +74,9 @@ def post_decision(
     """
     Record an accept/reject decision for the record's current digest.
 
-    :param record_id: Record id.
+    :param record_id: The ADR UUID.
     :param body: Action, optional comment and expected digest.
+    :param ref: A candidate's ref; omitted for the published row.
     :param principal: The authenticated caller (``read`` required).
     :param provider: Storage provider (overridden by tests).
     :param runtime: Startup configuration state (approval policy).
@@ -79,6 +85,7 @@ def post_decision(
     event = record_decision(
         provider,
         record_id,
+        ref=ref,
         action=body.action,
         comment=body.comment,
         expected_digest=body.expected_digest,

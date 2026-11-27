@@ -229,21 +229,23 @@ def test_unresolved_erratum_target(
     }
 
 
-def test_erratum_belongs_to_the_closest_decision(
+def test_erratum_belongs_to_its_target_wherever_it_lives(
     client: TestClient, provider: PostgresStoreProvider
 ) -> None:
-    """Ensure same-project-first resolution decides an erratum's target."""
-    platform, [erratum] = _seed_target(provider, project="platform")
+    """Ensure ``erratum-for`` resolves by UUID across projects."""
+    target, [] = _seed_target(provider, errata=0, project="platform")
+    own = uuid.uuid5(TARGET, "elsewhere")
     with provider.lock_registration("central") as store:
-        payments = seed(
+        seed(
             store,
             project="payments",
-            path=DECISION_PATH,
-            content=adr(TARGET, title="Use a queue (payments)"),
+            path="doc/decisions/errata/2024-04-01-fix.md",
+            content=erratum_text(own).encode(),
         )
 
-    assert [e["id"] for e in _detail(client, platform)["errata"]] == [erratum]
-    assert _detail(client, str(payments))["errata"] == []
+    assert [e["id"] for e in _detail(client, target)["errata"]] == [str(own)]
+    erratum_for = _detail(client, str(own))["erratum_for"]
+    assert erratum_for["id"] == target and erratum_for["resolved"] is True
 
 
 def _search(client: TestClient, **params: Any) -> list[dict[str, Any]]:

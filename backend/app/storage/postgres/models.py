@@ -7,8 +7,8 @@ tables outside tests. Triggers (search vector, append-only decisions)
 and column comments live in the migration only.
 
 Public API: :class:`SourceRegistrationRow`, :class:`RevisionRow`,
-:class:`RecordRow`, :class:`DecisionEventRow`, :class:`IntakeRunRow`,
-:class:`AuthSessionRow`, :class:`AuthLoginRow`.
+:class:`RecordRow`, :class:`DecisionEventRow`, :class:`NotIndexedRow`,
+:class:`IntakeRunRow`, :class:`AuthSessionRow`, :class:`AuthLoginRow`.
 """
 
 import datetime
@@ -88,7 +88,7 @@ class RevisionRow(Base):
 
 
 class RecordRow(Base):
-    """A published or candidate ADR record."""
+    """A published or candidate ADR row, keyed by its authored UUID."""
 
     __tablename__ = "record"
     __table_args__ = (
@@ -104,23 +104,12 @@ class RecordRow(Base):
             name="ck_record_record_kind",
         ),
         Index(
-            "uq_record_published_location",
-            "source_id",
-            "project",
-            "path",
+            "uq_record_published_uuid",
+            "adr_uuid",
             unique=True,
             postgresql_where=text("kind = 'published'"),
         ),
-        Index(
-            "uq_record_candidate_identity_ref",
-            "source_id",
-            "project",
-            "record_key",
-            "ref",
-            unique=True,
-            postgresql_where=text("kind = 'candidate'"),
-        ),
-        Index("ix_record_identity", "source_id", "project", "record_key"),
+        Index("ix_record_location", "source_id", "project", "path"),
         Index("ix_record_search", "search", postgresql_using="gin"),
         Index(
             "ix_record_links_corrects",
@@ -129,18 +118,16 @@ class RecordRow(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=_UUID_DEFAULT
+    adr_uuid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True
     )
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    ref: Mapped[str] = mapped_column(Text, primary_key=True)
     source_id: Mapped[str] = mapped_column(
         Text, ForeignKey("source_registration.id"), nullable=False
     )
     project: Mapped[str] = mapped_column(Text, nullable=False)
     path: Mapped[str] = mapped_column(Text, nullable=False)
-    ref: Mapped[str] = mapped_column(Text, nullable=False)
-    adr_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    record_key: Mapped[str] = mapped_column(Text, nullable=False)
     digest: Mapped[str] = mapped_column(
         Text, ForeignKey("revision.digest"), nullable=False
     )
@@ -171,7 +158,7 @@ class RecordRow(Base):
 
 
 class DecisionEventRow(Base):
-    """An append-only formal decision on one content digest."""
+    """An append-only formal decision on one ADR UUID and digest."""
 
     __tablename__ = "decision_event"
     __table_args__ = (
@@ -180,22 +167,13 @@ class DecisionEventRow(Base):
             name="ck_decision_event_action",
         ),
         UniqueConstraint(
-            "source_id",
-            "project",
-            "record_key",
-            "digest",
-            name="uq_decision_event_identity_digest",
+            "adr_uuid", "digest", name="uq_decision_event_uuid_digest"
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=_UUID_DEFAULT
     )
-    source_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("source_registration.id"), nullable=False
-    )
-    project: Mapped[str] = mapped_column(Text, nullable=False)
-    record_key: Mapped[str] = mapped_column(Text, nullable=False)
     adr_uuid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False
     )
@@ -212,6 +190,34 @@ class DecisionEventRow(Base):
     policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
     provenance: Mapped[Any] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime.datetime] = _now_column()
+
+
+class NotIndexedRow(Base):
+    """A document intake found but could not index, keyed by location."""
+
+    __tablename__ = "not_indexed"
+    __table_args__ = (
+        CheckConstraint(
+            "origin IN ('poll', 'push')", name="ck_not_indexed_origin"
+        ),
+    )
+
+    source_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("source_registration.id"), primary_key=True
+    )
+    project: Mapped[str] = mapped_column(Text, primary_key=True)
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    ref: Mapped[str] = mapped_column(Text, primary_key=True)
+    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    reasons: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    digest: Mapped[str | None] = mapped_column(
+        Text, ForeignKey("revision.digest")
+    )
+    holder_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    change_token: Mapped[str | None] = mapped_column(Text)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    first_seen_at: Mapped[datetime.datetime] = _now_column()
+    last_seen_at: Mapped[datetime.datetime] = _now_column()
 
 
 class IntakeRunRow(Base):

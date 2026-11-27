@@ -79,7 +79,8 @@ def test_search_survives_a_legacy_self_targeting_erratum(
     with clean_engine.begin() as connection:
         connection.execute(
             text(
-                "UPDATE record SET links = CAST(:links AS jsonb) WHERE id = :id"
+                "UPDATE record SET links = CAST(:links AS jsonb) "
+                "WHERE adr_uuid = :id"
             ),
             {"links": json.dumps(legacy), "id": erratum_id},
         )

@@ -15,7 +15,6 @@ from app.domain.records import (
     TitleSource,
     is_adr_filename,
     parse_record,
-    record_key,
 )
 
 UUID_A = "0b0c2f4e-1a2b-4c3d-8e9f-001122334455"
@@ -419,18 +418,31 @@ def test_result_is_json_serialisable() -> None:
     )
 
 
-def test_record_key_prefers_uuid() -> None:
-    """Ensure the record key is the UUID string when available."""
-    key = record_key(uuid.UUID(UUID_A), "central", "platform", NAME)
+def test_document_without_uuid_has_not_indexed_reasons() -> None:
+    """Ensure a document without a UUID explains why it is not indexed."""
+    record = parse_record(doc("title: No identity\n"), filename=NAME)
 
-    assert key == UUID_A
+    assert record.adr_uuid is None
+    assert [i.code for i in record.not_indexed_reasons] == [
+        IssueCode.MISSING_UUID
+    ]
 
 
-def test_record_key_falls_back_to_source_location() -> None:
-    """Ensure records without a UUID are keyed by source location."""
-    key = record_key(None, "central", "platform", NAME)
+def test_unparseable_frontmatter_is_the_not_indexed_reason() -> None:
+    """Ensure broken YAML (not a missing UUID) is the reported reason."""
+    record = parse_record(b"---\nuuid: [x\n---\n", filename=NAME)
 
-    assert key == f"src:central/platform/{NAME}"
+    assert [i.code for i in record.not_indexed_reasons] == [IssueCode.BAD_YAML]
+
+
+def test_document_with_uuid_has_no_not_indexed_reasons() -> None:
+    """Ensure a valid UUID makes a document indexable despite errors."""
+    raw = f"---\nuuid: {UUID_A}\ndecision-date: nope\n---\n".encode()
+
+    record = parse_record(raw, filename=NAME)
+
+    assert record.has_errors
+    assert record.not_indexed_reasons == ()
 
 
 @given(st.binary(max_size=300))

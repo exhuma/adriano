@@ -3,8 +3,8 @@ Errata part of the record detail page (read-only).
 
 Converts the erratum rows that belong to a record (resolved by
 :mod:`app.services.record_relationships`) into :class:`ErratumInfo`
-values, each with the approval state of the erratum's **own**
-identity and digest, and counts them in :class:`ErrataSummary` for
+values, each with the approval state of the erratum's **own** UUID
+and digest, and counts them in :class:`ErrataSummary` for
 the page's top notice. The corrected record's own digest, approval
 state and history are never involved: an erratum is a separate record
 with its own accept/reject workflow.
@@ -53,7 +53,6 @@ from app.domain.approval import (
     evaluate,
 )
 from app.domain.errata import ErratumType
-from app.domain.values import Identity
 from app.services.approval_view import is_approvable
 from app.storage.port import (
     CatalogStore,
@@ -103,7 +102,8 @@ class ErratumInfo:
     Content fields are ``None`` (and ``corrected_html`` empty) when the
     row was stored before erratum content was (``has_content`` false).
 
-    :param id: Erratum record id.
+    :param id: The erratum's UUID (with :attr:`ref` and :attr:`kind`,
+        its row key).
     :param kind: ``published`` or ``candidate`` (a proposal).
     :param ref: Branch/ref of the erratum content.
     :param source_id: Registration id of the erratum.
@@ -222,14 +222,14 @@ def _info(
 
     :param row: The erratum row.
     :param policy: The configured policy, or ``None``.
-    :param events: Decision events of the erratum's identity.
+    :param events: Decision events of the erratum's UUID.
     :returns: The value.
     """
     approvable = is_approvable(row)
     state = evaluate(policy, events, row.digest, approvable).state
     content = row.erratum
     return ErratumInfo(
-        id=row.id,
+        id=row.adr_uuid,
         kind=row.kind,
         ref=row.ref,
         source_id=row.source_id,
@@ -285,9 +285,9 @@ def build_errata(
     :param policy: The configured policy, or ``None``.
     :returns: The errata and their summary.
     """
-    identities = {row.identity for row in rows}
-    events: dict[Identity, list[DecisionEventView]] = defaultdict(list)
-    for event in store.list_decisions_for(identities):
-        events[event.identity].append(event.as_view())
-    errata = tuple(_info(row, policy, events[row.identity]) for row in rows)
+    uuids = {row.adr_uuid for row in rows}
+    events: dict[uuid.UUID, list[DecisionEventView]] = defaultdict(list)
+    for event in store.list_decisions_for(uuids):
+        events[event.adr_uuid].append(event.as_view())
+    errata = tuple(_info(row, policy, events[row.adr_uuid]) for row in rows)
     return ErrataView(errata=errata, summary=_summary(errata))

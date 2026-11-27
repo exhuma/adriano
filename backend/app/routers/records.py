@@ -44,6 +44,10 @@ router = APIRouter(
 )
 
 _DEFAULT_PAGE_SIZE = 20
+_REF = (
+    "Ref of a candidate; omitted: the published row (or, without one, "
+    "the newest candidate)."
+)
 _read = require_permission(Permission.READ)
 
 
@@ -91,7 +95,7 @@ def list_records(
             "(A-Z) or `recent` (content last changed, newest first). "
             "Default: `relevance` when `q` is set, else `title`; "
             "`relevance` without `q` falls back to `title`. Ties are "
-            "broken by title, then id."
+            "broken by title, then UUID, state and ref."
         ),
     ),
     page: int = Query(default=1, ge=1),
@@ -137,6 +141,7 @@ def list_records(
 @router.get("/records/{record_id}", response_model=RecordDetailOut)
 def get_record(
     record_id: uuid.UUID,
+    ref: str | None = Query(default=None, max_length=255, description=_REF),
     provider: CatalogStoreProvider = Depends(get_store_provider),
     runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
     settings: Settings = Depends(get_settings),
@@ -148,7 +153,8 @@ def get_record(
     ``approval.can_decide`` (and the blocked reason) is evaluated for
     the caller.
 
-    :param record_id: Record id.
+    :param record_id: The ADR UUID.
+    :param ref: A candidate's ref; omitted for the published row.
     :param provider: Storage provider (overridden by tests).
     :param runtime: Startup configuration state.
     :param settings: Application settings (for the stale threshold).
@@ -161,6 +167,7 @@ def get_record(
         detail = record_detail.get_record_detail(
             store,
             record_id,
+            ref=ref,
             policy=policy,
             policy_status=policy_status,
             now=datetime.datetime.now(datetime.UTC),
@@ -178,6 +185,7 @@ def get_record(
 @router.get("/records/{record_id}/diff", response_model=RecordDiffOut)
 def get_record_diff(
     record_id: uuid.UUID,
+    ref: str | None = Query(default=None, max_length=255, description=_REF),
     from_digest: str | None = Query(
         default=None,
         alias="from",
@@ -194,12 +202,13 @@ def get_record_diff(
     provider: CatalogStoreProvider = Depends(get_store_provider),
 ) -> RecordDiffOut:
     """
-    Diff two stored snapshots of the record's identity.
+    Diff two stored snapshots of the record's ADR.
 
     Only digests related to the record are accepted (404
     ``unknown_revision`` otherwise); see :mod:`app.services.diff`.
 
-    :param record_id: Record id.
+    :param record_id: The ADR UUID.
+    :param ref: A candidate's ref; omitted for the published row.
     :param from_digest: Base digest (query ``from``).
     :param to_digest: Target digest (query ``to``).
     :param provider: Storage provider (overridden by tests).
@@ -208,6 +217,10 @@ def get_record_diff(
     """
     with provider.unit_of_work() as store:
         diff = diff_record(
-            store, record_id, from_digest=from_digest, to_digest=to_digest
+            store,
+            record_id,
+            ref=ref,
+            from_digest=from_digest,
+            to_digest=to_digest,
         )
     return RecordDiffOut.model_validate(diff)

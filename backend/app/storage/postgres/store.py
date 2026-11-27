@@ -9,15 +9,17 @@ store delegates each operation to a concern module
 :mod:`~app.storage.postgres.records`,
 :mod:`~app.storage.postgres.errata`,
 :mod:`~app.storage.postgres.search`,
-:mod:`~app.storage.postgres.events`). All SQL uses bound parameters.
+:mod:`~app.storage.postgres.events`,
+:mod:`~app.storage.postgres.queue`). All SQL uses bound parameters.
 
 Registration locks use ``pg_advisory_xact_lock(namespace,
 hashtext(source_id))``: the lock lives exactly as long as the
 transaction, so it is released by commit or rollback and works across
-processes and replicas.
+processes and replicas. :meth:`PostgresCatalogStore.lock_published`
+takes the same kind of lock on the fixed key :data:`PUBLISHED_LOCK`.
 
-Public API: :data:`LOCK_NAMESPACE`, :class:`PostgresCatalogStore`,
-:class:`PostgresStoreProvider`.
+Public API: :data:`LOCK_NAMESPACE`, :data:`PUBLISHED_LOCK`,
+:class:`PostgresCatalogStore`, :class:`PostgresStoreProvider`.
 """
 
 import datetime
@@ -31,7 +33,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.domain.approval import Policy
 from app.domain.frontmatter import JsonValue
 from app.domain.relationships import RecordSummary
-from app.domain.values import Identity
 from app.storage.port import (
     ChangeTokenEntry,
     DecisionEvent,
@@ -40,8 +41,10 @@ from app.storage.port import (
     IntakeKind,
     IntakeRun,
     IntakeStatus,
-    LinkTarget,
     NewDecision,
+    NotIndexedEntry,
+    NotIndexedKey,
+    NotIndexedWrite,
     PollStatus,
     RecordState,
     RecordWrite,
@@ -54,12 +57,17 @@ from app.storage.port import (
     StoredRecord,
     UpsertResult,
 )
-from app.storage.postgres import errata, events, records, search
+from app.storage.postgres import errata, events, queue, records, search
 from app.storage.postgres import registrations as registration_sql
 
 #: First key of the two-key advisory lock; keeps registration locks
 #: apart from any other advisory lock users of the database.
 LOCK_NAMESPACE = 0x4144_5201
+
+#: Second key of the catalog-wide published-rows lock. Registration
+#: locks use ``hashtext(source_id)``, which may collide with it; that
+#: only makes two locks wait for each other, never wrong.
+PUBLISHED_LOCK = 0
 
 
 class PostgresCatalogStore:
@@ -124,6 +132,12 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.get_revision`."""
         return records.get_revision(self._session, digest)
 
+    def lock_published(self) -> None:
+        """See :meth:`app.storage.port.CatalogStore.lock_published`."""
+        self._session.execute(
+            select(func.pg_advisory_xact_lock(LOCK_NAMESPACE, PUBLISHED_LOCK))
+        )
+
     def upsert_published(self, record: RecordWrite) -> UpsertResult:
         """See :meth:`app.storage.port.CatalogStore.upsert_published`."""
         return records.upsert_record(
@@ -140,9 +154,23 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.create_candidate`."""
         return records.create_candidate(self._session, record)
 
-    def get_record(self, record_id: uuid.UUID) -> StoredRecord | None:
-        """See :meth:`app.storage.port.CatalogStore.get_record`."""
-        return records.get_record(self._session, record_id)
+    def get_published(self, adr_uuid: uuid.UUID) -> StoredRecord | None:
+        """See :meth:`app.storage.port.CatalogStore.get_published`."""
+        return records.get_record(
+            self._session, adr_uuid, RecordState.PUBLISHED, None
+        )
+
+    def get_candidate(
+        self, adr_uuid: uuid.UUID, ref: str
+    ) -> StoredRecord | None:
+        """See :meth:`app.storage.port.CatalogStore.get_candidate`."""
+        return records.get_record(
+            self._session, adr_uuid, RecordState.CANDIDATE, ref
+        )
+
+    def list_records(self, adr_uuid: uuid.UUID) -> list[StoredRecord]:
+        """See :meth:`app.storage.port.CatalogStore.list_records`."""
+        return records.list_records(self._session, adr_uuid)
 
     def list_change_tokens(
         self, source_id: str, project: str | None = None
@@ -150,19 +178,21 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.list_change_tokens`."""
         return records.list_change_tokens(self._session, source_id, project)
 
-    def delete_published(self, record_ids: Collection[uuid.UUID]) -> int:
+    def list_published_entries(
+        self, uuids: Collection[uuid.UUID]
+    ) -> list[ChangeTokenEntry]:
+        """See :meth:`.CatalogStore.list_published_entries`."""
+        return records.list_published_entries(self._session, uuids)
+
+    def set_change_token(
+        self, entry: ChangeTokenEntry, change_token: str | None
+    ) -> bool:
+        """See :meth:`app.storage.port.CatalogStore.set_change_token`."""
+        return records.set_change_token(self._session, entry, change_token)
+
+    def delete_published(self, entries: Collection[ChangeTokenEntry]) -> int:
         """See :meth:`app.storage.port.CatalogStore.delete_published`."""
-        return records.delete_published(self._session, record_ids)
-
-    def list_identity_siblings(self, identity: Identity) -> list[StoredRecord]:
-        """See :meth:`app.storage.port.CatalogStore.list_identity_siblings`."""
-        return records.list_identity_siblings(self._session, identity)
-
-    def list_relationship_summaries(
-        self, kind: RecordState | None = RecordState.PUBLISHED
-    ) -> list[RecordSummary]:
-        """See :meth:`.CatalogStore.list_relationship_summaries`."""
-        return records.list_relationship_summaries(self._session, kind)
+        return records.delete_published(self._session, entries)
 
     def list_relationship_candidates(
         self, self_uuid: uuid.UUID, link_targets: Collection[uuid.UUID]
@@ -176,11 +206,11 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.list_errata_for`."""
         return errata.list_errata_for(self._session, target_uuid)
 
-    def list_published_by_uuid(
+    def published_titles(
         self, uuids: Collection[uuid.UUID]
-    ) -> list[LinkTarget]:
-        """See :meth:`.CatalogStore.list_published_by_uuid`."""
-        return errata.list_published_by_uuid(self._session, uuids)
+    ) -> dict[uuid.UUID, str]:
+        """See :meth:`app.storage.port.CatalogStore.published_titles`."""
+        return errata.published_titles(self._session, uuids)
 
     def list_facets(self) -> list[FacetEntry]:
         """See :meth:`app.storage.port.CatalogStore.list_facets`."""
@@ -205,15 +235,29 @@ class PostgresCatalogStore:
         """See :meth:`app.storage.port.CatalogStore.append_decision`."""
         return events.append_decision(self._session, decision)
 
-    def list_decisions(self, identity: Identity) -> list[DecisionEvent]:
+    def list_decisions(self, adr_uuid: uuid.UUID) -> list[DecisionEvent]:
         """See :meth:`app.storage.port.CatalogStore.list_decisions`."""
-        return events.list_decisions(self._session, identity)
+        return events.list_decisions(self._session, adr_uuid)
 
     def list_decisions_for(
-        self, identities: Collection[Identity]
+        self, uuids: Collection[uuid.UUID]
     ) -> list[DecisionEvent]:
         """See :meth:`.CatalogStore.list_decisions_for`."""
-        return events.list_decisions_for(self._session, identities)
+        return events.list_decisions_for(self._session, uuids)
+
+    def put_not_indexed(self, entry: NotIndexedWrite) -> None:
+        """See :meth:`app.storage.port.CatalogStore.put_not_indexed`."""
+        queue.put_not_indexed(self._session, entry)
+
+    def list_not_indexed(
+        self, source_id: str | None = None, origin: IntakeKind | None = None
+    ) -> list[NotIndexedEntry]:
+        """See :meth:`app.storage.port.CatalogStore.list_not_indexed`."""
+        return queue.list_not_indexed(self._session, source_id, origin)
+
+    def delete_not_indexed(self, keys: Collection[NotIndexedKey]) -> int:
+        """See :meth:`app.storage.port.CatalogStore.delete_not_indexed`."""
+        return queue.delete_not_indexed(self._session, keys)
 
     def start_intake_run(
         self,

@@ -14,7 +14,9 @@ Unit-of-work rules:
 - :meth:`CatalogStoreProvider.lock_registration` is a unit of work that
   first takes an exclusive per-registration lock, held until the unit of
   work ends. All writes for one registration (poll, push) run inside it,
-  which makes concurrent workers and replicas safe.
+  which makes concurrent workers and replicas safe. Polls also take
+  :meth:`CatalogStore.lock_published`, because a UUID is unique across
+  registrations.
 - Conflicts are reported with domain errors from :mod:`app.errors`
   (:class:`~app.errors.DecisionExistsError`,
   :class:`~app.errors.CandidateExistsError`,
@@ -23,8 +25,9 @@ Unit-of-work rules:
 
 Public API:
 
-- every value type of :mod:`app.storage.values` and
-  :mod:`app.storage.errata_values` (re-exported here)
+- every value type of :mod:`app.storage.values`,
+  :mod:`app.storage.errata_values` and :mod:`app.storage.queue_values`
+  (re-exported here)
 - protocols :class:`CatalogStore`, :class:`CatalogStoreProvider`
 """
 
@@ -37,8 +40,12 @@ from typing import Protocol
 from app.domain.approval import Policy
 from app.domain.frontmatter import JsonValue
 from app.domain.relationships import RecordSummary
-from app.domain.values import Identity
-from app.storage.errata_values import LinkTarget, StoredErratum
+from app.storage.errata_values import StoredErratum
+from app.storage.queue_values import (
+    NotIndexedEntry,
+    NotIndexedKey,
+    NotIndexedWrite,
+)
 from app.storage.values import (
     MAX_PAGE_SIZE,
     ChangeTokenEntry,
@@ -49,6 +56,7 @@ from app.storage.values import (
     IntakeRun,
     IntakeStatus,
     JsonObject,
+    Location,
     NewDecision,
     PollStatus,
     RecordState,
@@ -75,9 +83,12 @@ __all__ = [
     "IntakeRun",
     "IntakeStatus",
     "JsonObject",
-    "LinkTarget",
+    "Location",
     "MAX_PAGE_SIZE",
     "NewDecision",
+    "NotIndexedEntry",
+    "NotIndexedKey",
+    "NotIndexedWrite",
     "PollStatus",
     "RecordState",
     "RecordWrite",
@@ -168,11 +179,27 @@ class CatalogStore(Protocol):
         """
         ...
 
+    def lock_published(self) -> None:
+        """
+        Take the catalog-wide lock for writing published rows.
+
+        Held until the unit of work ends. A UUID is unique across all
+        registrations, so a poll that decides who holds a UUID (and
+        moves rows between registrations) must not interleave with
+        another registration's poll; candidates and pushes do not need
+        it.
+        """
+        ...
+
     def upsert_published(self, record: RecordWrite) -> UpsertResult:
         """
-        Insert or replace the published row at a location.
+        Insert or replace the published row of an ADR.
 
-        Keyed by ``(source_id, project, path)``.
+        Keyed by ``adr_uuid`` alone: an existing row is updated in place,
+        including its location (a move keeps ``first_seen_at``, digest
+        history and approvals). Deciding *whether* a file may hold the
+        UUID is the caller's job (the holder rule of
+        :mod:`app.services.poll_apply`).
 
         :param record: Row content.
         :returns: The outcome.
@@ -183,7 +210,7 @@ class CatalogStore(Protocol):
         """
         Insert or replace a candidate row.
 
-        Keyed by ``(source_id, project, record_key, ref)``.
+        Keyed by ``(adr_uuid, ref)``.
 
         :param record: Row content.
         :returns: The outcome.
@@ -197,16 +224,37 @@ class CatalogStore(Protocol):
         :param record: Row content.
         :returns: The outcome (always ``created``).
         :raises app.errors.CandidateExistsError: If the candidate
-            ``(source_id, project, record_key, ref)`` exists.
+            ``(adr_uuid, ref)`` exists.
         """
         ...
 
-    def get_record(self, record_id: uuid.UUID) -> StoredRecord | None:
+    def get_published(self, adr_uuid: uuid.UUID) -> StoredRecord | None:
         """
-        Fetch one record row.
+        Fetch the published row of an ADR.
 
-        :param record_id: Record id.
+        :param adr_uuid: The ADR's UUID.
         :returns: The row, or ``None``.
+        """
+        ...
+
+    def get_candidate(
+        self, adr_uuid: uuid.UUID, ref: str
+    ) -> StoredRecord | None:
+        """
+        Fetch one candidate row.
+
+        :param adr_uuid: The ADR's UUID.
+        :param ref: The candidate's ref.
+        :returns: The row, or ``None``.
+        """
+        ...
+
+    def list_records(self, adr_uuid: uuid.UUID) -> list[StoredRecord]:
+        """
+        List every row (published and candidates) of an ADR.
+
+        :param adr_uuid: The ADR's UUID.
+        :returns: Rows, published first, then candidates by ref.
         """
         ...
 
@@ -214,7 +262,11 @@ class CatalogStore(Protocol):
         self, source_id: str, project: str | None = None
     ) -> list[ChangeTokenEntry]:
         """
-        List the stored change state of published files.
+        List the published files of a registration with their tokens.
+
+        Listings know paths before content is fetched, so change
+        detection looks up by location; the row it maps to is keyed by
+        the UUID in :attr:`ChangeTokenEntry.adr_uuid`.
 
         :param source_id: Registration id.
         :param project: Restrict to one project; ``None`` means all.
@@ -222,32 +274,40 @@ class CatalogStore(Protocol):
         """
         ...
 
-    def delete_published(self, record_ids: Collection[uuid.UUID]) -> int:
+    def list_published_entries(
+        self, uuids: Collection[uuid.UUID]
+    ) -> list[ChangeTokenEntry]:
+        """
+        List where the published rows of some UUIDs live (any source).
+
+        :param uuids: ADR UUIDs.
+        :returns: One entry per UUID that has a published row.
+        """
+        ...
+
+    def set_change_token(
+        self, entry: ChangeTokenEntry, change_token: str | None
+    ) -> bool:
+        """
+        Rewrite the change token of an unchanged published file.
+
+        Only touches the row if it still lives at the entry's location.
+
+        :param entry: The stored entry (UUID and location).
+        :param change_token: The new token.
+        :returns: ``True`` if a row was updated.
+        """
+        ...
+
+    def delete_published(self, entries: Collection[ChangeTokenEntry]) -> int:
         """
         Delete published rows (reconciliation). Candidates are kept.
 
-        :param record_ids: Ids to delete.
+        A row is deleted only if it still lives at the entry's location,
+        so a row another registration moved in the meantime survives.
+
+        :param entries: UUIDs with their expected locations.
         :returns: Number of deleted rows.
-        """
-        ...
-
-    def list_identity_siblings(self, identity: Identity) -> list[StoredRecord]:
-        """
-        List every row (published and candidates) of an identity.
-
-        :param identity: Logical identity.
-        :returns: Rows, published first, then by ref and path.
-        """
-        ...
-
-    def list_relationship_summaries(
-        self, kind: RecordState | None = RecordState.PUBLISHED
-    ) -> list[RecordSummary]:
-        """
-        List relationship summaries, keyed by ``str(record id)``.
-
-        :param kind: Restrict to one state; ``None`` means all rows.
-        :returns: One summary per row.
         """
         ...
 
@@ -257,17 +317,14 @@ class CatalogStore(Protocol):
         """
         List published rows that can affect one record's relationships.
 
-        A bounded alternative to ``list_relationship_summaries(
-        RecordState.PUBLISHED)`` for a single detail request: see
+        See
         :func:`app.storage.postgres.records.list_relationship_candidates`
-        for exactly which rows this returns and why the result is
-        equivalent for that one record's
-        :meth:`~app.domain.relationships.RelationshipIndex.view`.
+        for exactly which rows this returns.
 
         :param self_uuid: The viewed record's own UUID.
         :param link_targets: UUIDs the viewed record's own ``updates``,
             ``obsoletes`` and ``corrects`` links target.
-        :returns: The matching published rows.
+        :returns: One summary per matching published ADR.
         """
         ...
 
@@ -276,37 +333,35 @@ class CatalogStore(Protocol):
         List the erratum rows whose ``corrects`` link is *target_uuid*.
 
         Includes published rows and candidates (proposed errata), from
-        every registration and project; resolving which decision an
-        erratum applies to when the UUID is shared is up to the caller
-        (:mod:`app.domain.relationships` rules). Decisions are never
-        returned.
+        every registration and project. Decisions are never returned.
 
         :param target_uuid: UUID of the corrected decision.
         :returns: Published rows first, then by source, project, path,
-            ref and id.
+            ref and UUID.
         """
         ...
 
-    def list_published_by_uuid(
+    def published_titles(
         self, uuids: Collection[uuid.UUID]
-    ) -> list[LinkTarget]:
+    ) -> dict[uuid.UUID, str]:
         """
-        List the published rows holding any of *uuids*, with titles.
+        Look up the titles of the published rows of some UUIDs.
 
-        One query for a whole search page (erratum hits' targets).
+        One query for a whole set (link targets of a detail page,
+        erratum targets of a search page).
 
-        :param uuids: Authored UUIDs.
-        :returns: One entry per matching published row of any record
-            kind (decisions and errata), with its full links.
+        :param uuids: ADR UUIDs.
+        :returns: Title by UUID, for UUIDs with a published row.
         """
         ...
 
     def list_facets(self) -> list[FacetEntry]:
         """
-        Count decision rows per ``(source_id, project)``, for filter UIs.
+        Count decision ADRs per ``(source_id, project)``, for filter UIs.
 
-        Counts include both published and candidate rows, but not
-        errata (matching the default ``record_type=decision`` search).
+        Counts distinct UUIDs (an ADR with candidates counts once), from
+        published and candidate rows, but not errata (matching the
+        default ``record_type=decision`` search).
 
         :returns: One entry per non-empty ``(source_id, project)``
             pair, ordered by source id then project.
@@ -350,29 +405,61 @@ class CatalogStore(Protocol):
 
         :param decision: The decision.
         :returns: The stored event.
-        :raises app.errors.DecisionExistsError: If the identity already
-            has a decision for the digest.
+        :raises app.errors.DecisionExistsError: If the ADR already has
+            a decision for the digest.
         """
         ...
 
-    def list_decisions(self, identity: Identity) -> list[DecisionEvent]:
+    def list_decisions(self, adr_uuid: uuid.UUID) -> list[DecisionEvent]:
         """
-        List all decision events of an identity, any digest.
+        List all decision events of an ADR, any digest.
 
-        :param identity: Logical identity.
+        :param adr_uuid: The ADR's UUID.
         :returns: Events, oldest first.
         """
         ...
 
     def list_decisions_for(
-        self, identities: Collection[Identity]
+        self, uuids: Collection[uuid.UUID]
     ) -> list[DecisionEvent]:
         """
-        List all decision events of several identities in one query.
+        List all decision events of several ADRs in one query.
 
-        :param identities: Logical identities.
+        :param uuids: ADR UUIDs.
         :returns: Events of all of them, oldest first; group them by
-            :attr:`~app.storage.port.DecisionEvent.identity`.
+            :attr:`~app.storage.port.DecisionEvent.adr_uuid`.
+        """
+        ...
+
+    def put_not_indexed(self, entry: NotIndexedWrite) -> None:
+        """
+        Insert or replace a not-indexed entry at its key.
+
+        ``first_seen_at`` is kept for an existing key; ``last_seen_at``
+        moves to now.
+
+        :param entry: The entry.
+        """
+        ...
+
+    def list_not_indexed(
+        self, source_id: str | None = None, origin: IntakeKind | None = None
+    ) -> list[NotIndexedEntry]:
+        """
+        List not-indexed entries.
+
+        :param source_id: Restrict to one registration; ``None`` = all.
+        :param origin: Restrict to one intake; ``None`` = both.
+        :returns: Entries ordered by key.
+        """
+        ...
+
+    def delete_not_indexed(self, keys: Collection[NotIndexedKey]) -> int:
+        """
+        Delete not-indexed entries (automatic clearing only).
+
+        :param keys: Keys to delete; unknown keys are ignored.
+        :returns: Number of deleted entries.
         """
         ...
 

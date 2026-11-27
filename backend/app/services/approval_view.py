@@ -1,10 +1,10 @@
 """
 Approval part of the record detail page (read-only).
 
-Builds :class:`ApprovalSummary` for one record from its identity
-siblings and decision events: the state of the current digest
-(:func:`app.domain.approval.evaluate`), the full decision history of
-the identity (each event marked ``current_digest``), divergence
+Builds :class:`ApprovalSummary` for one record from the other rows of
+its ADR (same UUID) and its decision events: the state of the current
+digest (:func:`app.domain.approval.evaluate`), the full decision
+history of the UUID (each event marked ``current_digest``), divergence
 between published and accepted/candidate content, competing
 candidates, and whether **the caller** may decide now
 (:func:`app.services.decisions.decision_blocker`, the same rules as the
@@ -13,13 +13,13 @@ decision endpoint).
 Divergence (``divergence``, at most one):
 
 - ``published_not_accepted`` -- the record is published, its current
-  digest is not accepted, and another digest of the identity was
-  accepted (typically an accepted candidate whose content differs from
-  what was published). ``other_record_ids`` lists the rows currently
-  holding that accepted digest (may be empty when no row holds it
-  any more).
-- ``published_differs`` -- the record is a candidate and the
-  identity's published row holds different content.
+  digest is not accepted, and another digest of the ADR was accepted
+  (typically an accepted candidate whose content differs from what was
+  published). ``other_record_ids`` holds the ADR UUID when a row still
+  holds that accepted digest (empty when none does any more).
+- ``published_differs`` -- the record is a candidate and the ADR's
+  published row holds different content (``other_record_ids``: the
+  ADR UUID, which addresses the published row).
 
 Public API: :class:`PolicySummary`, :class:`DecisionProvenance`,
 :class:`DecisionSummary`, :class:`DivergenceKind`,
@@ -88,9 +88,8 @@ class PolicySummary:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DecisionProvenance:
     """
-    The decided row as it was at decision time.
+    The decided row as it was at decision time (historical snapshot).
 
-    :param record_id: Row id.
     :param kind: ``published`` or ``candidate``.
     :param source_id: Registration id.
     :param project: Project path.
@@ -99,7 +98,6 @@ class DecisionProvenance:
     :param source_url: Link to the content at the source.
     """
 
-    record_id: str | None
     kind: str | None
     source_id: str | None
     project: str | None
@@ -111,7 +109,7 @@ class DecisionProvenance:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DecisionSummary:
     """
-    One append-only decision event of the identity.
+    One append-only decision event of the ADR.
 
     The reviewer's email is not exposed to readers.
 
@@ -154,12 +152,13 @@ class DivergenceKind(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DivergenceInfo:
     """
-    Content divergence within the identity.
+    Content divergence between the rows of one ADR.
 
     :param kind: Which divergence.
     :param other_digest: The accepted (or published) digest that
         differs from the current one.
-    :param other_record_ids: Rows currently holding *other_digest*.
+    :param other_record_ids: The ADR UUID if a row currently holds
+        *other_digest* (see the module docstring).
     :param other_accepted: Whether *other_digest* is accepted.
     :param message: Reader-facing explanation.
     """
@@ -174,9 +173,9 @@ class DivergenceInfo:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CompetingCandidate:
     """
-    Another candidate of the identity with different content.
+    Another candidate of the ADR with different content.
 
-    :param id: Row id.
+    :param id: The ADR UUID (with :attr:`ref`, the candidate's key).
     :param ref: Branch/ref of the candidate.
     :param path: File path.
     :param digest: Its digest.
@@ -201,7 +200,7 @@ class ApprovalSummary:
     :param needs_approval: Whether the record is in "Needs approval".
     :param digest: The current digest the state applies to.
     :param policy: The applicable policy summary.
-    :param history: All decisions of this identity, oldest first.
+    :param history: All decisions of this ADR, oldest first.
     :param approvable: Whether the content can be decided at all.
     :param approval_blocker: Why not, when not approvable.
     :param last_accepted_digest: Latest accepted other digest, set for
@@ -210,7 +209,7 @@ class ApprovalSummary:
     :param decide_blocked_code: Stable code when the caller cannot.
     :param decide_blocked_reason: Reader-facing reason when not.
     :param divergence: Published/accepted divergence, if any.
-    :param competing_candidates: Other candidates of the identity with
+    :param competing_candidates: Other candidates of the ADR with
         different content.
     """
 
@@ -234,7 +233,7 @@ def is_approvable(record: Approvable) -> bool:
     Tell whether a stored row's content may be decided at all.
 
     :param record: The row.
-    :returns: ``True`` without identity or encoding errors.
+    :returns: ``True`` without encoding errors.
     """
     return approval_blocker(record) is None
 
@@ -280,7 +279,6 @@ def decision_summary(
         policy_id=event.policy_id,
         policy_version=event.policy_version,
         provenance=DecisionProvenance(
-            record_id=_text(raw.get("record_id")),
             kind=_text(raw.get("kind")),
             source_id=_text(raw.get("source_id")),
             project=_text(raw.get("project")),
@@ -324,7 +322,7 @@ def _divergence(
             kind=DivergenceKind.PUBLISHED_NOT_ACCEPTED,
             other_digest=accepted.digest,
             other_record_ids=tuple(
-                s.id for s in siblings if s.digest == accepted.digest
+                {s.adr_uuid for s in siblings if s.digest == accepted.digest}
             ),
             other_accepted=True,
             message="a different revision of this ADR was accepted; the "
@@ -338,7 +336,7 @@ def _divergence(
     return DivergenceInfo(
         kind=DivergenceKind.PUBLISHED_DIFFERS,
         other_digest=published.digest,
-        other_record_ids=(published.id,),
+        other_record_ids=(published.adr_uuid,),
         other_accepted=published.digest in accepted_digests,
         message="the published revision of this ADR differs from this "
         "candidate",
@@ -351,12 +349,12 @@ def _competing(
     policy: Policy | None,
     views: Sequence[DecisionEventView],
 ) -> tuple[CompetingCandidate, ...]:
-    """List the identity's other candidates with different content."""
+    """List the ADR's other candidates with different content."""
     return tuple(
         _competing_candidate(s, policy, views)
         for s in siblings
         if s.kind is RecordState.CANDIDATE
-        and s.id != record.id
+        and not s.is_row(record)
         and s.digest != record.digest
     )
 
@@ -369,7 +367,7 @@ def _competing_candidate(
     """Build one :class:`CompetingCandidate` with its state."""
     approvable = is_approvable(sibling)
     return CompetingCandidate(
-        id=sibling.id,
+        id=sibling.adr_uuid,
         ref=sibling.ref,
         path=sibling.path,
         digest=sibling.digest,
@@ -391,7 +389,7 @@ def _caller_blocker(
     Tell why the caller cannot decide now.
 
     :param record: The viewed record.
-    :param events: Every decision event of its identity.
+    :param events: Every decision event of its ADR.
     :param policy: The configured policy, or ``None``.
     :param policy_status: Configuration status of the policy.
     :param reviewer: The caller, or ``None``.
@@ -420,8 +418,8 @@ def build_approval(
     Build the approval summary of one record for one caller.
 
     :param record: The viewed record.
-    :param siblings: Every row of its identity (including itself).
-    :param events: Every decision event of its identity.
+    :param siblings: Every row of its ADR (including itself).
+    :param events: Every decision event of its ADR.
     :param policy: The configured policy, or ``None``.
     :param policy_status: Configuration status of the policy.
     :param reviewer: The caller, or ``None`` (then nobody can decide).

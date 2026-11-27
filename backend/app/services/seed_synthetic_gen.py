@@ -80,7 +80,7 @@ class GeneratedPublished:
     :param path: File path inside the project.
     :param content: Raw Markdown bytes (frontmatter and body).
     :param adr_uuid: The record's UUID, or ``None`` for a deliberately
-        broken record with no stable identity (never a link target).
+        broken document without a UUID (it goes to the not-indexed list).
     """
 
     project: str

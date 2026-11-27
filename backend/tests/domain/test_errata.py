@@ -11,7 +11,6 @@ from hypothesis import strategies as st
 from app.domain.errata import ErratumContent, ErratumType, parse_erratum_body
 from app.domain.issues import Issue, IssueCode, Severity
 from app.domain.records import (
-    Identity,
     LinkType,
     ParsedRecord,
     RecordKind,
@@ -449,17 +448,15 @@ def test_from_dict_rejects_malformed_data(data: dict[str, object]) -> None:
 # -- relationships --------------------------------------------------------
 
 
-def _summary(key: str, record: ParsedRecord) -> RecordSummary:
+def _summary(record: ParsedRecord) -> RecordSummary:
     """
     Build a relationship summary from a parsed record.
 
-    :param key: Row key.
-    :param record: The parsed record.
+    :param record: The parsed record (with a UUID).
     :returns: The summary.
     """
+    assert record.adr_uuid is not None
     return RecordSummary(
-        key=key,
-        identity=Identity("central", "platform", str(record.adr_uuid)),
         adr_uuid=record.adr_uuid,
         links=record.links,
         record_kind=record.record_kind,
@@ -472,15 +469,18 @@ def test_erratum_is_listed_on_its_target() -> None:
         f"---\nuuid: {TARGET_UUID}\n---\n# Target\n".encode(),
         "doc/decisions/2024-01-01-target.md",
     )
-    summaries = [
-        _summary("target", target),
-        _summary("fix", parse(erratum_doc())),
-    ]
+    summaries = [_summary(target), _summary(parse(erratum_doc()))]
+    target_uuid = uuid.UUID(TARGET_UUID)
+    erratum_uuid = uuid.UUID(ERRATUM_UUID)
 
-    view = resolve_relationships(summaries, "target")
-    own = resolve_relationships(summaries, "fix")
+    view = resolve_relationships(summaries, target_uuid)
+    own = resolve_relationships(summaries, erratum_uuid)
 
-    assert view.errata == ("fix",)
+    assert view.errata == (erratum_uuid,)
     assert view.inbound == ()
     [link] = own.outbound
-    assert (link.link_type, link.target_key) == (LinkType.CORRECTS, "target")
+    assert (link.link_type, link.target_uuid, link.resolved) == (
+        LinkType.CORRECTS,
+        target_uuid,
+        True,
+    )

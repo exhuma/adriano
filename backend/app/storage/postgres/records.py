@@ -1,16 +1,19 @@
 """
 Record and revision queries of the PostgreSQL store.
 
-Upserts use ``INSERT ... ON CONFLICT`` against the partial unique
-indexes ``uq_record_published_location`` and
-``uq_record_candidate_identity_ref``. The search vector is maintained by
-a database trigger, so it is never written here.
+A record row is keyed by its ADR UUID: the published row by
+``adr_uuid`` alone (partial unique index ``uq_record_published_uuid``),
+a candidate by ``(adr_uuid, ref)`` (the primary key
+``(adr_uuid, kind, ref)``). Upserts use ``INSERT ... ON CONFLICT``
+against those. The search vector is maintained by a database trigger,
+so it is never written here.
 
 Public API: :func:`put_revision`, :func:`get_revision`,
 :func:`upsert_record`, :func:`create_candidate`, :func:`get_record`,
-:func:`list_change_tokens`, :func:`delete_published`,
-:func:`list_identity_siblings`, :func:`list_relationship_summaries`,
-:func:`list_relationship_candidates`, :func:`list_facets`.
+:func:`list_records`, :func:`list_change_tokens`,
+:func:`list_published_entries`, :func:`set_change_token`,
+:func:`delete_published`, :func:`list_relationship_candidates`,
+:func:`list_facets`.
 """
 
 import uuid
@@ -29,12 +32,14 @@ from sqlalchemy import (
     or_,
     select,
     text,
+    tuple_,
+    update,
 )
 from sqlalchemy.dialects.postgresql import Insert, insert
 from sqlalchemy.orm import Session
 
 from app.domain.relationships import RecordSummary
-from app.domain.values import Identity, Links, RecordKind
+from app.domain.values import Links, RecordKind
 from app.errors import CandidateExistsError
 from app.storage.port import (
     ChangeTokenEntry,
@@ -51,19 +56,17 @@ from app.storage.postgres.models import RecordRow, RevisionRow
 RECORD: Table = RecordRow.__table__  # type: ignore[assignment]
 REVISION: Table = RevisionRow.__table__  # type: ignore[assignment]
 
-#: Conflict target columns and partial-index predicate per state. The
-#: predicate must be a SQL literal identical to the index definition so
-#: PostgreSQL can infer the partial unique index.
-_CONFLICT_KEYS: dict[RecordState, tuple[tuple[str, ...], TextClause]] = {
-    RecordState.PUBLISHED: (
-        ("source_id", "project", "path"),
-        text("kind = 'published'"),
-    ),
-    RecordState.CANDIDATE: (
-        ("source_id", "project", "record_key", "ref"),
-        text("kind = 'candidate'"),
-    ),
+#: Conflict target columns and index predicate per state. The predicate
+#: of the published key must be a SQL literal identical to the partial
+#: index definition so PostgreSQL can infer the index.
+_CONFLICT_KEYS: dict[RecordState, tuple[tuple[str, ...], TextClause | None]] = {
+    RecordState.PUBLISHED: (("adr_uuid",), text("kind = 'published'")),
+    RecordState.CANDIDATE: (("adr_uuid", "kind", "ref"), None),
 }
+
+_LOCATION = ("source_id", "project", "path")
+
+_PUBLISHED = RECORD.c.kind == RecordState.PUBLISHED.value
 
 
 def put_revision(session: Session, digest: str, content: str) -> bool:
@@ -101,20 +104,23 @@ def get_revision(session: Session, digest: str) -> Revision | None:
 
 
 def _key_condition(
-    record: RecordWrite, kind: RecordState
+    adr_uuid: uuid.UUID, kind: RecordState, ref: str | None
 ) -> ColumnElement[bool]:
     """
-    Build the WHERE clause that finds the row an upsert would hit.
+    Build the WHERE clause that finds one row by its key.
 
-    :param record: Row content.
+    :param adr_uuid: The ADR's UUID.
     :param kind: Published or candidate.
+    :param ref: The candidate's ref (ignored for the published row).
     :returns: The condition.
     """
-    columns, predicate = _CONFLICT_KEYS[kind]
-    values = convert.record_values(record, kind)
-    return and_(
-        predicate, *(RECORD.c[name] == values[name] for name in columns)
-    )
+    conditions = [
+        RECORD.c.adr_uuid == adr_uuid,
+        RECORD.c.kind == kind.value,
+    ]
+    if kind is RecordState.CANDIDATE:
+        conditions.append(RECORD.c.ref == ref)
+    return and_(*conditions)
 
 
 def _upsert_set(stmt: Insert, values: dict[str, Any]) -> dict[str, Any]:
@@ -122,7 +128,7 @@ def _upsert_set(stmt: Insert, values: dict[str, Any]) -> dict[str, Any]:
     Build the ``ON CONFLICT DO UPDATE SET`` clause.
 
     ``previous_digest`` and ``updated_at`` only move when the digest
-    changes; ``first_seen_at`` and ``id`` are kept.
+    changes; ``first_seen_at`` is kept.
 
     :param stmt: The insert statement.
     :param values: Inserted column values.
@@ -152,11 +158,15 @@ def upsert_record(
     :param kind: Published or candidate.
     :returns: The outcome.
     """
-    old_digest = session.execute(
-        select(RECORD.c.digest)
-        .where(_key_condition(record, kind))
-        .with_for_update()
-    ).scalar_one_or_none()
+    old = (
+        session.execute(
+            select(RECORD.c.digest, *(RECORD.c[name] for name in _LOCATION))
+            .where(_key_condition(record.adr_uuid, kind, record.ref))
+            .with_for_update()
+        )
+        .mappings()
+        .first()
+    )
     columns, predicate = _CONFLICT_KEYS[kind]
     values = convert.record_values(record, kind)
     stmt = insert(RECORD).values(values)
@@ -165,17 +175,19 @@ def upsert_record(
         index_where=predicate,
         set_=_upsert_set(stmt, values),
     ).returning(
-        RECORD.c.id,
         RECORD.c.previous_digest,
         literal_column("(xmax = 0)").label("created"),
     )
     row = session.execute(stmt).one()
     created = bool(row.created)
+    moved = old is not None and any(
+        old[name] != values[name] for name in _LOCATION
+    )
     return UpsertResult(
-        id=row.id,
         created=created,
-        digest_changed=not created and old_digest != record.digest,
+        digest_changed=old is not None and old["digest"] != record.digest,
         previous_digest=row.previous_digest,
+        moved=moved,
     )
 
 
@@ -188,61 +200,84 @@ def create_candidate(session: Session, record: RecordWrite) -> UpsertResult:
     :returns: The outcome.
     :raises CandidateExistsError: If the candidate exists.
     """
-    columns, predicate = _CONFLICT_KEYS[RecordState.CANDIDATE]
+    columns, _predicate = _CONFLICT_KEYS[RecordState.CANDIDATE]
     stmt = (
         insert(RECORD)
         .values(convert.record_values(record, RecordState.CANDIDATE))
-        .on_conflict_do_nothing(
-            index_elements=list(columns), index_where=predicate
-        )
-        .returning(RECORD.c.id)
+        .on_conflict_do_nothing(index_elements=list(columns))
+        .returning(RECORD.c.adr_uuid)
     )
-    record_id = session.execute(stmt).scalar_one_or_none()
-    if record_id is None:
+    if session.execute(stmt).scalar_one_or_none() is None:
         raise CandidateExistsError(
-            f"candidate {record.identity} on ref {record.ref!r} exists"
+            f"candidate {record.adr_uuid} on ref {record.ref!r} exists"
         )
     return UpsertResult(
-        id=record_id, created=True, digest_changed=False, previous_digest=None
+        created=True, digest_changed=False, previous_digest=None
     )
 
 
-def get_record(session: Session, record_id: uuid.UUID) -> StoredRecord | None:
+def get_record(
+    session: Session, adr_uuid: uuid.UUID, kind: RecordState, ref: str | None
+) -> StoredRecord | None:
     """
-    Fetch one record row.
+    Fetch one record row by its key.
 
     :param session: Unit-of-work session.
-    :param record_id: Record id.
+    :param adr_uuid: The ADR's UUID.
+    :param kind: Published or candidate.
+    :param ref: The candidate's ref (ignored for the published row).
     :returns: The row, or ``None``.
     """
     row = (
-        session.execute(select(RECORD).where(RECORD.c.id == record_id))
+        session.execute(
+            select(RECORD).where(_key_condition(adr_uuid, kind, ref))
+        )
         .mappings()
         .first()
     )
     return None if row is None else convert.stored_record(row)
 
 
+def list_records(session: Session, adr_uuid: uuid.UUID) -> list[StoredRecord]:
+    """
+    List every row of an ADR.
+
+    :param session: Unit-of-work session.
+    :param adr_uuid: The ADR's UUID.
+    :returns: The published row first, then candidates by ref.
+    """
+    stmt = (
+        select(RECORD)
+        .where(RECORD.c.adr_uuid == adr_uuid)
+        .order_by(~_PUBLISHED, RECORD.c.ref)
+    )
+    rows = session.execute(stmt).mappings()
+    return [convert.stored_record(row) for row in rows]
+
+
+_ENTRY_COLUMNS = (
+    RECORD.c.adr_uuid,
+    RECORD.c.source_id,
+    RECORD.c.project,
+    RECORD.c.path,
+    RECORD.c.change_token,
+    RECORD.c.digest,
+)
+
+
 def list_change_tokens(
     session: Session, source_id: str, project: str | None
 ) -> list[ChangeTokenEntry]:
     """
-    List the stored change state of published files.
+    List the published files of a registration with their tokens.
 
     :param session: Unit-of-work session.
     :param source_id: Registration id.
     :param project: Restrict to one project, or ``None``.
     :returns: Entries ordered by project and path.
     """
-    stmt = select(
-        RECORD.c.id,
-        RECORD.c.project,
-        RECORD.c.path,
-        RECORD.c.change_token,
-        RECORD.c.digest,
-    ).where(
-        RECORD.c.kind == RecordState.PUBLISHED.value,
-        RECORD.c.source_id == source_id,
+    stmt = select(*_ENTRY_COLUMNS).where(
+        _PUBLISHED, RECORD.c.source_id == source_id
     )
     if project is not None:
         stmt = stmt.where(RECORD.c.project == project)
@@ -250,109 +285,91 @@ def list_change_tokens(
     return [ChangeTokenEntry(**row) for row in rows.mappings()]
 
 
-def delete_published(
-    session: Session, record_ids: Collection[uuid.UUID]
-) -> int:
+def list_published_entries(
+    session: Session, uuids: Collection[uuid.UUID]
+) -> list[ChangeTokenEntry]:
     """
-    Delete published rows by id; candidates are never deleted here.
+    List where the published rows of some UUIDs live.
 
     :param session: Unit-of-work session.
-    :param record_ids: Ids to delete.
+    :param uuids: ADR UUIDs; empty means no query.
+    :returns: One entry per UUID with a published row.
+    """
+    if not uuids:
+        return []
+    stmt = select(*_ENTRY_COLUMNS).where(
+        _PUBLISHED, RECORD.c.adr_uuid.in_(list(uuids))
+    )
+    return [ChangeTokenEntry(**row) for row in session.execute(stmt).mappings()]
+
+
+def _at_location(entry: ChangeTokenEntry) -> ColumnElement[bool]:
+    """
+    Match the published row of an entry at the entry's location.
+
+    :param entry: UUID and expected location.
+    :returns: The condition.
+    """
+    return and_(
+        _PUBLISHED,
+        RECORD.c.adr_uuid == entry.adr_uuid,
+        RECORD.c.source_id == entry.source_id,
+        RECORD.c.project == entry.project,
+        RECORD.c.path == entry.path,
+    )
+
+
+def set_change_token(
+    session: Session, entry: ChangeTokenEntry, change_token: str | None
+) -> bool:
+    """
+    Rewrite the change token of a published row still at its location.
+
+    ``last_seen_at`` moves too, like any ingest write.
+
+    :param session: Unit-of-work session.
+    :param entry: UUID and expected location.
+    :param change_token: The new token.
+    :returns: ``True`` if a row was updated.
+    """
+    stmt = (
+        update(RECORD)
+        .where(_at_location(entry))
+        .values(change_token=change_token, last_seen_at=func.now())
+        .returning(RECORD.c.adr_uuid)
+    )
+    return session.execute(stmt).first() is not None
+
+
+def delete_published(
+    session: Session, entries: Collection[ChangeTokenEntry]
+) -> int:
+    """
+    Delete published rows still at their expected locations.
+
+    Candidates are never deleted here.
+
+    :param session: Unit-of-work session.
+    :param entries: UUIDs with their expected locations.
     :returns: Number of deleted rows.
     """
-    if not record_ids:
+    if not entries:
         return 0
+    keys = [(e.adr_uuid, e.source_id, e.project, e.path) for e in entries]
     stmt = (
         delete(RECORD)
         .where(
-            RECORD.c.kind == RecordState.PUBLISHED.value,
-            RECORD.c.id.in_(list(record_ids)),
+            _PUBLISHED,
+            tuple_(
+                RECORD.c.adr_uuid,
+                RECORD.c.source_id,
+                RECORD.c.project,
+                RECORD.c.path,
+            ).in_(keys),
         )
-        .returning(RECORD.c.id)
+        .returning(RECORD.c.adr_uuid)
     )
     return len(session.execute(stmt).all())
-
-
-def list_identity_siblings(
-    session: Session, identity: Identity
-) -> list[StoredRecord]:
-    """
-    List every row of an identity.
-
-    :param session: Unit-of-work session.
-    :param identity: Logical identity.
-    :returns: Published rows first, then by ref and path.
-    """
-    stmt = (
-        select(RECORD)
-        .where(
-            RECORD.c.source_id == identity.source_id,
-            RECORD.c.project == identity.project,
-            RECORD.c.record_key == identity.record_key,
-        )
-        .order_by(
-            (RECORD.c.kind != RecordState.PUBLISHED.value),
-            RECORD.c.ref,
-            RECORD.c.path,
-        )
-    )
-    rows = session.execute(stmt).mappings()
-    return [convert.stored_record(row) for row in rows]
-
-
-#: Columns needed to build a :class:`RecordSummary` (shared by
-#: :func:`list_relationship_summaries` and
-#: :func:`list_relationship_candidates`).
-_SUMMARY_COLUMNS = (
-    RECORD.c.id,
-    RECORD.c.source_id,
-    RECORD.c.project,
-    RECORD.c.record_key,
-    RECORD.c.adr_uuid,
-    RECORD.c.links,
-    RECORD.c.record_kind,
-    RECORD.c.path,
-    RECORD.c.kind,
-    RECORD.c.updated_at,
-)
-
-
-def _to_summary(row: Any) -> RecordSummary:
-    """
-    Build a :class:`RecordSummary` from one ``_SUMMARY_COLUMNS`` row.
-
-    :param row: A mapping of ``_SUMMARY_COLUMNS``.
-    :returns: The summary, keyed by ``str(record id)``.
-    """
-    return RecordSummary(
-        key=str(row["id"]),
-        identity=Identity(row["source_id"], row["project"], row["record_key"]),
-        adr_uuid=row["adr_uuid"],
-        links=Links.from_dict(row["links"]),
-        record_kind=RecordKind(row["record_kind"]),
-        path=row["path"],
-        published=row["kind"] == RecordState.PUBLISHED.value,
-        updated_at=row["updated_at"],
-    )
-
-
-def list_relationship_summaries(
-    session: Session, kind: RecordState | None
-) -> list[RecordSummary]:
-    """
-    List relationship summaries keyed by ``str(record id)``.
-
-    :param session: Unit-of-work session.
-    :param kind: Restrict to one state, or ``None`` for all rows.
-    :returns: One summary per row, ordered by identity and path.
-    """
-    stmt = select(*_SUMMARY_COLUMNS)
-    if kind is not None:
-        stmt = stmt.where(RECORD.c.kind == kind.value)
-    stmt = stmt.order_by(
-        RECORD.c.source_id, RECORD.c.project, RECORD.c.path, RECORD.c.id
-    )
-    return [_to_summary(row) for row in session.execute(stmt).mappings()]
 
 
 def list_relationship_candidates(
@@ -363,60 +380,55 @@ def list_relationship_candidates(
     """
     List the published rows that can affect one record's relationships.
 
-    A bounded alternative to ``list_relationship_summaries(PUBLISHED)``
-    for one detail request: instead of every published row, this
-    returns only rows that :class:`~app.domain.relationships.
-    RelationshipIndex` could possibly use to resolve *self_uuid*'s
-    relationships --
+    Instead of every published row, this returns only the rows that
+    :class:`~app.domain.relationships.RelationshipIndex` could use for
+    *self_uuid*'s view:
 
-    - other rows sharing *self_uuid* (duplicate-identity detection);
-    - rows whose ``adr_uuid`` is one of *link_targets* (candidates for
-      resolving *self_uuid*'s own outbound links, with every row
-      sharing a target so ambiguity still resolves correctly);
+    - rows whose UUID is one of *link_targets* (the record's own
+      outbound links);
     - rows that link to *self_uuid* via ``updates``, ``obsoletes`` or
       ``corrects`` (inbound links and errata).
 
-    The Postgres planner still scans every published row (``links``
-    has no index), but only the rows that match are sent to the
-    client and turned into :class:`RecordSummary` objects, which is
-    where the cost of :func:`list_relationship_summaries` actually
-    goes at catalog scale (see
-    ``docs/developer/performance.rst``). The result, combined with
-    :meth:`~app.storage.port.CatalogStore.list_identity_siblings`, is
-    exactly the summary set :func:`list_relationship_summaries` would
-    have narrowed :class:`RelationshipIndex` to for this one record's
-    :meth:`~app.domain.relationships.RelationshipIndex.view`.
+    The record's own published row is not returned: the caller adds the
+    row being viewed (see :mod:`app.services.record_relationships`).
+    The planner still scans every published row (``links`` has no
+    index), but only matching rows are sent to the client (see
+    ``docs/developer/performance.rst``).
 
     :param session: Unit-of-work session.
     :param self_uuid: The viewed record's own UUID.
     :param link_targets: UUIDs the viewed record's own ``updates``,
         ``obsoletes`` and ``corrects`` links target.
-    :returns: The matching published rows, ordered by identity and
-        path.
+    :returns: One summary per matching published ADR, ordered by UUID.
     """
-    uuids = {self_uuid, *link_targets}
     target = str(self_uuid)
     stmt = (
-        select(*_SUMMARY_COLUMNS)
+        select(RECORD.c.adr_uuid, RECORD.c.links, RECORD.c.record_kind)
         .where(
-            RECORD.c.kind == RecordState.PUBLISHED.value,
+            _PUBLISHED,
+            RECORD.c.adr_uuid != self_uuid,
             or_(
-                RECORD.c.adr_uuid.in_(uuids),
+                RECORD.c.adr_uuid.in_(list(link_targets)),
                 RECORD.c.links["updates"].op("?")(target),
                 RECORD.c.links["obsoletes"].op("?")(target),
                 RECORD.c.links["corrects"].astext == target,
             ),
         )
-        .order_by(
-            RECORD.c.source_id, RECORD.c.project, RECORD.c.path, RECORD.c.id
-        )
+        .order_by(RECORD.c.adr_uuid)
     )
-    return [_to_summary(row) for row in session.execute(stmt).mappings()]
+    return [
+        RecordSummary(
+            adr_uuid=row["adr_uuid"],
+            links=Links.from_dict(row["links"]),
+            record_kind=RecordKind(row["record_kind"]),
+        )
+        for row in session.execute(stmt).mappings()
+    ]
 
 
 def list_facets(session: Session) -> list[FacetEntry]:
     """
-    Count decision rows per ``(source_id, project)``, for filter UIs.
+    Count decision UUIDs per ``(source_id, project)``, for filter UIs.
 
     Errata are not counted, matching the default search.
 
@@ -427,7 +439,7 @@ def list_facets(session: Session) -> list[FacetEntry]:
         select(
             RECORD.c.source_id,
             RECORD.c.project,
-            func.count().label("count"),
+            func.count(RECORD.c.adr_uuid.distinct()).label("count"),
         )
         .where(RECORD.c.record_kind == RecordKind.DECISION.value)
         .group_by(RECORD.c.source_id, RECORD.c.project)

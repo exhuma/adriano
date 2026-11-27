@@ -13,30 +13,35 @@ One document goes through exactly these steps, whoever delivered it:
 5. upsert the published row, or the candidate row (replace or
    create-only), with its per-record validation issues.
 
-:func:`prepare_document` (steps 1, 2 and 4) is pure, so push intake can
-inspect the result (e.g. compare the document UUID with the request)
-before writing anything; :func:`ingest_document` adds steps 3 and 5.
+A document without a valid UUID has no identity: it is not a record.
+:func:`prepare_document` then leaves :attr:`PreparedDocument.record`
+empty and :func:`not_indexed_entry` describes it for the not-indexed
+list instead (written with :func:`queue_document`).
+
+:func:`prepare_document` (steps 1, 2 and 4) is pure, so intake can
+inspect the result (e.g. compare the document UUID with the request,
+or apply the UUID holder rule) before writing anything;
+:func:`ingest_document` adds steps 3 and 5.
 
 Ingest never touches ``decision_event``: approval history is keyed by
-identity and digest and is never rewritten by intake. Callers run ingest
+UUID and digest and is never rewritten by intake. Callers run ingest
 inside :meth:`~app.storage.port.CatalogStoreProvider.lock_registration`.
 
-Relationship issues (``missing_target``, ``ambiguous_target``,
-``duplicate_uuid``) are **not** stored by ingest. They depend on other
-records -- also those of other registrations, which can change without
-this record changing -- so they are computed at read time from
-:meth:`~app.storage.port.CatalogStore.list_relationship_summaries` with
-:class:`app.domain.relationships.RelationshipIndex` (phase 05, catalog
-service). Stored ``issues`` therefore hold only the per-document
-findings of :func:`~app.domain.records.parse_record`.
+Relationship issues (``missing_target``) are **not** stored by ingest.
+They depend on other records, which can change without this record
+changing, so they are computed at read time
+(:mod:`app.services.record_relationships`). Stored ``issues`` hold only
+the per-document findings of :func:`~app.domain.records.parse_record`.
 
 Public API: :class:`IncomingDocument`, :class:`PreparedDocument`,
 :class:`IngestResult`, :func:`render_markdown`,
-:func:`render_erratum`, :func:`prepare_document`, :func:`ingest_document`.
+:func:`render_erratum`, :func:`prepare_document`,
+:func:`ingest_document`, :func:`not_indexed_entry`,
+:func:`queue_document`.
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import nh3
 from markdown_it import MarkdownIt
@@ -44,9 +49,12 @@ from markdown_it import MarkdownIt
 from app.domain.errata import ErratumContent
 from app.domain.hashing import canonicalize, canonicalize_text, content_digest
 from app.domain.issues import Issue
-from app.domain.records import ParsedRecord, parse_record, record_key
+from app.domain.records import ParsedRecord, parse_record
 from app.storage.port import (
     CatalogStore,
+    IntakeKind,
+    NotIndexedKey,
+    NotIndexedWrite,
     RecordState,
     RecordWrite,
     StoredErratum,
@@ -79,22 +87,43 @@ class IncomingDocument:
     source_url: str | None = None
     author: str | None = None
 
+    @property
+    def key(self) -> NotIndexedKey:
+        """
+        Where the document was found, as a not-indexed key.
+
+        :returns: ``(source_id, project, path, ref)``.
+        """
+        return NotIndexedKey(self.source_id, self.project, self.path, self.ref)
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PreparedDocument:
     """
     A parsed, hashed and rendered document, ready to be stored.
 
+    :param document: The delivered document, without its content.
     :param parsed: Parse and validation result.
     :param digest: Canonical digest string.
     :param text: Canonical text stored as the revision snapshot.
-    :param record: The row to write.
+    :param record: The row to write; ``None`` when the document has no
+        valid UUID (see :attr:`reasons`).
     """
 
+    document: IncomingDocument
     parsed: ParsedRecord
     digest: str
     text: str
-    record: RecordWrite
+    record: RecordWrite | None
+
+    @property
+    def reasons(self) -> tuple[Issue, ...]:
+        """
+        Why the document cannot be indexed, if it cannot.
+
+        :returns: The reasons, ``()`` when :attr:`record` is set.
+        """
+        return self.parsed.not_indexed_reasons
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -102,23 +131,25 @@ class IngestResult:
     """
     Outcome of ingesting one document.
 
-    :param record_id: Stored row id.
+    :param adr_uuid: UUID of the stored ADR.
+    :param ref: Ref of the stored row.
     :param kind: Published or candidate.
     :param digest: Canonical digest string.
     :param created: ``True`` if a new row was inserted.
     :param digest_changed: ``True`` if an existing row got new content.
     :param previous_digest: Digest before this write, if any.
-    :param record_key: Identity key of the row.
+    :param moved: ``True`` if a published row got a new location.
     :param issues: Per-document validation issues.
     """
 
-    record_id: uuid.UUID
+    adr_uuid: uuid.UUID
+    ref: str
     kind: RecordState
     digest: str
     created: bool
     digest_changed: bool
     previous_digest: str | None
-    record_key: str
+    moved: bool
     issues: tuple[Issue, ...]
 
 
@@ -170,26 +201,25 @@ def _canonical_text(raw: bytes) -> str:
         return canonicalize_text(raw.decode("utf-8", errors="replace"))
 
 
-def prepare_document(document: IncomingDocument) -> PreparedDocument:
+def _record(
+    document: IncomingDocument, parsed: ParsedRecord, digest: str
+) -> RecordWrite | None:
     """
-    Parse, validate, hash and render a document (pure).
-
-    Never raises for content problems.
+    Build the row of a parsed document, if it has an identity.
 
     :param document: The delivered document.
-    :returns: The prepared document.
+    :param parsed: Its parse result.
+    :param digest: Its canonical digest.
+    :returns: The row, or ``None`` without a valid UUID.
     """
-    parsed = parse_record(document.content, filename=document.path)
-    digest = str(content_digest(document.content))
-    record = RecordWrite(
+    if parsed.adr_uuid is None:
+        return None
+    return RecordWrite(
         source_id=document.source_id,
         project=document.project,
         path=document.path,
         ref=document.ref,
         adr_uuid=parsed.adr_uuid,
-        record_key=record_key(
-            parsed.adr_uuid, document.source_id, document.project, document.path
-        ),
         digest=digest,
         change_token=document.change_token,
         metadata=parsed.metadata,
@@ -205,11 +235,26 @@ def prepare_document(document: IncomingDocument) -> PreparedDocument:
         author=document.author,
         erratum=render_erratum(parsed.erratum),
     )
+
+
+def prepare_document(document: IncomingDocument) -> PreparedDocument:
+    """
+    Parse, validate, hash and render a document (pure).
+
+    Never raises for content problems.
+
+    :param document: The delivered document.
+    :returns: The prepared document (without a row when it has no
+        valid UUID).
+    """
+    parsed = parse_record(document.content, filename=document.path)
+    digest = str(content_digest(document.content))
     return PreparedDocument(
+        document=replace(document, content=b""),
         parsed=parsed,
         digest=digest,
         text=_canonical_text(document.content),
-        record=record,
+        record=_record(document, parsed, digest),
     )
 
 
@@ -231,9 +276,12 @@ def ingest_document(
     :returns: The outcome.
     :raises app.errors.CandidateExistsError: If *create_only* and the
         candidate exists.
+    :raises ValueError: If the document has no row (no valid UUID).
     """
-    store.put_revision(prepared.digest, prepared.text)
     record = prepared.record
+    if record is None:
+        raise ValueError(f"{prepared.document.key} has no valid UUID")
+    store.put_revision(prepared.digest, prepared.text)
     if kind is RecordState.PUBLISHED:
         outcome = store.upsert_published(record)
     elif create_only:
@@ -241,12 +289,62 @@ def ingest_document(
     else:
         outcome = store.upsert_candidate(record)
     return IngestResult(
-        record_id=outcome.id,
+        adr_uuid=record.adr_uuid,
+        ref=record.ref,
         kind=kind,
         digest=prepared.digest,
         created=outcome.created,
         digest_changed=outcome.digest_changed,
         previous_digest=outcome.previous_digest,
-        record_key=record.record_key,
+        moved=outcome.moved,
         issues=record.issues,
     )
+
+
+def not_indexed_entry(
+    prepared: PreparedDocument,
+    origin: IntakeKind,
+    *,
+    reasons: tuple[Issue, ...] | None = None,
+    holder_uuid: uuid.UUID | None = None,
+) -> NotIndexedWrite:
+    """
+    Describe a prepared document for the not-indexed list.
+
+    The change token is kept only when the content alone explains the
+    entry: a losing duplicate (*holder_uuid*) depends on another file,
+    so it gets no token and the next poll reads it again.
+
+    :param prepared: The prepared document.
+    :param origin: The intake that found it.
+    :param reasons: Why it is not indexed; default
+        :attr:`PreparedDocument.reasons`.
+    :param holder_uuid: For a losing duplicate, the UUID it claims.
+    :returns: The entry to write with :func:`queue_document`.
+    """
+    document = prepared.document
+    return NotIndexedWrite(
+        key=document.key,
+        origin=origin,
+        reasons=prepared.reasons if reasons is None else reasons,
+        digest=prepared.digest,
+        holder_uuid=holder_uuid,
+        change_token=None if holder_uuid else document.change_token,
+        source_url=document.source_url,
+    )
+
+
+def queue_document(
+    store: CatalogStore, prepared: PreparedDocument, entry: NotIndexedWrite
+) -> None:
+    """
+    Store the snapshot and the not-indexed entry of a document.
+
+    The snapshot is kept so the list can show what was found.
+
+    :param store: Store of the caller's (locked) unit of work.
+    :param prepared: The prepared document.
+    :param entry: Its entry (:func:`not_indexed_entry`).
+    """
+    store.put_revision(prepared.digest, prepared.text)
+    store.put_not_indexed(entry)

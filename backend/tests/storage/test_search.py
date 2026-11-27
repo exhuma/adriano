@@ -177,11 +177,10 @@ def test_pagination_bounds(
 
 
 def test_search_item_fields(seeded: PostgresStoreProvider) -> None:
-    """Ensure items carry identity, digest and the approval state."""
+    """Ensure items carry the UUID, digest and the approval state."""
     with seeded.unit_of_work() as store:
         page = store.search("queue", ALL, 1, MAX_PAGE_SIZE, policy=POLICY)
     (item,) = page.items
     assert item.adr_uuid == U2
-    assert item.record_key == str(U2)
     assert item.digest.startswith("sha256-v1:")
     assert item.approval_state == "pending"

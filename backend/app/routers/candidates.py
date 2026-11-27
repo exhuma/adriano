@@ -18,6 +18,7 @@ CandidateSubmission`, published in OpenAPI through ``openapi_extra``.
 """
 
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -93,14 +94,15 @@ def _out(result: IntakeResult) -> CandidateResultOut:
     :param result: The intake outcome.
     :returns: The response body.
     """
+    query = urlencode({"ref": result.ref})
     return CandidateResultOut(
-        record_id=result.record_id,
+        record_id=result.adr_uuid,
         digest=result.digest,
         created=result.created,
         updated=result.updated,
         deduplicated=result.deduplicated,
         issues=[IssueOut.model_validate(issue) for issue in result.issues],
-        catalog_path=f"/records/{result.record_id}",
+        catalog_path=f"/records/{result.adr_uuid}?{query}",
     )
 
 
@@ -153,14 +155,14 @@ async def put_candidate(
     runtime: CatalogRuntime | None = Depends(get_catalog_runtime),
 ) -> CandidateResultOut:
     """
-    Create or replace the candidate for (source, project, ADR, ref).
+    Create or replace the candidate for (ADR UUID, ref).
 
     :param request: The request.
     :param response: The response.
     :param credentials: Push-token bearer credentials.
     :param provider: Storage provider (overridden by tests).
     :param runtime: Startup configuration state.
-    :returns: Record id, server digest, issues and catalog path.
+    :returns: ADR UUID, server digest, issues and catalog path.
     """
     return await _submit(
         request, response, credentials, provider, runtime, IntakeMode.REPLACE
@@ -189,7 +191,7 @@ async def post_candidate(
     :param credentials: Push-token bearer credentials.
     :param provider: Storage provider (overridden by tests).
     :param runtime: Startup configuration state.
-    :returns: Record id, server digest, issues and catalog path.
+    :returns: ADR UUID, server digest, issues and catalog path.
     """
     return await _submit(
         request, response, credentials, provider, runtime, IntakeMode.CREATE

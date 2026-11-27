@@ -4,7 +4,13 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from app.storage.port import RecordState
+from app.services.ingest import (
+    IncomingDocument,
+    not_indexed_entry,
+    prepare_document,
+    queue_document,
+)
+from app.storage.port import IntakeKind, RecordState
 from app.storage.postgres.store import PostgresStoreProvider
 from tests.routers.conftest import adr, seed
 
@@ -60,6 +66,36 @@ def test_legacy_fields_and_a_missing_link_target(
     assert body["approval"]["needs_approval"] is True
     assert body["approval"]["policy"]["id"] == "global"
     assert body["approval"]["history"] == []
+
+
+def test_links_resolve_by_uuid_across_registrations(
+    client: TestClient, provider: PostgresStoreProvider
+) -> None:
+    """Ensure a link reaches its target in another registration."""
+    with provider.lock_registration("central") as store:
+        seed(store, content=adr(U1, title="Old"))
+    with provider.lock_registration("other") as store:
+        seed(
+            store,
+            source_id="other",
+            project="payments",
+            content=adr(U2, title="New", extra=f"obsoletes: [{U1}]\n"),
+        )
+
+    old = client.get(f"/api/v1/records/{U1}").json()
+    new = client.get(f"/api/v1/records/{U2}").json()
+
+    [inbound] = old["inbound_links"]
+    assert (inbound["source_id"], inbound["source_title"]) == (str(U2), "New")
+    assert old["status"] == "obsoleted"
+    [outbound] = new["outbound_links"]
+    assert outbound == {
+        "link_type": "obsoletes",
+        "target_uuid": str(U1),
+        "target_id": str(U1),
+        "target_title": "Old",
+    }
+    assert new["issues"] == []
 
 
 def test_erratum_is_listed_on_the_corrected_record(
@@ -127,33 +163,37 @@ def test_inbound_obsoleted_by_and_derived_status(
     assert inbound["source_title"] == "New decision"
 
 
-def test_an_invalid_record_does_not_affect_others(
+def test_a_document_without_uuid_is_not_a_record(
     client: TestClient, provider: PostgresStoreProvider
 ) -> None:
-    """Ensure a record with bad frontmatter is isolated, others unaffected."""
+    """Ensure bad frontmatter is not indexed and others are unaffected."""
+    broken = prepare_document(
+        IncomingDocument(
+            source_id="central",
+            project="platform",
+            path="doc/decisions/2024-01-02-broken.md",
+            ref="local",
+            content=b"not frontmatter at all",
+        )
+    )
     with provider.lock_registration("central") as store:
         valid_id = seed(
             store,
             path="doc/decisions/2024-01-01-valid.md",
             content=adr(uuid.uuid4(), title="Still fine"),
         )
-        broken_id = seed(
-            store,
-            path="doc/decisions/2024-01-02-broken.md",
-            content=b"not frontmatter at all",
+        queue_document(
+            store, broken, not_indexed_entry(broken, IntakeKind.POLL)
         )
+        [entry] = store.list_not_indexed()
 
     valid_response = client.get(f"/api/v1/records/{valid_id}")
-    broken_response = client.get(f"/api/v1/records/{broken_id}")
+    listing = client.get("/api/v1/records").json()
 
     assert valid_response.status_code == 200
     assert valid_response.json()["metadata"]["title"] == "Still fine"
-    assert broken_response.status_code == 200
-    broken_body = broken_response.json()
-    assert broken_body["metadata"]["adr_uuid"] is None
-    codes = {issue["code"] for issue in broken_body["issues"]}
-    assert "missing_frontmatter" in codes
-    assert broken_body["approval"]["state"] == "pending"
+    assert [item["id"] for item in listing["items"]] == [str(valid_id)]
+    assert [r.code.value for r in entry.reasons] == ["missing_frontmatter"]
 
 
 def test_candidate_detail_uses_identity_siblings_for_relationships(

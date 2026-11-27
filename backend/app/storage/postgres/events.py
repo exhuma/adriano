@@ -1,8 +1,8 @@
 """
 Decision-event and intake-run queries of the PostgreSQL store.
 
-Decision uniqueness per (identity, digest) is enforced by
-``uq_decision_event_identity_digest``; inserts use ``ON CONFLICT DO
+Decision uniqueness per (ADR UUID, digest) is enforced by
+``uq_decision_event_uuid_digest``; inserts use ``ON CONFLICT DO
 NOTHING`` so a conflict (including a concurrent one) is reported as a
 domain error without aborting the surrounding transaction.
 
@@ -14,12 +14,11 @@ Public API: :func:`append_decision`, :func:`list_decisions`,
 import uuid
 from collections.abc import Collection
 
-from sqlalchemy import Table, func, select, text, tuple_, update
+from sqlalchemy import Table, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.domain.frontmatter import JsonValue
-from app.domain.values import Identity
 from app.errors import DecisionExistsError, DeliveryExistsError
 from app.storage.port import (
     DecisionEvent,
@@ -45,15 +44,11 @@ def append_decision(session: Session, decision: NewDecision) -> DecisionEvent:
     :param session: Unit-of-work session.
     :param decision: The decision.
     :returns: The stored event.
-    :raises DecisionExistsError: If (identity, digest) is decided.
+    :raises DecisionExistsError: If (UUID, digest) is decided.
     """
-    identity = decision.identity
     stmt = (
         insert(DECISION)
         .values(
-            source_id=identity.source_id,
-            project=identity.project,
-            record_key=identity.record_key,
             adr_uuid=decision.adr_uuid,
             digest=decision.digest,
             action=decision.action.value,
@@ -67,32 +62,30 @@ def append_decision(session: Session, decision: NewDecision) -> DecisionEvent:
             provenance=dict(decision.provenance),
             created_at=func.clock_timestamp(),
         )
-        .on_conflict_do_nothing(constraint="uq_decision_event_identity_digest")
+        .on_conflict_do_nothing(constraint="uq_decision_event_uuid_digest")
         .returning(*DECISION.c)
     )
     row = session.execute(stmt).mappings().first()
     if row is None:
         raise DecisionExistsError(
-            f"{identity} already has a decision for {decision.digest}"
+            f"{decision.adr_uuid} already has a decision for {decision.digest}"
         )
     return convert.decision_event(row)
 
 
-def list_decisions(session: Session, identity: Identity) -> list[DecisionEvent]:
+def list_decisions(
+    session: Session, adr_uuid: uuid.UUID
+) -> list[DecisionEvent]:
     """
-    List all decision events of an identity.
+    List all decision events of an ADR.
 
     :param session: Unit-of-work session.
-    :param identity: Logical identity.
+    :param adr_uuid: The ADR's UUID.
     :returns: Events, oldest first (ties by id).
     """
     stmt = (
         select(DECISION)
-        .where(
-            DECISION.c.source_id == identity.source_id,
-            DECISION.c.project == identity.project,
-            DECISION.c.record_key == identity.record_key,
-        )
+        .where(DECISION.c.adr_uuid == adr_uuid)
         .order_by(DECISION.c.created_at, DECISION.c.id)
     )
     rows = session.execute(stmt).mappings()
@@ -100,27 +93,20 @@ def list_decisions(session: Session, identity: Identity) -> list[DecisionEvent]:
 
 
 def list_decisions_for(
-    session: Session, identities: Collection[Identity]
+    session: Session, uuids: Collection[uuid.UUID]
 ) -> list[DecisionEvent]:
     """
-    List the decision events of several identities in one query.
+    List the decision events of several ADRs in one query.
 
     :param session: Unit-of-work session.
-    :param identities: Logical identities; empty means no query.
+    :param uuids: ADR UUIDs; empty means no query.
     :returns: Events of all of them, oldest first (ties by id).
     """
-    if not identities:
+    if not uuids:
         return []
-    keys = [(i.source_id, i.project, i.record_key) for i in identities]
     stmt = (
         select(DECISION)
-        .where(
-            tuple_(
-                DECISION.c.source_id,
-                DECISION.c.project,
-                DECISION.c.record_key,
-            ).in_(keys)
-        )
+        .where(DECISION.c.adr_uuid.in_(list(uuids)))
         .order_by(DECISION.c.created_at, DECISION.c.id)
     )
     rows = session.execute(stmt).mappings()

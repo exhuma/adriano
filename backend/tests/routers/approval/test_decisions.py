@@ -69,7 +69,8 @@ def test_reviewer_role_accepts(
     assert event["actor_subject"] == "rita"
     assert event["comment"] == "Looks right."
     assert (event["policy_id"], event["policy_version"]) == ("global", 3)
-    assert event["provenance"]["record_id"] == pushed["record_id"]
+    assert "record_id" not in event["provenance"]
+    assert event["provenance"]["kind"] == "candidate"
     assert event["provenance"]["ref"] == "feature/catalog"
     approval = _approval(client, pushed["record_id"])
     assert approval["state"] == "accepted"
@@ -271,9 +272,10 @@ def test_unapprovable_records_cannot_be_decided(
     router_settings: Settings,
     provider: PostgresStoreProvider,
 ) -> None:
-    """Ensure a record without a valid UUID answers 409."""
+    """Ensure content that is not valid UTF-8 answers 409."""
+    content = f"---\nuuid: {uuid.uuid4()}\ntitle: x\n---\nCaf\xe9\n"
     with provider.lock_registration("central") as store:
-        record_id = seed(store, content=b"---\ntitle: x\n---\nBody\n")
+        record_id = seed(store, content=content.encode("latin-1"))
     as_user(client)
 
     response = decide(client, str(record_id))

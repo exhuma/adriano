@@ -40,8 +40,10 @@ and a ``hint``; see ``docs``/the router for the HTTP status):
 10. document without usable frontmatter or UUID -> 422
     ``invalid_document`` with the ``issues`` list; document UUID other
     than ``adr_uuid`` -> 422 ``uuid_mismatch``;
-11. ``POST`` and the candidate ``(source_id, project, adr_uuid, ref)``
-    exists -> 409 ``candidate_exists``.
+11. ``POST`` and the candidate ``(adr_uuid, ref)`` exists -> 409
+    ``candidate_exists``. Candidates are keyed by UUID and ref alone,
+    so a push for that UUID and ref from another registration or
+    project replaces (``PUT``) the same candidate.
 
 Every request records an ``intake_run`` (kind ``push``): successes
 (also deduplicated ones) with the outcome in ``counts``, failures with
@@ -126,7 +128,8 @@ class IntakeResult:
     """
     Outcome of one candidate submission.
 
-    :param record_id: Candidate row id.
+    :param adr_uuid: UUID of the candidate's ADR.
+    :param ref: Ref of the candidate (with the UUID, its key).
     :param digest: Server-computed canonical digest.
     :param created: A new candidate row was inserted.
     :param updated: An existing candidate got new content.
@@ -135,7 +138,8 @@ class IntakeResult:
     :param issues: Per-document validation issues (non-blocking).
     """
 
-    record_id: uuid.UUID
+    adr_uuid: uuid.UUID
+    ref: str
     digest: str
     created: bool
     updated: bool
@@ -159,7 +163,8 @@ def _counts(result: IntakeResult) -> dict[str, JsonValue]:
         "updated": int(result.updated),
         "unchanged": int(not (result.created or result.updated)),
         "deduplicated": result.deduplicated,
-        "record_id": str(result.record_id),
+        "adr_uuid": str(result.adr_uuid),
+        "ref": result.ref,
         "digest": result.digest,
         "issues": issues_json(result.issues),
     }
@@ -172,7 +177,8 @@ def _from_run(run: IntakeRun) -> IntakeResult | None:
         return None
     issues = counts.get("issues")
     return IntakeResult(
-        record_id=uuid.UUID(str(counts["record_id"])),
+        adr_uuid=uuid.UUID(str(counts["adr_uuid"])),
+        ref=str(counts["ref"]),
         digest=str(counts["digest"]),
         created=bool(counts.get("created")),
         updated=bool(counts.get("updated")),
@@ -239,7 +245,8 @@ def _ingest(
             create_only=attempt.mode is IntakeMode.CREATE,
         )
         result = IntakeResult(
-            record_id=outcome.record_id,
+            adr_uuid=outcome.adr_uuid,
+            ref=outcome.ref,
             digest=outcome.digest,
             created=outcome.created,
             updated=outcome.digest_changed,
@@ -354,7 +361,7 @@ def submit_candidate(
         return _submit(provider, sources, token, body, attempt)
     except CandidateExistsError as exc:
         error = ConflictError(
-            "a candidate for this source, project, ADR and ref exists",
+            "a candidate for this ADR and ref exists",
             code="candidate_exists",
             hint="use PUT to replace an existing candidate",
         )

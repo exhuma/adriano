@@ -25,6 +25,8 @@ from tests.routers.approval.support import (
 )
 
 ADR = uuid.UUID("5d2a7c61-0c4e-4f43-9a61-3c1d1f1e0a01")
+#: Ref of the pushed candidates (the :func:`candidate` default).
+REF = "feature/catalog"
 FILE = "doc/decisions/2024-03-01-use-a-catalog.md"
 REQUIRED_FALSE = """
 approval_policy:
@@ -59,16 +61,21 @@ def _published_id(client: TestClient) -> str:
     return items[0]["id"]
 
 
-def _detail(client: TestClient, record_id: str) -> dict[str, object]:
-    """Read a record detail."""
-    response = client.get(f"/api/v1/records/{record_id}")
+def _detail(
+    client: TestClient, record_id: str, ref: str | None = None
+) -> dict[str, object]:
+    """Read a record detail (a candidate when *ref* is given)."""
+    params = {} if ref is None else {"ref": ref}
+    response = client.get(f"/api/v1/records/{record_id}", params=params)
     assert response.status_code == 200
     return response.json()
 
 
-def _approval(client: TestClient, record_id: str) -> dict[str, object]:
+def _approval(
+    client: TestClient, record_id: str, ref: str | None = None
+) -> dict[str, object]:
     """Read the approval block of a record."""
-    approval = _detail(client, record_id)["approval"]
+    approval = _detail(client, record_id, ref)["approval"]
     assert isinstance(approval, dict)
     return approval
 
@@ -119,7 +126,7 @@ def test_identical_content_is_accepted_when_published(
     assert history[0]["current_digest"] is True
     assert history[0]["provenance"]["kind"] == "candidate"
     assert approval["divergence"] is None
-    candidate_state = _approval(client, accepted["record_id"])["state"]
+    candidate_state = _approval(client, accepted["record_id"], REF)["state"]
     assert candidate_state == "accepted"
     diff = client.get(f"/api/v1/records/{published_id}/diff").json()
     assert diff["base"] is None
@@ -153,7 +160,7 @@ def test_edited_content_needs_new_approval_and_diffs(
     assert isinstance(divergence, dict)
     assert divergence["kind"] == "published_not_accepted"
     assert divergence["other_record_ids"] == [accepted["record_id"]]
-    candidate_view = _approval(client, accepted["record_id"])
+    candidate_view = _approval(client, accepted["record_id"], REF)
     assert candidate_view["state"] == "accepted"
     candidate_divergence = candidate_view["divergence"]
     assert isinstance(candidate_divergence, dict)
@@ -222,18 +229,19 @@ def test_needs_approval_filter_across_states(
     as_user(client)
     assert decide(client, rejected["record_id"], "rejected").status_code == 201
 
-    def needing(test_client: TestClient) -> set[str]:
+    def needing(test_client: TestClient) -> set[tuple[str, str]]:
         response = test_client.get(
             "/api/v1/records", params={"needs_approval": "true"}
         )
-        return {item["id"] for item in response.json()["items"]}
+        return {(item["id"], item["ref"]) for item in response.json()["items"]}
 
+    accepted_row = (accepted["record_id"], REF)
     everything = {
-        accepted["record_id"],
-        changed,
-        pending["record_id"],
-        rejected["record_id"],
+        accepted_row,
+        (changed, "local"),
+        (pending["record_id"], "feature/p"),
+        (rejected["record_id"], "feature/r"),
     }
-    assert needing(client) == everything - {accepted["record_id"]}
+    assert needing(client) == everything - {accepted_row}
     assert needing(make_client(None)) == everything
     assert needing(make_client(REQUIRED_FALSE)) == set()

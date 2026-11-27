@@ -7,7 +7,6 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import DBAPIError
 
 from app.domain.approval import DecisionAction
-from app.domain.values import Identity
 from app.errors import DecisionExistsError, DeliveryExistsError
 from app.storage.port import (
     CatalogStore,
@@ -20,14 +19,14 @@ from app.storage.postgres.store import PostgresStoreProvider
 from tests.storage.conftest import put_record
 
 U1 = uuid.UUID("0b0c2f4e-1234-4abc-8def-0123456789ab")
-IDENTITY = Identity("central", "platform", str(U1))
+U2 = uuid.UUID("1b0c2f4e-1234-4abc-8def-0123456789ab")
 
 
 def decide(
     store: CatalogStore,
     digest: str,
     action: DecisionAction = DecisionAction.ACCEPTED,
-    identity: Identity = IDENTITY,
+    adr_uuid: uuid.UUID = U1,
 ) -> DecisionEvent:
     """
     Append a decision with fixed reviewer and policy fields.
@@ -35,13 +34,12 @@ def decide(
     :param store: Store in the current unit of work.
     :param digest: Decided digest.
     :param action: Accepted or rejected.
-    :param identity: Decided identity.
+    :param adr_uuid: Decided ADR.
     :returns: The stored event.
     """
     return store.append_decision(
         NewDecision(
-            identity=identity,
-            adr_uuid=U1,
+            adr_uuid=adr_uuid,
             digest=digest,
             action=action,
             actor_issuer="https://idp.example.com",
@@ -63,11 +61,14 @@ def test_append_and_list_decisions(provider: PostgresStoreProvider) -> None:
         second = put_record(store, adr_uuid=U1, body="v2")
         accepted = decide(store, first.digest)
         rejected = decide(store, second.digest, DecisionAction.REJECTED)
-        decide(store, first.digest, identity=Identity("other", "p", str(U1)))
+        other = decide(store, first.digest, adr_uuid=U2)
     with provider.unit_of_work() as store:
-        events = store.list_decisions(IDENTITY)
+        events = store.list_decisions(U1)
+        both = store.list_decisions_for({U1, U2})
+        assert store.list_decisions_for(set()) == []
     assert [event.id for event in events] == [accepted.id, rejected.id]
-    assert events[0].identity == IDENTITY
+    assert [event.id for event in both] == [accepted.id, rejected.id, other.id]
+    assert events[0].adr_uuid == U1
     assert events[0].provenance == {"ref": "main"}
     assert events[0].comment == "looks good"
     view = events[1].as_view()
@@ -79,13 +80,13 @@ def test_append_and_list_decisions(provider: PostgresStoreProvider) -> None:
 def test_second_decision_for_digest_is_refused(
     provider: PostgresStoreProvider,
 ) -> None:
-    """Ensure one decision per identity and digest; the UoW survives."""
+    """Ensure one decision per UUID and digest; the UoW survives."""
     with provider.unit_of_work() as store:
         write = put_record(store, adr_uuid=U1)
         decide(store, write.digest)
         with pytest.raises(DecisionExistsError):
             decide(store, write.digest, DecisionAction.REJECTED)
-        assert len(store.list_decisions(IDENTITY)) == 1
+        assert len(store.list_decisions(U1)) == 1
 
 
 @pytest.mark.parametrize(
@@ -108,7 +109,7 @@ def test_decision_events_are_append_only(
         with engine.begin() as connection:
             connection.execute(text(statement))
     with provider.unit_of_work() as store:
-        events = store.list_decisions(IDENTITY)
+        events = store.list_decisions(U1)
     assert [event.comment for event in events] == ["looks good"]
 
 

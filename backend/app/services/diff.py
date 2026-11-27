@@ -4,7 +4,7 @@ Unified diff between stored snapshots (``GET /api/v1/records/{id}/diff``).
 The diff compares the exact canonical snapshots in the ``revision``
 store (never Git history). Defaults:
 
-- ``from``: the identity's last decided snapshot other than the
+- ``from``: the ADR's last decided snapshot other than the
   current digest (latest acceptance, else latest rejection,
   :func:`app.domain.approval.last_decided`); else the record's
   ``previous_digest``; else there is no base (``reason:
@@ -12,8 +12,8 @@ store (never Git history). Defaults:
 - ``to``: the record's current digest.
 
 Only digests related to the record may be requested: its current and
-previous digest, digests decided for its identity, and the current
-digests of its identity siblings. Any other digest is answered with
+previous digest, digests decided for its UUID, and the current
+digests of the other rows of its ADR. Any other digest is answered with
 404 ``unknown_revision``, so the endpoint cannot be used to read
 arbitrary snapshots.
 
@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 from app.domain.approval import DecisionAction, last_decided
 from app.errors import NotFoundError
+from app.services.record_lookup import find_record
 from app.storage.port import CatalogStore, DecisionEvent, StoredRecord
 
 __all__ = ["DiffEndpoint", "RecordDiff", "diff_record", "short_digest"]
@@ -55,7 +56,7 @@ class DiffEndpoint:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RecordDiff:
     """
-    A unified diff between two snapshots of one record's identity.
+    A unified diff between two snapshots of one ADR.
 
     :param base: The ``from`` side, ``None`` without a prior revision.
     :param target: The ``to`` side.
@@ -104,7 +105,7 @@ def _endpoint(
     Label a digest relative to the record.
 
     :param record: The viewed record.
-    :param events: Every decision event of its identity.
+    :param events: Every decision event of its ADR.
     :param digest: The digest to label.
     :returns: The labelled endpoint.
     """
@@ -192,28 +193,30 @@ def _unified(
 
 def diff_record(
     store: CatalogStore,
-    record_id: uuid.UUID,
+    adr_uuid: uuid.UUID,
     *,
+    ref: str | None = None,
     from_digest: str | None = None,
     to_digest: str | None = None,
 ) -> RecordDiff:
     """
-    Diff two snapshots of a record's identity.
+    Diff two snapshots of an ADR.
 
     :param store: Store of the caller's unit of work.
-    :param record_id: Record id.
+    :param adr_uuid: The ADR's UUID.
+    :param ref: A candidate's ref; ``None`` for the published row.
     :param from_digest: Base digest; default per the module docstring.
     :param to_digest: Target digest; default the current digest.
     :returns: The diff.
     :raises NotFoundError: ``record_not_found`` or ``unknown_revision``.
     """
-    record = store.get_record(record_id)
+    record = find_record(store, adr_uuid, ref)
     if record is None:
         raise NotFoundError(
-            f"record {record_id} not found", code="record_not_found"
+            f"record {adr_uuid} not found", code="record_not_found"
         )
-    events = store.list_decisions(record.identity)
-    siblings = store.list_identity_siblings(record.identity)
+    events = store.list_decisions(record.adr_uuid)
+    siblings = store.list_records(record.adr_uuid)
     allowed = _allowed(record, events, siblings)
     for digest in (from_digest, to_digest):
         if digest is not None and digest not in allowed:

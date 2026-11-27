@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict
 from app.domain.approval import ApprovalStateCode, DecisionAction, PolicyStatus
 from app.domain.errata import ErratumType
 from app.domain.issues import IssueCode, Severity
-from app.domain.relationships import DisplayStatus, InboundType, Resolution
+from app.domain.relationships import DisplayStatus, InboundType
 from app.domain.values import LinkType, RecordKind, TitleSource
 from app.services.approval_view import DivergenceKind
 from app.storage.port import IntakeKind, PollStatus, RecordState
@@ -78,7 +78,7 @@ class MetadataOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    adr_uuid: uuid.UUID | None
+    adr_uuid: uuid.UUID
     decision_date: datetime.date | None
     decision_date_inferred: bool
     kind: RecordState
@@ -123,9 +123,6 @@ class OutboundLinkOut(BaseModel):
     target_uuid: uuid.UUID
     target_id: uuid.UUID | None
     target_title: str | None
-    resolution: Resolution | None
-    ambiguous: bool
-    candidate_ids: list[uuid.UUID]
 
 
 class InboundLinkOut(BaseModel):
@@ -217,7 +214,7 @@ class ErratumForOut(BaseModel):
 
 
 class SiblingOut(BaseModel):
-    """One published or candidate row sharing a record's identity."""
+    """One published or candidate row of the same ADR (same UUID)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -252,7 +249,6 @@ class DecisionProvenanceOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    record_id: str | None
     kind: str | None
     source_id: str | None
     project: str | None
@@ -262,7 +258,7 @@ class DecisionProvenanceOut(BaseModel):
 
 
 class DecisionSummaryOut(BaseModel):
-    """One append-only decision event of the record's identity."""
+    """One append-only decision event of the record's ADR."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -281,7 +277,7 @@ class DecisionSummaryOut(BaseModel):
 
 
 class DivergenceOut(BaseModel):
-    """Content divergence within the record's identity."""
+    """Content divergence between the rows of the record's ADR."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -293,7 +289,7 @@ class DivergenceOut(BaseModel):
 
 
 class CompetingCandidateOut(BaseModel):
-    """Another candidate of the identity with different content."""
+    """Another candidate of the ADR with different content."""
 
     model_config = ConfigDict(from_attributes=True)
 

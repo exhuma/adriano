@@ -20,7 +20,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.domain.approval import DecisionAction
-from app.domain.values import Identity
 from app.sources import filesystem, gitlab, gitlab_api
 from app.storage.port import NewDecision, RecordState
 from app.storage.postgres.store import PostgresStoreProvider
@@ -69,7 +68,7 @@ def _seed_catalog(provider: PostgresStoreProvider) -> uuid.UUID:
     Seed two revisions, a candidate and an accepted decision.
 
     :param provider: Store provider of the test database.
-    :returns: The published record id (with a previous revision).
+    :returns: The published ADR UUID (with a previous revision).
     """
     with provider.lock_registration("central") as store:
         seed(store, content=adr(U1, title="First"))
@@ -81,11 +80,10 @@ def _seed_catalog(provider: PostgresStoreProvider) -> uuid.UUID:
             path="doc/decisions/2024-01-02-b.md",
             kind=RecordState.CANDIDATE,
         )
-        stored = store.get_record(record_id)
+        stored = store.get_published(record_id)
         assert stored is not None
         store.append_decision(
             NewDecision(
-                identity=Identity("central", "platform", str(U1)),
                 adr_uuid=U1,
                 digest=stored.digest,
                 action=DecisionAction.ACCEPTED,

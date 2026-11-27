@@ -53,7 +53,8 @@ def test_put_creates_then_is_idempotent(
     assert body["updated"] is False
     assert body["deduplicated"] is False
     assert body["digest"].startswith("sha256-v1:")
-    assert body["catalog_path"] == f"/records/{body['record_id']}"
+    assert body["record_id"] == str(ADR)
+    assert body["catalog_path"] == (f"/records/{ADR}?ref=feature%2Fcatalog")
     assert second.status_code == 200
     assert second.json() == {**body, "created": False}
     assert _revision_count(clean_engine) == revisions
@@ -278,11 +279,11 @@ def test_candidate_never_overwrites_published(
     response = push(client, candidate(ADR, path=path))
 
     assert response.status_code == 201
-    assert response.json()["record_id"] != str(published_id)
+    assert response.json()["record_id"] == str(published_id)
     with provider.unit_of_work() as store:
-        published = store.get_record(published_id)
+        published = store.get_published(published_id)
         assert published is not None
-        siblings = store.list_identity_siblings(published.identity)
+        siblings = store.list_records(published.adr_uuid)
     assert published.kind is RecordState.PUBLISHED
     assert "Published text." in published.rendered_html
     assert {s.kind for s in siblings} == {

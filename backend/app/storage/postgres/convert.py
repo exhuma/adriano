@@ -8,7 +8,8 @@ column name and returns a port value type.
 Public API: :func:`record_values`, :func:`erratum_json`,
 :func:`stored_erratum`, :func:`stored_record`, :func:`erratum_row`,
 :func:`search_item`, :func:`registration`, :func:`revision`,
-:func:`decision_event`, :func:`intake_run`.
+:func:`decision_event`, :func:`intake_run`,
+:func:`not_indexed_values`, :func:`not_indexed`.
 """
 
 import datetime
@@ -20,13 +21,16 @@ from sqlalchemy.engine import RowMapping
 from app.domain.approval import ApprovalStateCode, DecisionAction
 from app.domain.errata import ErratumType
 from app.domain.issues import Issue
-from app.domain.values import Identity, Links, RecordKind, TitleSource
+from app.domain.values import Links, RecordKind, TitleSource
 from app.storage.port import (
     DecisionEvent,
     ErratumRow,
     IntakeKind,
     IntakeRun,
     IntakeStatus,
+    NotIndexedEntry,
+    NotIndexedKey,
+    NotIndexedWrite,
     PollStatus,
     RecordState,
     RecordWrite,
@@ -53,7 +57,6 @@ def record_values(record: RecordWrite, kind: RecordState) -> dict[str, Any]:
         "path": record.path,
         "ref": record.ref,
         "adr_uuid": record.adr_uuid,
-        "record_key": record.record_key,
         "digest": record.digest,
         "change_token": record.change_token,
         "metadata": dict(record.metadata),
@@ -135,14 +138,12 @@ def stored_record(row: RowMapping) -> StoredRecord:
     :returns: The stored record.
     """
     return StoredRecord(
-        id=row["id"],
         kind=RecordState(row["kind"]),
         source_id=row["source_id"],
         project=row["project"],
         path=row["path"],
         ref=row["ref"],
         adr_uuid=row["adr_uuid"],
-        record_key=row["record_key"],
         digest=row["digest"],
         previous_digest=row["previous_digest"],
         change_token=row["change_token"],
@@ -172,14 +173,12 @@ def erratum_row(row: RowMapping) -> ErratumRow:
     :returns: The erratum row.
     """
     return ErratumRow(
-        id=row["id"],
         kind=RecordState(row["kind"]),
         source_id=row["source_id"],
         project=row["project"],
         path=row["path"],
         ref=row["ref"],
         adr_uuid=row["adr_uuid"],
-        record_key=row["record_key"],
         digest=row["digest"],
         title=row["title"],
         erratum=stored_erratum(row["erratum"]),
@@ -196,14 +195,12 @@ def search_item(row: RowMapping) -> SearchItem:
     :returns: The search item.
     """
     return SearchItem(
-        id=row["id"],
         kind=RecordState(row["kind"]),
         source_id=row["source_id"],
         project=row["project"],
         path=row["path"],
         ref=row["ref"],
         adr_uuid=row["adr_uuid"],
-        record_key=row["record_key"],
         digest=row["digest"],
         title=row["title"],
         record_kind=RecordKind(row["record_kind"]),
@@ -258,7 +255,6 @@ def decision_event(row: RowMapping) -> DecisionEvent:
     """
     return DecisionEvent(
         id=row["id"],
-        identity=Identity(row["source_id"], row["project"], row["record_key"]),
         adr_uuid=row["adr_uuid"],
         digest=row["digest"],
         action=DecisionAction(row["action"]),
@@ -292,4 +288,48 @@ def intake_run(row: RowMapping) -> IntakeRun:
         status=IntakeStatus(row["status"]),
         counts=row["counts"],
         errors=row["errors"],
+    )
+
+
+def not_indexed_values(entry: NotIndexedWrite) -> dict[str, Any]:
+    """
+    Build the ``not_indexed`` column values for an insert.
+
+    :param entry: The entry.
+    :returns: Column name -> value, reasons as plain JSON.
+    """
+    key = entry.key
+    return {
+        "source_id": key.source_id,
+        "project": key.project,
+        "path": key.path,
+        "ref": key.ref,
+        "origin": entry.origin.value,
+        "reasons": [reason.to_dict() for reason in entry.reasons],
+        "digest": entry.digest,
+        "holder_uuid": entry.holder_uuid,
+        "change_token": entry.change_token,
+        "source_url": entry.source_url,
+    }
+
+
+def not_indexed(row: RowMapping) -> NotIndexedEntry:
+    """
+    Convert a ``not_indexed`` row.
+
+    :param row: The row.
+    :returns: The entry.
+    """
+    return NotIndexedEntry(
+        key=NotIndexedKey(
+            row["source_id"], row["project"], row["path"], row["ref"]
+        ),
+        origin=IntakeKind(row["origin"]),
+        reasons=_issues(row["reasons"]),
+        digest=row["digest"],
+        holder_uuid=row["holder_uuid"],
+        change_token=row["change_token"],
+        source_url=row["source_url"],
+        first_seen_at=row["first_seen_at"],
+        last_seen_at=row["last_seen_at"],
     )
